@@ -120,7 +120,7 @@ def classify_order(mags, tol=1e-3):
     nz = mags[np.linalg.norm(mags, axis=1) > tol]
     if len(nz) == 0:
         return "none", None
-    u, s, vt = np.linalg.svd(nz, full_matrices=False)
+    u, s, vt = np.linalg.svd(nz, full_matrices=True)        # vt is 3x3 even for 1-2 moments
     s = s / s[0]
     def canon(v):
         for x in v:
@@ -193,6 +193,10 @@ def spin_group(lat, frac, types, mags, rotations, translations, symprec=1e-3, mt
                 if np.max(np.abs(U @ src - dst)) > mtol * scale:
                     rejected += 1
                     continue
+                if kind == "coplanar" and (U @ axis) @ axis < 0:
+                    # coplanar: U is defined up to the spin-only reflection through the spin plane
+                    # (= C2(normal)·T); choose the representative with U n = +n
+                    U = U - 2 * np.outer(U @ axis, axis)
         coset = "H" if np.allclose(U, np.eye(3), atol=1e-6) else "A"
         lattice_ops.append(SpinOp(np.array(R), np.array(t), Rc, U, coset))
     gens = [SpinOp(np.eye(3, dtype=int), np.zeros(3), np.eye(3), U, "spin-only", True)
@@ -212,7 +216,13 @@ def classify_magnet(sg, tol_net=0.02):
     if kind == "none":
         return "non-magnetic", "no moments: spin fully decoupled, bands spin degenerate"
     if kind != "collinear":
-        return f"{kind} magnet", "non-collinear order: see the spin-polarisation form s(k) below"
+        net = np.linalg.norm(sg["net"])
+        tag = "coplanar" if kind == "coplanar" else "non-coplanar"
+        if comp:
+            return f"non-collinear antiferromagnet ({tag})", \
+                "compensated non-collinear order; NR spin splitting given by s(k) below"
+        return f"non-collinear ferro/ferrimagnet ({tag}, net |m| = {net:.3f} muB)", \
+            "uncompensated non-collinear order (canted / weak ferromagnet or ferrimagnet)"
     A = [o for o in sg["ops"] if o.coset == "A"]
     if not A:
         if comp:

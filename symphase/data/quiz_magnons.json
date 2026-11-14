@@ -1,0 +1,240 @@
+{
+ "title": "Quiz 3 — spin groups, magnons (collinear and non-collinear) & finite-T hulls",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "How many collinear spin space groups are there (non-trivial parts)?",
+   "options": {
+    "a": "230",
+    "b": "1421",
+    "c": "1651",
+    "d": "uncountably many"
+   },
+   "explanation": "They map one-to-one onto the black-and-white magnetic groups of type I, III and IV: 230 + 674 + 517 = 1421.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "SymPhase labels a collinear SSG by the BNS number of a magnetic group. Which replacement defines that group?",
+   "options": {
+    "a": "[C2⊥ || g] → g T",
+    "b": "[E || g] → g T",
+    "c": "g → g P",
+    "d": "spin rotations → lattice rotations"
+   },
+   "explanation": "Every element that flips the spins, [C2⊥||g], becomes the primed operation gT; spin-preserving ones stay unprimed.",
+   "id": 2,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "The spin-only group of a collinear magnet is …",
+   "options": {
+    "a": "trivial",
+    "b": "{E, C2⊥T}",
+    "c": "∞m1 = C∞(n) ⋊ {E, C2⊥T}",
+    "d": "O(3)"
+   },
+   "explanation": "All rotations about the spin axis plus C2⊥ combined with T leave a collinear configuration invariant.",
+   "id": 3,
+   "key": "ImMi"
+  },
+  {
+   "type": "mc",
+   "question": "Why is the anomalous Hall effect of a collinear magnet forbidden without SOC?",
+   "options": {
+    "a": "because of inversion",
+    "b": "the spin-only element [C2⊥T || E] acts on σ_ij as pure time reversal",
+    "c": "because spins are axial",
+    "d": "it is not forbidden"
+   },
+   "explanation": "[C2⊥T||E] leaves the lattice untouched but contains T, so every T-odd charge response vanishes; SOC is required.",
+   "id": 4,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "In a collinear magnet without SOC every magnon carries …",
+   "options": {
+    "a": "ΔS_z = ±1 (chirality α or β)",
+    "b": "ΔS_z = 0",
+    "c": "ΔS_z = ±1/2",
+    "d": "no defined spin"
+   },
+   "explanation": "S_z is conserved, so each mode lowers (α) or raises (β) the total S_z by one.",
+   "id": 5,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "The symmetry of the magnon chirality splitting Δω(q) in an altermagnet is …",
+   "options": {
+    "a": "always s-wave",
+    "b": "the same as the electronic NR spin splitting s(k) (d, g or i-wave)",
+    "c": "always p-wave",
+    "d": "unrelated to the spin group"
+   },
+   "explanation": "Both are fixed by the same spin group: RuO2 is d-wave for electrons and magnons.",
+   "id": 6,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which exchange paths split the magnon chiralities in RuO2?",
+   "options": {
+    "a": "the nearest-neighbour inter-sublattice bonds",
+    "b": "the c-axis bonds",
+    "c": "the same-sublattice 6.35 Å bonds along [110] and [1-10], which are inequivalent",
+    "d": "none"
+   },
+   "explanation": "Crystal symmetry (O positions) makes the [110] and [1-10] bonds of one sublattice different and swaps them on the other: J7 ≠ J8 gives Δω ∝ qx·qy.",
+   "id": 7,
+   "key": "ImMi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many symmetry classes of Ru–Ru bonds does SymPhase find in RuO2 up to 6.5 Å?",
+   "tol": 0.1,
+   "hint": "symphase magnons --list-bonds --rmax 6.5 (or res['classes'])",
+   "explanation": "J1 … J8; the last two have identical length 6.35 Å but are not related by any crystal operation.",
+   "id": 8,
+   "key": "OA=="
+  },
+  {
+   "type": "text",
+   "question": "Hands-on: BNS number labelling the collinear spin space group of MnTe (examples/vasp/MnTe_altermagnet_INCAR)?",
+   "hint": "analyze_tensors(...)['spin_group']['ssg']['number']",
+   "explanation": "P6_3'/m'mc' (194.269), consistent with the spin Laue group ²6/²m¹m²m.",
+   "id": 9,
+   "key": "XSI5NjIuNDkxIls="
+  },
+  {
+   "type": "mc",
+   "question": "Why is there no magnon chirality splitting in bcc Cr (AFM with opposite spins at (0,0,0) and (½,½,½))?",
+   "options": {
+    "a": "the exchange is too small",
+    "b": "the sublattices are connected by a translation [C2⊥||τ]",
+    "c": "Cr is non-magnetic",
+    "d": "there is a splitting"
+   },
+   "explanation": "[C2⊥||τ] maps α onto β at the same q, so both chiralities are degenerate everywhere (as for electrons).",
+   "id": 10,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does non-collinear LSWT use a local frame (u_i, v_i) for every spin?",
+   "options": {
+    "a": "to make the code faster",
+    "b": "Holstein–Primakoff bosons describe deviations from each spin's own direction v_i",
+    "c": "because DMI requires it",
+    "d": "it is only a plotting convention"
+   },
+   "explanation": "The bosons live in the plane ⊥ v_i (u_i = x_i + i y_i); the global spectrum is independent of the in-plane choice of x_i.",
+   "id": 11,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many zero-energy (Goldstone) modes does the 120° triangular antiferromagnet have at Γ of its 3-sublattice cell?",
+   "tol": 0.1,
+   "hint": "res['n_goldstone'] for examples/vasp/Triangular_120AFM_INCAR with J = 1",
+   "explanation": "ω(k), ω(k+K), ω(k−K) all vanish at k = 0: the three generators of SO(3) are all broken by the coplanar order.",
+   "id": 12,
+   "key": "Mw=="
+  },
+  {
+   "type": "mc",
+   "question": "Which formula is the LSWT dispersion of the nearest-neighbour 120° triangular Heisenberg AFM (γ_k = Σ cos(k·δ)/3)?",
+   "options": {
+    "a": "ω = 2JS(1 − γ_k)",
+    "b": "ω = 3JS √((1 − γ_k)(1 + 2γ_k))",
+    "c": "ω = 6JS |sin k|",
+    "d": "ω = 3JS γ_k"
+   },
+   "explanation": "SymPhase reproduces it to 10⁻⁴ meV (tutorial 6 and the tests).",
+   "id": 13,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: canted chain with J = 1 meV and staggered D = 0.2 meV: by how many degrees are the spins canted away from antiparallel after --relax?",
+   "tol": 0.05,
+   "unit": "degrees",
+   "hint": "180° − angle between the relaxed directions",
+   "explanation": "φ = arctan(D/J) = 11.31°; the canting gives a weak ferromagnetic moment ⊥ to the Néel vector.",
+   "id": 14,
+   "key": "MTMuMTE="
+  },
+  {
+   "type": "mc",
+   "question": "To obtain a canted (weak-ferromagnetic) state rather than a spiral in a two-sublattice chain, the DM vectors must be …",
+   "options": {
+    "a": "uniform along the chain (same D for every i → i+1 bond)",
+    "b": "staggered, so that D·(S_A × S_B) has the same sign on both bonds",
+    "c": "parallel to the spins",
+    "d": "zero"
+   },
+   "explanation": "A uniform D twists every bond the same way (spiral); the staggered pattern of J_DM.dat favours one fixed canting angle.",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: which non-relativistic spin-splitting form does SymPhase find for the coplanar 120° triangular antiferromagnet?",
+   "options": {
+    "a": "none",
+    "b": "d-wave",
+    "c": "f-wave (odd in k)",
+    "d": "s-wave"
+   },
+   "hint": "analyze_tensors(...)['spin_group']['spin_splitting']",
+   "explanation": "The coplanar spin-only element C2(n)T forces s_z(−k) = −s_z(k); the lowest allowed form is cubic (f-wave), s_z ∝ kx(kx² − 3ky²).",
+   "id": 16,
+   "key": "ImMi"
+  },
+  {
+   "type": "num",
+   "question": "Configurational entropy (k_B per atom) of a high-entropy half-Heusler with sublattices 'TiZrHf | Ni | Sn'?",
+   "tol": 0.002,
+   "unit": "k_B/atom",
+   "hint": "parse_mixing('TiZrHf|Ni|Sn')",
+   "explanation": "−(3 · ⅓ ln ⅓)/3 = ln 3 / 3 = 0.366 k_B per atom.",
+   "id": 17,
+   "key": "MjY2My4w"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: mixing entropy only (vib='none'): temperature at which (Ti0.5Zr0.5)NiSn (E_hull = 5 meV/atom) reaches the hull?",
+   "tol": 2,
+   "unit": "K",
+   "hint": "FiniteTHull(..., vib='none').stabilisation_temperature(...)",
+   "explanation": "k_B T ln2 / 3 = 5 meV → T* = 251 K.",
+   "id": 18,
+   "key": "MTUy"
+  },
+  {
+   "type": "num",
+   "question": "Debye model: zero-point vibrational energy per atom for θ_D = 400 K, in meV/atom?",
+   "tol": 0.2,
+   "unit": "meV/atom",
+   "explanation": "F_vib(T = 0) = (9/8) k_B θ_D = 1.125 × 0.08617 meV/K × 400 K = 38.8 meV/atom.",
+   "id": 19,
+   "key": "NzcuODM="
+  },
+  {
+   "type": "mc",
+   "question": "Which statement about vib='bartel' is correct?",
+   "options": {
+    "a": "it needs phonopy files",
+    "b": "it uses the SISSO descriptor of Bartel et al. via pymatgen, needs structures, valid 300–2000 K",
+    "c": "it works at 0 K only",
+    "d": "it replaces the mixing entropy"
+   },
+   "explanation": "GibbsComputedStructureEntry estimates G(T) from volume and mass; mixing entropy is still added on top.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -242,3 +242,66 @@ def test_debye_free_energy_limits():
     assert abs(debye_free_energy(0, th) - 9 / 8 * KB * th) < 1e-12        # zero-point energy
     T = 5000.0                                                               # classical limit
     assert abs(debye_free_energy(T, th) - 3 * KB * T * math.log(th / T) - (-KB * T)) < 2e-3
+
+
+# ---------------------------------------------------------------- non-collinear magnons / spin groups
+def _sym(lat, frac, types):
+    import spglib
+    d = spglib.get_symmetry_dataset((lat, frac, types))
+    return d.rotations, d.translations
+
+
+def test_magnon_fm_direction_independent():
+    from symphase.magnons import analyse
+    lat, fr = np.eye(3) * 3.0, np.zeros((1, 3))
+    R, T = _sym(lat, fr, [0])
+    rz = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-1.0], rmax=3.1, n_per=6, nmap=3)
+    rd = analyse(lat, fr, [0], ["Fe"], np.array([[1, 1, 1.]]) * 2 / np.sqrt(3), R, T, J=[-1.0], rmax=3.1,
+                 n_per=6, nmap=3)
+    assert np.allclose(rz["omega"], rd["omega"], atol=1e-10)
+    assert np.allclose(rd["magnon_spin"][3, 0], -np.ones(3) / np.sqrt(3), atol=1e-8)
+
+
+def test_magnon_triangular_120_analytic():
+    from symphase.magnons import analyse
+    from symphase.tensors import read_poscar, read_incar
+    d = f"{EX}/vasp/Triangular_120AFM_INCAR"
+    p = read_poscar(f"{d}/POSCAR")
+    mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)
+    R, T = _sym(p["lattice"], p["frac"], [0, 0, 0])
+    r = analyse(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, R, T, J=[1.0], spin=1.0, rmax=3.1,
+                n_per=8, nmap=3)
+    a = 3.0
+    a1, a2 = np.array([a, 0, 0]), np.array([a / 2, a * np.sqrt(3) / 2, 0])
+    K = np.array([4 * np.pi / (3 * a), 0, 0])
+
+    def w(k):
+        g = (np.cos(k @ a1) + np.cos(k @ a2) + np.cos(k @ (a2 - a1))) / 3
+        return 3 * np.sqrt(max((1 - g) * (1 + 2 * g), 0))
+    for q, om in zip(r["q"], r["omega"]):
+        assert np.allclose(np.sort(om), np.sort([w(q), w(q + K), w(q - K)]), atol=1e-3)
+    assert r["kind"] == "coplanar" and r["n_goldstone"] == 3 and not r["unstable"]
+
+
+def test_canted_chain_relaxation():
+    from symphase.magnons import analyse, read_exchange_file
+    from symphase.tensors import read_poscar
+    d = f"{EX}/vasp/CantedChain_DMI_INCAR"
+    p = read_poscar(f"{d}/POSCAR")
+    R, T = _sym(p["lattice"], p["frac"], [0, 0])
+    mags = np.array([[0.0, 0, 2.0], [0.0, 0, -2.0]]) + np.array([[0.3, 0, 0], [0, 0, 0]])
+    r = analyse(p["lattice"], p["frac"], [0, 0], ["Fe", "Fe"], mags, R, T,
+                exchange=read_exchange_file(f"{d}/J_DM.dat"), spin=1.0, rmax=3.1, relax=True, n_per=6, nmap=3)
+    e = np.array(r["directions"])
+    ang = math.degrees(math.acos(np.clip(e[0] @ e[1], -1, 1)))
+    assert abs(ang - (180 - math.degrees(math.atan(0.2)))) < 1e-3
+    assert abs(r["E_classical"] + 2 * math.hypot(1.0, 0.2)) < 1e-6 and not r["unstable"]
+
+
+@pytest.mark.parametrize("d,cls,wave", [
+    ("CantedChain_DMI_INCAR", "non-collinear ferro/ferrimagnet", "s-wave"),
+    ("Triangular_120AFM_INCAR", "non-collinear antiferromagnet (coplanar)", "f-wave")])
+def test_noncollinear_spin_group_classes(d, cls, wave):
+    sg = analyze_tensors(f"{EX}/vasp/{d}", tensors="charge")["spin_group"]
+    assert sg["magnet_class"].startswith(cls) and sg["spin_splitting"].startswith(wave)
+    assert sg["n_H"] >= 1

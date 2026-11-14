@@ -552,6 +552,32 @@ Tests: FM and AFM chain exact; $J_7=J_8\Rightarrow\Delta\omega=0$. {\scriptsize 
 \end{tcolorbox}
 \end{frame}
 
+\begin{frame}{Non-collinear ferro- and antiferromagnets}
+\begin{columns}[T]
+\column{0.42\textwidth}
+{\footnotesize
+\textbf{Symmetry:} $U$ in $[U\|g]$ by Procrustes fit; spin-only group $\{E,C_2(\hat{\mathbf n})\Top\}$ (coplanar) or trivial.
+Classes: non-collinear AFM (compensated) or ferro/ferrimagnet (canted, weak FM).\\[0.4em]
+\textbf{LSWT in local frames} (Toth \& Lake 2015), $H=\sum\Sv_i^{T}J_{ij}\Sv_j+\sum\Sv_i^{T}A_i\Sv_i$ with Heisenberg, DMI or full tensors:
+\[
+A_{ij}\ni\tfrac{\sqrt{S_iS_j}}{2}\,\mathbf u_i^{T}J_{ij}\bar{\mathbf u}_j e^{i\mathbf k\cdot\mathbf d},\
+B_{ij}\ni\tfrac{\sqrt{S_iS_j}}{2}\,\mathbf u_i^{T}J_{ij}\mathbf u_j e^{i\mathbf k\cdot\mathbf d}
+\]
+magnon spin vector $\Delta\mathbf S_n$ per mode, non-reciprocity, \texttt{--relax} to the classical ground state.}
+\column{0.56\textwidth}
+\centering{\small\textbf{120° triangular AFM}}\\
+\includegraphics[width=0.84\linewidth]{figures/triangular.pdf}
+{\scriptsize\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{@{}p{0.36\linewidth}p{0.60\linewidth}@{}}
+\toprule
+test & result \\ \midrule
+FM $\parallel[111]$ vs $\parallel z$ & identical spectra ($10^{-15}$ meV) \\
+120° triangular AFM & analytic to $10^{-4}$; 3 Goldstone modes \\
+DMI chain & $\arctan(D/J)=11.31^\circ$ canting, weak FM \\ \bottomrule
+\end{tabular}}
+\end{columns}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -760,15 +786,17 @@ sbatch jobs/ibex_symphase_mpi.slurm
 \begin{columns}[T]
 \column{0.5\textwidth}
 \renewcommand{\arraystretch}{1.25}
-\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.2cm}@{}}
+{\footnotesize\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.6cm}@{}}
 \toprule
 notebook & content\\ \midrule
 01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
-02 & hull: 2, 3, 4, 5 elements, slices, screening, benchmark\\
+02 & hull: 2--5 elements, slices, screening, benchmark\\
 03 & elements-only pipeline, Ibex workflow\\
-04 & \textbf{Quiz 1}: 20 questions, symmetry\\
-05 & \textbf{Quiz 2}: 20 questions, hull\\ \bottomrule
-\end{tabular}
+06 & SSG numbers, magnon chirality (RuO$_2$)\\
+07 & finite-$T$ hulls: mixing entropy, phonons\\
+08 & non-collinear FM/AFM: triangular, canted DMI\\
+04, 05, 09 & \textbf{3 quizzes $\times$ 20 questions}\\ \bottomrule
+\end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
 \texttt{q = Quiz("hull")}\\
@@ -799,11 +827,12 @@ MoO$_2$ ($P2_1/c$) & $2/m1'$, 13 SHE/OHE comps (odd-$y$ rule) & \textcolor{spinc
 SSG numbers (5 examples) & BNS of C$_{2\perp}\!\to\!\Top$ group, \texttt{spinspg} & \textcolor{spinc}{\checkmark} \\
 magnons: FM, AFM chain, RuO$_2$ & analytic $\omega(\mathbf q)$; d-wave $\Delta\omega$ & \textcolor{spinc}{\checkmark} \\
 finite-$T$ hull & $T^*=251$ K (analytic), Debye limits & \textcolor{spinc}{\checkmark} \\
-quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+non-collinear LSWT & FM[111], 120° triangular, canted DMI & \textcolor{spinc}{\checkmark} \\
+quiz keys & 60 / 60 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\footnotesize Automated tests: \texttt{pytest tests/} (34 tests). OQMD/MP download checked against the documented API with a mock server.}
+{\footnotesize Automated tests: \texttt{pytest tests/} (40 tests). OQMD/MP download checked against the documented API with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -813,7 +842,7 @@ quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomru
 \begin{itemize}\setlength\itemsep{0.35em}
   \item SSG numbers only for collinear order (non-collinear: structured description)
   \item symmetry gives the \emph{shape}, not the magnitude, of tensors
-  \item LSWT is harmonic; exchange constants must be supplied
+  \item LSWT is harmonic, magnetic cell fixed; exchange constants must be supplied
   \item mixing energy sources requires identical DFT settings
 \end{itemize}
 \column{0.46\textwidth}

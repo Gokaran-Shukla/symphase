@@ -42,3 +42,26 @@ fig = ft.plot_ehull_vs_T(nmax=5, figsize=(6.4, 4.2), legend_out=False)
 fig.axes[0].set_title("E$_{hull}$(T): Debye + mixing entropy (toy)", fontsize=12)
 fig.savefig(os.path.join(F, "ehull_vs_T.pdf")); fig.savefig(os.path.join(F, "ehull_vs_T.png"), dpi=160); plt.close(fig)
 print("figure ehull_vs_T")
+
+# ---------------------------------------------------------------- non-collinear: triangular 120° AFM vs analytic
+from symphase.tensors import read_incar
+d = f"{V}/Triangular_120AFM_INCAR"
+p = read_poscar(f"{d}/POSCAR"); mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)
+ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0, 0]))
+r = analyse(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, ds.rotations, ds.translations,
+            J=[1.0], spin=1.0, rmax=3.1, n_per=50, nmap=3)
+a = 3.0; a1, a2 = np.array([a, 0, 0]), np.array([a / 2, a * np.sqrt(3) / 2, 0]); K = np.array([4 * np.pi / (3 * a), 0, 0])
+def wtri(k):
+    g = (np.cos(k @ a1) + np.cos(k @ a2) + np.cos(k @ (a2 - a1))) / 3
+    return 3 * np.sqrt(max((1 - g) * (1 + 2 * g), 0))
+ana = np.array([np.sort([wtri(q), wtri(q + K), wtri(q - K)]) for q in r["q"]])
+fig, ax = plt.subplots(figsize=(6.0, 3.9))
+ax.plot(r["x"], r["omega"], color="#16325c", lw=2.2)
+ax.plot(r["x"][::5], ana[::5], "o", color="#e67e22", ms=4.5, mfc="none", mew=1.3)
+ax.plot([], [], color="#16325c", lw=2.2, label="SymPhase LSWT"); ax.plot([], [], "o", color="#e67e22", mfc="none", label="analytic")
+ax.set_xticks([t for t, _ in r["ticks"]]); ax.set_xticklabels([l for _, l in r["ticks"]], fontsize=9); ax.minorticks_off()
+for t, _ in r["ticks"]: ax.axvline(t, color="0.85", lw=0.7, zorder=0)
+ax.set_xlim(r["x"][0], r["x"][-1]); ax.set_ylim(0, None); ax.set_ylabel("ω (JS)")
+ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, fontsize=10, frameon=False)
+fig.savefig(os.path.join(F, "triangular.pdf")); fig.savefig(os.path.join(F, "triangular.png"), dpi=160); plt.close(fig)
+print("figure triangular")

@@ -14,3 +14,5 @@ contain only POSCAR + INCAR (moments from `MAGMOM`).
 | `Cr_bcc_AFM_INCAR` | bcc Cr, commensurate AFM | — | AFM [C₂‖τ] |
 | `Mn2Au_PT_AFM_INCAR` | Mn₂Au | I4/m'm'm' | PT-AFM |
 | `MoO2_monoclinic` | MoO₂, P2₁/c, non-magnetic (POSCAR + INCAR; AMCSD 0011769), unique axis b ∥ y | P2₁/c1' (14.76) | non-magnetic; 13 SHE/OHE components |
+| `Triangular_120AFM_INCAR` | 120° triangular AFM (toy Cr layer), non-collinear MAGMOM | — | non-collinear AFM (coplanar), f-wave |
+| `CantedChain_DMI_INCAR` | AFM chain + staggered DMI (`J_DM.dat`), canted | — | non-collinear weak FM |

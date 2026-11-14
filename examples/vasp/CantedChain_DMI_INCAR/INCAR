@@ -1,0 +1,4 @@
+SYSTEM = AFM chain with staggered DMI -> canted (weak ferro) order (toy)
+LNONCOLLINEAR = .TRUE.
+ISPIN = 2
+MAGMOM = -0.39 0 1.96  -0.39 0 -1.96   ! canted by atan(D/J) = 11.3 deg (ground state for D_y > 0): weak FM along -x

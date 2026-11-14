@@ -26,7 +26,6 @@ Command line:  symphase magnons --list-bonds          (show bond classes)
 
 import math
 import os
-import sys
 
 import numpy as np
 
@@ -105,47 +104,85 @@ def bond_classes(lat, frac, types, bonds, rotations, translations):
 
 
 # ----------------------------------------------------------------------------
-#  LSWT
+#  LSWT for arbitrary (collinear or non-collinear) magnetic order
 # ----------------------------------------------------------------------------
+def dm_matrix(D):
+    """3x3 matrix M with  S_i^T M S_j = D . (S_i x S_j)"""
+    Dx, Dy, Dz = D
+    return np.array([[0.0, Dz, -Dy], [-Dz, 0.0, Dx], [Dy, -Dx, 0.0]])
+
+
+def local_frames(dirs):
+    """u_i = x_i + i y_i (complex, ⊥ spin) and v_i = spin direction, right-handed frames"""
+    U, V = [], []
+    for e in dirs:
+        e = np.asarray(e, float) / np.linalg.norm(e)
+        t = np.array([0.0, 0.0, 1.0]) if abs(e[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+        x = np.cross(t, e)
+        x /= np.linalg.norm(x)
+        y = np.cross(e, x)
+        U.append(x + 1j * y)
+        V.append(e)
+    return np.array(U), np.array(V)
+
+
+def _as_matrix(J):
+    J = np.asarray(J, float)
+    return J * np.eye(3) if J.ndim == 0 else J
+
+
 def _pairs_from(bonds, Jcls=None, Jexplicit=None):
+    """list of (i, j, d, 3x3 J)"""
     pairs = []
+    bset = {(b["i"], b["j"], tuple(b["R"])): b for b in bonds}
+    if Jexplicit is not None:
+        for (i, j, R), J in Jexplicit.items():
+            b = bset.get((i, j, R))
+            if b is not None:
+                pairs.append((i, j, b["d"], _as_matrix(J)))
+                continue
+            b = bset.get((j, i, tuple(-np.array(R))))
+            if b is None:
+                continue
+            pairs.append((j, i, b["d"], _as_matrix(J).T))   # S_i^T J S_j = S_j^T J^T S_i
+        return pairs
     for b in bonds:
-        J = Jcls[b["cls"]] if Jcls is not None else None
-        if Jexplicit is not None:
-            J = Jexplicit.get((b["i"], b["j"], tuple(b["R"])), Jexplicit.get((b["j"], b["i"], tuple(-b["R"]))))
-        if J is None or J == 0:
-            continue
-        pairs.append((b["i"], b["j"], b["d"], float(J)))
+        J = Jcls[b["cls"]] if Jcls is not None else 0.0
+        if np.any(np.asarray(J) != 0):
+            pairs.append((b["i"], b["j"], b["d"], _as_matrix(J)))
     return pairs
 
 
-def hamiltonian(q, sites, sig, S, pairs, K=0.0):
-    """bosonic BdG matrix H(q) (2N x 2N) in meV;  q in 1/Å (Cartesian)"""
+def hamiltonian(q, sites, U, V, S, pairs, Asite):
+    """bosonic BdG matrix H(q) (2N x 2N, meV) for H = Σ S_i^T J_ij S_j + Σ S_i^T A_i S_i"""
     N = len(sites)
     loc = {s: n for n, s in enumerate(sites)}
-    A = np.zeros((N, N), complex)
-    B = np.zeros((N, N), complex)
-    Am = np.zeros((N, N), complex)   # A(-q)
-    for i, j, d, J in pairs:
-        a, b = loc[i], loc[j]
-        sij = sig[a] * sig[b]
-        c = J * math.sqrt(S[a] * S[b])
-        A[a, a] += -sij * J * S[b]
-        A[b, b] += -sij * J * S[a]
-        Am[a, a] += -sij * J * S[b]
-        Am[b, b] += -sij * J * S[a]
-        ph, phm = np.exp(1j * q @ d), np.exp(-1j * q @ d)
-        if sij > 0:
-            A[a, b] += c * ph
-            A[b, a] += c * np.conj(ph)
-            Am[a, b] += c * phm
-            Am[b, a] += c * np.conj(phm)
-        else:
-            B[a, b] += c * ph
-            B[b, a] += c * np.conj(ph)
-    for a in range(N):
-        A[a, a] += 2 * K * S[a]
-        Am[a, a] += 2 * K * S[a]
+
+    def block(qq):
+        A = np.zeros((N, N), complex)
+        B = np.zeros((N, N), complex)
+        for i, j, d, J in pairs:
+            a, b = loc[i], loc[j]
+            r = math.sqrt(S[a] * S[b]) / 2.0
+            ph = np.exp(1j * qq @ d)
+            c1 = r * (U[a] @ J @ np.conj(U[b]))
+            c3 = r * (U[a] @ J @ U[b])
+            dv = V[a] @ J @ V[b]
+            A[a, b] += c1 * ph
+            A[b, a] += np.conj(c1) * np.conj(ph)
+            B[a, b] += c3 * ph
+            B[b, a] += c3 * np.conj(ph)
+            A[a, a] += -S[b] * dv
+            A[b, b] += -S[a] * dv
+        for a in range(N):
+            Am = Asite[a]
+            if Am is None:
+                continue
+            A[a, a] += S[a] * (np.real(U[a] @ Am @ np.conj(U[a])) - 2 * V[a] @ Am @ V[a])
+            B[a, a] += S[a] * (U[a] @ Am @ U[a])
+        return A, B
+    A, B = block(q)
+    Am, _ = block(-q)
     return np.block([[A, B], [B.conj().T, Am.T]])
 
 
@@ -153,62 +190,110 @@ def colpa(H, eps=1e-9):
     """positive eigen-energies and the first N columns of the paraunitary T (Ψ = T Φ)"""
     n2 = H.shape[0]
     N = n2 // 2
-    Hs = 0.5 * (H + H.conj().T) + eps * np.eye(n2)
-    try:
-        Kc = np.linalg.cholesky(Hs).conj().T          # H = K^† K
-    except np.linalg.LinAlgError:
+    H0 = 0.5 * (H + H.conj().T)
+    scale = max(1.0, np.abs(H0).max())
+    Kc = None
+    for e in (eps, 1e-7, 1e-6, 1e-5):                  # Goldstone modes: tiny regulariser
+        try:
+            Kc = np.linalg.cholesky(H0 + e * scale * np.eye(n2)).conj().T   # H = K^† K
+            break
+        except np.linalg.LinAlgError:
+            continue
+    if Kc is None:
         return None, None
     s3 = np.diag(np.r_[np.ones(N), -np.ones(N)])
     W = Kc @ s3 @ Kc.conj().T
-    w, U = np.linalg.eigh(0.5 * (W + W.conj().T))
-    order = np.argsort(-w)                            # positive first
-    w, U = w[order], U[:, order]
+    w, Uv = np.linalg.eigh(0.5 * (W + W.conj().T))
+    order = np.argsort(-w)
+    w, Uv = w[order], Uv[:, order]
     om = w[:N]
-    T = np.linalg.solve(Kc, U[:, :N] * np.sqrt(np.abs(om))[None, :])
+    T = np.linalg.solve(Kc, Uv[:, :N] * np.sqrt(np.abs(om))[None, :])
     return om, T
 
 
 def _w_modes(q):
-    sites, sig, S, pairs, K = (get_shared(k) for k in ("sites", "sig", "S", "pairs", "K"))
-    om, T = colpa(hamiltonian(q, sites, sig, S, pairs, K))
+    sites, U, V, S, pairs, Asite, axis = (get_shared(k) for k in ("sites", "U", "V", "S", "pairs", "Asite", "axis"))
     N = len(sites)
+    om, T = colpa(hamiltonian(q, sites, U, V, S, pairs, Asite))
     if om is None:
-        return np.full(N, np.nan), np.zeros(N)
+        return np.full(N, np.nan), np.zeros(N), np.zeros((N, 3))
     o = np.argsort(om)
     om, T = om[o], T[:, o]
-    # S_z change operator in the magnon basis; diagonalise inside degenerate subspaces
-    Dm = -(T[:N].conj().T * sig[None, :]) @ T[:N] - (T[N:].conj().T * sig[None, :]) @ T[N:]
-    dSz = np.real(np.diag(Dm)).copy()
+    w = np.abs(T[:N]) ** 2 + np.abs(T[N:]) ** 2              # (N sites, N modes)
+    dS = -(V.T @ w).T                                          # magnon spin vector per mode
+    pv = V @ axis                                              # spin projection of each site
+    Dm = -(T[:N].conj().T * pv[None, :]) @ T[:N] - (T[N:].conj().T * pv[None, :]) @ T[N:]
+    proj = np.real(np.diag(Dm)).copy()
     tol = 1e-6 * max(1.0, np.abs(om).max())
     k = 0
-    while k < N:
+    while k < N:                                               # pure states in degenerate subspaces
         m = k + 1
         while m < N and abs(om[m] - om[k]) < tol:
             m += 1
         if m - k > 1:
-            dSz[k:m] = np.sort(np.linalg.eigvalsh(0.5 * (Dm[k:m, k:m] + Dm[k:m, k:m].conj().T)))
+            proj[k:m] = np.sort(np.linalg.eigvalsh(0.5 * (Dm[k:m, k:m] + Dm[k:m, k:m].conj().T)))
         k = m
-    return om, dSz
+    return om, proj, dS
 
 
-def spectrum(qs, sites, sig, S, pairs, K=0.0, nproc=None):
+def spectrum(qs, sites, U, V, S, pairs, Asite, axis, nproc=None):
     res = pmap(_w_modes, list(qs), nproc=nproc, backend="process",
-               shared=dict(sites=sites, sig=np.asarray(sig, float), S=np.asarray(S, float),
-                           pairs=pairs, K=K), min_items=64)
-    om = np.array([r[0] for r in res])
-    dS = np.array([r[1] for r in res])
-    return om, dS
+               shared=dict(sites=sites, U=U, V=V, S=np.asarray(S, float), pairs=pairs, Asite=Asite,
+                           axis=np.asarray(axis, float)), min_items=64)
+    return (np.array([r[0] for r in res]), np.array([r[1] for r in res]), np.array([r[2] for r in res]))
 
 
-def chirality_split(om, dS):
-    """Δω = (lowest β mode) − (lowest α mode) per q; nan if a chirality is missing"""
+def chirality_split(om, proj, thr=0.1):
+    """Δω = (lowest mode with spin projection > thr) − (lowest with < −thr), nan otherwise"""
     out = np.full(len(om), np.nan)
     for k in range(len(om)):
-        a = om[k][dS[k] < -0.5]
-        b = om[k][dS[k] > 0.5]
+        a = om[k][proj[k] < -thr]
+        b = om[k][proj[k] > thr]
         if len(a) and len(b):
             out[k] = b.min() - a.min()
     return out
+
+
+# ----------------------------------------------------------------------------
+#  classical ground state
+# ----------------------------------------------------------------------------
+def classical_energy(dirs, S, sites, pairs, Asite):
+    loc = {s: n for n, s in enumerate(sites)}
+    E = 0.0
+    for i, j, d, J in pairs:
+        a, b = loc[i], loc[j]
+        E += S[a] * S[b] * dirs[a] @ J @ dirs[b]
+    for a, Am in enumerate(Asite):
+        if Am is not None:
+            E += S[a] ** 2 * dirs[a] @ Am @ dirs[a]
+    return E
+
+
+def relax_spins(dirs, S, sites, pairs, Asite, steps=20000, tol=1e-10, lr=0.05):
+    """projected steepest descent of the classical energy on unit vectors (fixed magnetic cell)"""
+    loc = {s: n for n, s in enumerate(sites)}
+    e = np.array(dirs, float)
+    e /= np.linalg.norm(e, axis=1)[:, None]
+    E_old = classical_energy(e, S, sites, pairs, Asite)
+    scale = max(1e-9, max(np.abs(J).max() for *_, J in pairs) if pairs else 1.0) * max(S) ** 2
+    for it in range(steps):
+        g = np.zeros_like(e)
+        for i, j, d, J in pairs:
+            a, b = loc[i], loc[j]
+            g[a] += S[a] * S[b] * (J @ e[b])
+            g[b] += S[a] * S[b] * (J.T @ e[a])
+        for a, Am in enumerate(Asite):
+            if Am is not None:
+                g[a] += S[a] ** 2 * (Am + Am.T) @ e[a]
+        g -= np.sum(g * e, axis=1)[:, None] * e                 # tangent component
+        e = e - lr / scale * g
+        e /= np.linalg.norm(e, axis=1)[:, None]
+        if it % 50 == 0:
+            E = classical_energy(e, S, sites, pairs, Asite)
+            if abs(E_old - E) < tol * max(1.0, abs(E)) and np.abs(g).max() < 1e-7 * scale:
+                break
+            E_old = E
+    return e, classical_energy(e, S, sites, pairs, Asite), it
 
 
 # ----------------------------------------------------------------------------
@@ -241,70 +326,110 @@ def make_path(lat, points, n_per=60):
 #  analysis driver
 # ----------------------------------------------------------------------------
 def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, exchange=None,
-            K=0.0, spin=None, rmax=6.5, mmin=0.05, nproc=None, n_per=60, nmap=41, sg=None):
+            K=0.0, spin=None, rmax=6.5, mmin=0.05, nproc=None, n_per=60, nmap=41, sg=None,
+            K_axis=None, K_local=False, relax=False, axis=None):
+    """bond classes and (if J or exchange given) the LSWT spectrum for any magnetic order.
+
+    J        : list of scalar J per bond class (meV, J > 0 AFM)
+    exchange : list of (i, j, R, J) with J a scalar or 3x3 tensor (1-based atom indices)
+    K        : single-ion anisotropy −K (S·n)², along K_axis (default: magnetic axis or z),
+               or along each spin (K_local=True)
+    relax    : minimise the classical energy before LSWT (non-collinear ground states)
+    axis     : projection axis for magnon spin / chirality (default: collinear axis, plane
+               normal of coplanar orders, net moment of ferromagnets, else z)
+    """
     norms = np.linalg.norm(mags, axis=1)
     magnetic = [i for i in range(len(frac)) if norms[i] > mmin * max(norms.max(), 1e-9)]
     if not magnetic:
         raise ValueError("no magnetic atoms")
     nz = mags[magnetic]
-    u, s, vt = np.linalg.svd(nz, full_matrices=False)
-    if len(s) > 1 and s[1] / s[0] > 1e-3:
-        raise ValueError("magnon module supports collinear magnets only")
-    n = vt[0]
-    for x in n:                      # canonical axis direction (first non-zero component > 0)
-        if abs(x) > 1e-8:
-            n = n if x > 0 else -n
-            break
-    sig = np.sign(nz @ n)
-    S = np.array([spin] * len(magnetic)) if spin else np.abs(nz @ n) / 2.0   # S = |m|/2 (g = 2)
+    dirs0 = nz / np.linalg.norm(nz, axis=1)[:, None]
+    _, s_, vt = np.linalg.svd(nz, full_matrices=False)
+    s_ = s_ / s_[0]
+    kind = "collinear" if (len(s_) < 2 or s_[1] < 1e-3) else ("coplanar" if (len(s_) < 3 or s_[2] < 1e-3)
+                                                              else "noncoplanar")
+
+    def canon(v):
+        for x in v:
+            if abs(x) > 1e-8:
+                return v if x > 0 else -v
+        return v
+    if axis is None:
+        net = nz.sum(0)
+        if kind == "collinear":
+            axis = canon(vt[0])
+        elif np.linalg.norm(net) > 0.05 * np.abs(nz).sum() / len(nz):
+            axis = net / np.linalg.norm(net)
+        elif kind == "coplanar":
+            axis = canon(vt[2])
+        else:
+            axis = np.array([0.0, 0.0, 1.0])
+    axis = np.asarray(axis, float) / np.linalg.norm(axis)
+    S = np.array([spin] * len(magnetic)) if spin else np.linalg.norm(nz, axis=1) / 2.0  # S = |m|/2
     bonds = enumerate_bonds(lat, frac, types, magnetic, rmax)
     classes = bond_classes(lat, frac, types, bonds, rotations, translations)
-    loc = {s_: k for k, s_ in enumerate(magnetic)}
+    loc = {s2: k for k, s2 in enumerate(magnetic)}
     cls_info = []
     for c, g in enumerate(classes):
         b = bonds[g[0]]
-        kinds = {("same" if sig[loc[bonds[x]["i"]]] == sig[loc[bonds[x]["j"]]] else "opposite") for x in g}
+        cosang = {round(float(dirs0[loc[bonds[x]["i"]]] @ dirs0[loc[bonds[x]["j"]]]), 3) for x in g}
+        kinds = {("same" if c_ > 0.999 else ("opposite" if c_ < -0.999 else f"{math.degrees(math.acos(c_)):.0f}°"))
+                 for c_ in cosang}
         cls_info.append(dict(cls=c, L=b["L"], n_bonds=len(g), spins="/".join(sorted(kinds)),
                              rep=(symbols[b["i"]], b["i"] + 1, symbols[b["j"]], b["j"] + 1, b["R"].tolist(),
                                   b["d"].tolist()),
                              members=[(bonds[x]["i"] + 1, bonds[x]["j"] + 1, bonds[x]["R"].tolist()) for x in g]))
-    out = dict(axis=n.tolist(), sites=[m + 1 for m in magnetic], sigma=sig.tolist(), S=S.tolist(),
-               classes=cls_info, bonds=bonds)
+    out = dict(kind=kind, axis=axis.tolist(), sites=[m + 1 for m in magnetic], directions=dirs0.tolist(),
+               S=S.tolist(), classes=cls_info, bonds=bonds,
+               sigma=np.sign(dirs0 @ axis).tolist())
     if J is None and exchange is None:
         return out
     Jexp = None
     if exchange is not None:
-        Jexp = {}
-        for (i, j, R, val) in exchange:
-            Jexp[(i - 1, j - 1, tuple(R))] = val
-        missing = [k for k in Jexp if (k[0], k[1], k[2]) not in {(b["i"], b["j"], tuple(b["R"])) for b in bonds}
-                   and (k[1], k[0], tuple(-np.array(k[2]))) not in {(b["i"], b["j"], tuple(b["R"])) for b in bonds}]
+        Jexp = {(i - 1, j - 1, tuple(R)): val for (i, j, R, val) in exchange}
+        known = {(b["i"], b["j"], tuple(b["R"])) for b in bonds}
+        missing = [k for k in Jexp if k not in known and (k[1], k[0], tuple(-np.array(k[2]))) not in known]
         if missing:
-            raise ValueError(f"{len(missing)} exchange bond(s) outside rmax or not between magnetic atoms")
-    Jcls = None
-    if J is not None:
-        Jcls = list(J) + [0.0] * (len(classes) - len(J))
+            raise ValueError(f"{len(missing)} exchange bond(s) outside rmax or not between magnetic atoms: "
+                             f"{[(a + 1, b + 1, R) for a, b, R in missing[:3]]}")
+    Jcls = None if J is None else list(J) + [0.0] * (len(classes) - len(J))
     pairs = _pairs_from(bonds, Jcls, Jexp)
+    Asite = [None] * len(magnetic)
+    if K:
+        for a in range(len(magnetic)):
+            n_ = dirs0[a] if K_local else (np.asarray(K_axis, float) / np.linalg.norm(K_axis) if K_axis is not None
+                                           else (axis if kind == "collinear" else np.array([0.0, 0.0, 1.0])))
+            Asite[a] = -K * np.outer(n_, n_)
+    dirs = dirs0.copy()
+    E0 = classical_energy(dirs, S, magnetic, pairs, Asite)
+    if relax:
+        dirs, E1, nit = relax_spins(dirs, S, magnetic, pairs, Asite)
+        out.update(relaxed=True, E_classical_start=E0, E_classical=E1, relax_iterations=nit)
+        if K_local:
+            Asite = [-K * np.outer(e, e) if K else None for e in dirs]
+    else:
+        out.update(relaxed=False, E_classical=E0)
+    out["directions"] = dirs.tolist()
+    out["net_moment"] = (dirs * (2 * S)[:, None]).sum(0).tolist()
+    Uf, Vf = local_frames(dirs)
     qs, xs, ticks = make_path(lat, DEFAULT_PATH, n_per)
-    om, dS = spectrum(qs, magnetic, sig, S, pairs, K, nproc)
-    dw = chirality_split(om, dS)
-    # Δω map in the (b1, b2) plane
+    om, proj, dS = spectrum(qs, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
+    omm, _, _ = spectrum(-qs, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
+    dw = chirality_split(om, proj)
     Bm = 2 * np.pi * np.linalg.inv(lat).T
     f = np.linspace(-0.5, 0.5, nmap)
     F1, F2 = np.meshgrid(f, f, indexing="ij")
     Q = (F1.ravel()[:, None] * Bm[0][None, :] + F2.ravel()[:, None] * Bm[1][None, :])
-    omm, dSm = spectrum(Q, magnetic, sig, S, pairs, K, nproc)
-    dwm = chirality_split(omm, dSm).reshape(F1.shape)
-    out.update(J_classes=Jcls, n_pairs=len(pairs), q=qs, x=xs, ticks=ticks, omega=om, dSz=dS, split=dw,
-               map_q=Q.reshape(nmap, nmap, 3), map_split=dwm, unstable=bool(np.isnan(om).any()))
-    # symmetry check against the spin-group spin-splitting form
+    om2, pr2, _ = spectrum(Q, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
+    dwm = chirality_split(om2, pr2).reshape(F1.shape)
+    nonrec = float(np.nanmax(np.abs(om - omm))) if np.isfinite(om).any() else float("nan")
+    out.update(J_classes=Jcls, n_pairs=len(pairs), q=qs, x=xs, ticks=ticks, omega=om, dSz=proj, magnon_spin=dS,
+               split=dw, map_q=Q.reshape(nmap, nmap, 3), map_split=dwm, nonreciprocity=nonrec,
+               unstable=bool(np.isnan(om).any()), max_split=float(np.nanmax(np.abs(dwm))) if np.isfinite(dwm).any()
+               else 0.0, n_goldstone=int(np.sum(np.abs(om[0]) < 1e-3)) if np.isfinite(om[0]).all() else None)
     if sg is not None:
         from .spingroup import spin_polarisation_form
-        deg, forms = spin_polarisation_form(sg)
-        out["sym_degree"], out["sym_form"] = deg, forms
-        ok = np.isfinite(dwm)
-        amp = np.nanmax(np.abs(dwm)) if ok.any() else 0.0
-        out["max_split"] = float(amp)
+        out["sym_degree"], out["sym_form"] = spin_polarisation_form(sg)
     return out
 
 
@@ -332,8 +457,8 @@ def plot_bands(res, save=None, title=None, figsize=(7.4, 6.2)):
     for t, lab in res["ticks"]:
         for a in (ax, ax2):
             a.axvline(t, color="0.75", lw=0.7, zorder=0)
-    ax.plot([], [], color=cmap(0.0), lw=2.2, label="α  (ΔS$_z$ = −1)")
-    ax.plot([], [], color=cmap(1.0), lw=2.2, label="β  (ΔS$_z$ = +1)")
+    ax.plot([], [], color=cmap(0.0), lw=2.2, label="α  (ΔS·n = −1)")
+    ax.plot([], [], color=cmap(1.0), lw=2.2, label="β  (ΔS·n = +1)")
     ax.legend(loc="upper right", fontsize=9)
     ax.set_title(title or "magnon bands coloured by chirality")
     ax2.axhline(0, color="0.5", lw=0.8)
@@ -372,6 +497,10 @@ def plot_split_map(res, save=None, title=None, figsize=(5.6, 4.8)):
 #  command line
 # ----------------------------------------------------------------------------
 def read_exchange_file(path):
+    """lines:  i j n1 n2 n3 J                      (Heisenberg, meV)
+               i j n1 n2 n3 J Dx Dy Dz             (+ Dzyaloshinskii–Moriya vector, D·(S_i×S_j))
+               i j n1 n2 n3 Jxx Jxy ... Jzz        (full 3x3 tensor, row major)
+       atoms are 1-based in POSCAR order; '#' starts a comment"""
     rows = []
     with open(path) as fh:
         for line in fh:
@@ -379,7 +508,17 @@ def read_exchange_file(path):
             if not line:
                 continue
             t = line.split()
-            rows.append((int(t[0]), int(t[1]), [int(t[2]), int(t[3]), int(t[4])], float(t[5])))
+            i, j, R = int(t[0]), int(t[1]), [int(t[2]), int(t[3]), int(t[4])]
+            v = [float(x) for x in t[5:]]
+            if len(v) == 1:
+                J = v[0]
+            elif len(v) == 4:
+                J = v[0] * np.eye(3) + dm_matrix(v[1:])
+            elif len(v) == 9:
+                J = np.array(v).reshape(3, 3)
+            else:
+                raise ValueError(f"{path}: expected 1, 4 or 9 exchange values, got {len(v)}: {line}")
+            rows.append((i, j, R, J))
     return rows
 
 
@@ -396,7 +535,9 @@ def main(argv=None):
         epilog="examples:\n  symphase magnons --list-bonds --rmax 6.5\n"
                "  symphase magnons --J 3.0 2.0 0.5 0.4 0.1 --plot magnons.png\n"
                "  symphase magnons --exchange J.dat --K 0.05\n"
-               "J > 0 is antiferromagnetic (H = Σ J S_i·S_j); energies in meV; S = |m|/2 unless --spin.")
+               "  symphase magnons --exchange J_DM.dat --relax          # non-collinear / canted ground state\n"
+               "J > 0 is antiferromagnetic (H = Σ S_i·J_ij·S_j + Σ S_i·A_i·S_i); energies in meV;\n"
+               "S = |m|/2 unless --spin.  Collinear and non-collinear orders (moments from OUTCAR/INCAR).")
     ap.add_argument("-p", "--poscar", default="POSCAR")
     ap.add_argument("-o", "--outcar", default="OUTCAR")
     ap.add_argument("-i", "--incar", default="INCAR")
@@ -410,6 +551,10 @@ def main(argv=None):
     ap.add_argument("--J", type=float, nargs="+", default=None, help="J per bond class (meV), in listed order")
     ap.add_argument("--exchange", default=None, help="file with lines: i j n1 n2 n3 J(meV) (1-based atoms)")
     ap.add_argument("--K", type=float, default=0.0, help="easy-axis single-ion anisotropy (meV)")
+    ap.add_argument("--K-axis", type=float, nargs=3, default=None, help="anisotropy axis (default: spin axis or z)")
+    ap.add_argument("--K-local", action="store_true", help="easy axis along each site's spin direction")
+    ap.add_argument("--relax", action="store_true", help="minimise the classical energy before LSWT")
+    ap.add_argument("--axis", type=float, nargs=3, default=None, help="projection axis for magnon spin")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -442,9 +587,12 @@ def main(argv=None):
     exch = read_exchange_file(args.exchange) if args.exchange else None
     res = analyse(lat, frac, types, symbols, mags, rots, trs, J=args.J, exchange=exch, K=args.K,
                   spin=args.spin, rmax=args.rmax, mmin=args.mmin, nproc=args.nproc, n_per=args.nq,
-                  nmap=args.nmap, sg=sg)
-    print(f"\n  magnetic sites: {res['sites']}   σ = {[int(x) for x in res['sigma']]}   "
-          f"S = {[round(x, 3) for x in res['S']]}   axis n = {fmt_vec(res['axis'], 3)}")
+                  nmap=args.nmap, sg=sg, K_axis=args.K_axis, K_local=args.K_local, relax=args.relax,
+                  axis=args.axis)
+    print(f"\n  order: {res['kind']}   magnetic sites: {res['sites']}   S = {[round(x, 3) for x in res['S']]}   "
+          f"projection axis = {fmt_vec(res['axis'], 3)}")
+    if res["kind"] == "collinear":
+        print(f"  σ = {[int(x) for x in res['sigma']]}")
     print(f"  bond classes up to {args.rmax} Å (bonds related by a crystal operation share one J):")
     print("   cls   |d| (Å)   #bonds/cell   spins       representative  i -> j + R            d (Å)")
     for c in res["classes"]:
@@ -454,12 +602,22 @@ def main(argv=None):
     if "omega" not in res:
         print("\n  give one J per class with --J (meV, J>0 AFM) or an --exchange file to compute magnons")
         return res
+    if res.get("relaxed"):
+        print(f"\n  classical relaxation: E = {res['E_classical_start']:.5f} -> {res['E_classical']:.5f} meV/cell "
+              f"({res['relax_iterations']} steps)")
+    print("  spin directions used:")
+    for k, (sidx, e) in enumerate(zip(res["sites"], res["directions"])):
+        print(f"    {symbols[sidx-1]}{sidx}: {fmt_vec(e, 4)}")
+    print(f"  net moment: {fmt_vec(res['net_moment'], 3)} muB/cell")
     if res["unstable"]:
-        print("\n  WARNING: H(q) not positive definite somewhere: the assumed order is not the LSWT ground state")
-    print(f"\n  {res['n_pairs']} bonds used;  max |Δω| (q3 = 0 plane) = {res['max_split']:.4f} meV")
+        print("\n  WARNING: H(q) not positive definite somewhere: the order is not a (local) LSWT ground state"
+              " -> try --relax or anisotropy")
+    print(f"\n  {res['n_pairs']} bonds used;  zero modes at Γ: {res['n_goldstone']};  "
+          f"max |Δω| (q3 = 0 plane) = {res['max_split']:.4f} meV;  non-reciprocity max|ω(q)−ω(−q)| = "
+          f"{res['nonreciprocity']:.4f} meV")
     for (xt, lab) in res["ticks"]:
         k = int(np.argmin(np.abs(res["x"] - xt)))
-        print(f"    {lab:<10s} ω = {np.round(res['omega'][k], 3)}  ΔS_z = {np.round(res['dSz'][k], 2)}  "
+        print(f"    {lab:<10s} ω = {np.round(res['omega'][k], 3)}  ΔS·n = {np.round(res['dSz'][k], 2)}  "
               f"Δω = {res['split'][k]:+.4f}")
     if args.plot and args.plot.lower() != "none":
         stem, ext = os.path.splitext(args.plot)

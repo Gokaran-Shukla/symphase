@@ -435,6 +435,86 @@ symphase run Ti Zr Ni Sn temperatures="300 600 900 1200" vib=bartel     # automa
 ], "07_tutorial_finite_temperature_hull.ipynb")
 
 # =============================================================================
+# 08  non-collinear magnets
+# =============================================================================
+save([
+    md(r"""# SymPhase tutorial 6 — non-collinear ferro- and antiferromagnets
+
+**Symmetry.** For non-collinear orders the spin part $U$ of every spin-group element $[U\|g]$ is found by an orthogonal
+Procrustes fit ($\mathbf m_{g(i)}=U\mathbf m_i$); the spin-only group is $\{E,\,C_2(\hat{\mathbf n})\mathcal T\}$ for coplanar and
+trivial for non-coplanar orders. SymPhase classifies compensated orders as non-collinear antiferromagnets and uncompensated
+ones (canted, weak ferromagnets, ferrimagnets) as non-collinear ferro/ferrimagnets, and finds the spin-splitting form $\mathbf s(\mathbf k)$
+(odd p-/f-wave forms are possible).
+
+**Magnons.** General linear spin-wave theory in local frames (S. Toth and B. Lake, J. Phys.: Condens. Matter **27**, 166002 (2015)):
+each spin direction $\mathbf v_i$ gets $\mathbf u_i=\hat{\mathbf x}_i+i\hat{\mathbf y}_i$, and for $H=\sum\mathbf S_i^{T}J_{ij}\mathbf S_j+\sum\mathbf S_i^{T}A_i\mathbf S_i$
+(Heisenberg, DMI $\mathbf D\cdot(\mathbf S_i\times\mathbf S_j)$ or full tensors)
+$$A_{ij}(\mathbf k)\ni\tfrac{\sqrt{S_iS_j}}{2}\,\mathbf u_i^{T}J_{ij}\bar{\mathbf u}_j\,e^{i\mathbf k\cdot\mathbf d},\quad
+B_{ij}(\mathbf k)\ni\tfrac{\sqrt{S_iS_j}}{2}\,\mathbf u_i^{T}J_{ij}\mathbf u_j\,e^{i\mathbf k\cdot\mathbf d},\quad
+A_{ii}\ni-S_j\,\mathbf v_i^{T}J_{ij}\mathbf v_j .$$
+Every mode carries a magnon spin vector $\Delta\mathbf S_n=-\sum_i\mathbf v_i\,(|T_{in}|^2+|T_{i+N,n}|^2)$; `--relax` minimises the classical energy first."""),
+    SETUP,
+    md("## 1. Symmetry of the non-collinear examples"),
+    code("""from symphase import analyze_tensors
+for c in ["Triangular_120AFM_INCAR", "CantedChain_DMI_INCAR", "Mn3Sn_allin"]:
+    sg = analyze_tensors(f"{EX}/vasp/{c}", tensors="charge,spin")["spin_group"]
+    print(f"{c:<24s} {sg['magnet_class']:<55s} {sg['spin_splitting']:<12s} {(sg['s_k'] or [''])[0]}")"""),
+    md("""## 2. Sanity check: a ferromagnet along [111] is identical to one along z
+
+The local frames make the spectrum independent of the global spin direction; the magnon spin points along −[111]."""),
+    code("""import numpy as np, spglib, math
+from symphase.magnons import analyse, plot_bands, read_exchange_file
+lat, fr = np.eye(3) * 3.0, np.zeros((1, 3))
+ds = spglib.get_symmetry_dataset((lat, fr, [0]))
+rz = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), ds.rotations, ds.translations, J=[-1.0], rmax=3.1, n_per=20, nmap=3)
+rd = analyse(lat, fr, [0], ["Fe"], np.array([[1, 1, 1.]]) * 2 / np.sqrt(3), ds.rotations, ds.translations,
+             J=[-1.0], rmax=3.1, n_per=20, nmap=3)
+print("max |ω_[111] − ω_z| =", np.abs(rz["omega"] - rd["omega"]).max(), " magnon spin:", np.round(rd["magnon_spin"][10, 0], 3))"""),
+    md(r"""## 3. Triangular-lattice 120° antiferromagnet (coplanar)
+
+Three sublattices in a $\sqrt3\times\sqrt3$ cell (POSCAR + INCAR only). Compare with the analytic result
+$\omega(\mathbf k)=3JS\sqrt{(1-\gamma_{\mathbf k})(1+2\gamma_{\mathbf k})}$ folded with $\mathbf k\pm\mathbf K$:"""),
+    code("""from symphase.tensors import read_poscar, read_incar
+import matplotlib.pyplot as plt
+d = f"{EX}/vasp/Triangular_120AFM_INCAR"
+p = read_poscar(f"{d}/POSCAR"); mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)
+ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0, 0]))
+r = analyse(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, ds.rotations, ds.translations,
+            J=[1.0], spin=1.0, rmax=3.1, n_per=40, nmap=3)
+a = 3.0; a1, a2 = np.array([a, 0, 0]), np.array([a / 2, a * np.sqrt(3) / 2, 0]); K = np.array([4 * np.pi / (3 * a), 0, 0])
+w = lambda k: 3 * np.sqrt(max((1 - (g := (np.cos(k @ a1) + np.cos(k @ a2) + np.cos(k @ (a2 - a1))) / 3)) * (1 + 2 * g), 0))
+ana = np.array([np.sort([w(q), w(q + K), w(q - K)]) for q in r["q"]])
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.plot(r["x"], r["omega"], color="#16325c", lw=2.2)
+ax.plot(r["x"][::4], ana[::4], "o", color="#e67e22", ms=4, mfc="none")
+ax.set_xticks([t for t, _ in r["ticks"]]); ax.set_xticklabels([l for _, l in r["ticks"]]); ax.set_ylabel("ω (meV)")
+ax.set_title("120° triangular AFM: LSWT (lines) vs analytic (circles)")
+print("max error:", np.abs(np.sort(r["omega"], axis=1) - ana).max(), "meV;  Goldstone modes at Γ:", r["n_goldstone"])"""),
+    md(r"""## 4. Canted antiferromagnet (weak ferromagnet) from staggered DMI
+
+Exchange file `J_DM.dat` (one line per bond: `i j n1 n2 n3 J Dx Dy Dz`). Starting from a collinear guess, `relax=True`
+finds the canted ground state, tilted by $\varphi=\arctan(D/J)$ from antiparallel:"""),
+    code("""d = f"{EX}/vasp/CantedChain_DMI_INCAR"
+print(open(f"{d}/J_DM.dat").read())
+p = read_poscar(f"{d}/POSCAR"); ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0]))
+r = analyse(p["lattice"], p["frac"], [0, 0], ["Fe", "Fe"], np.array([[0.3, 0, 2.0], [0, 0, -2.0]]), ds.rotations,
+            ds.translations, exchange=read_exchange_file(f"{d}/J_DM.dat"), spin=1.0, rmax=3.1, relax=True, n_per=40, nmap=3)
+e = np.array(r["directions"])
+print("angle between spins:", round(math.degrees(math.acos(e[0] @ e[1])), 3), "°   expected", round(180 - math.degrees(math.atan(0.2)), 3))
+print("net moment:", np.round(r["net_moment"], 3), "muB/cell;  stable LSWT:", not r["unstable"])
+fig = plot_bands(r, title="canted chain: bands coloured by magnon spin along the net moment")"""),
+    md("""## 5. Command line
+
+```bash
+cd examples/vasp/Triangular_120AFM_INCAR && symphase magnons --J 1.0 --rmax 3.1
+cd examples/vasp/CantedChain_DMI_INCAR   && symphase magnons --exchange J_DM.dat --relax --rmax 3.1
+symphase tensors --analysis spin        # spin group, magnet class and s(k) of any non-collinear order
+```
+Non-reciprocity $\\omega(\\mathbf q)\\neq\\omega(-\\mathbf q)$ (e.g. from uniform DMI) is reported as `nonreciprocity`.
+Continue with **09_quiz_spin_groups_magnons_finiteT.ipynb**."""),
+], "08_tutorial_noncollinear_magnets.ipynb")
+
+# =============================================================================
 # quizzes
 # =============================================================================
 S = [
@@ -585,6 +665,79 @@ H = [
 build_bank(os.path.join(DATA, "quiz_symmetry.json"), "Quiz 1 — magnetic symmetry & response tensors", S)
 build_bank(os.path.join(DATA, "quiz_hull.json"), "Quiz 2 — convex hull & phase stability", H)
 
+M = [
+    dict(type="mc", question="How many collinear spin space groups are there (non-trivial parts)?",
+         options={"a": "230", "b": "1421", "c": "1651", "d": "uncountably many"}, answer="b",
+         explanation="They map one-to-one onto the black-and-white magnetic groups of type I, III and IV: 230 + 674 + 517 = 1421."),
+    dict(type="mc", question="SymPhase labels a collinear SSG by the BNS number of a magnetic group. Which replacement defines that group?",
+         options={"a": "[C2⊥ || g] → g T", "b": "[E || g] → g T", "c": "g → g P", "d": "spin rotations → lattice rotations"},
+         answer="a", explanation="Every element that flips the spins, [C2⊥||g], becomes the primed operation gT; spin-preserving ones stay unprimed."),
+    dict(type="mc", question="The spin-only group of a collinear magnet is …",
+         options={"a": "trivial", "b": "{E, C2⊥T}", "c": "∞m1 = C∞(n) ⋊ {E, C2⊥T}", "d": "O(3)"},
+         answer="c", explanation="All rotations about the spin axis plus C2⊥ combined with T leave a collinear configuration invariant."),
+    dict(type="mc", question="Why is the anomalous Hall effect of a collinear magnet forbidden without SOC?",
+         options={"a": "because of inversion", "b": "the spin-only element [C2⊥T || E] acts on σ_ij as pure time reversal",
+                  "c": "because spins are axial", "d": "it is not forbidden"},
+         answer="b", explanation="[C2⊥T||E] leaves the lattice untouched but contains T, so every T-odd charge response vanishes; SOC is required."),
+    dict(type="mc", question="In a collinear magnet without SOC every magnon carries …",
+         options={"a": "ΔS_z = ±1 (chirality α or β)", "b": "ΔS_z = 0", "c": "ΔS_z = ±1/2", "d": "no defined spin"},
+         answer="a", explanation="S_z is conserved, so each mode lowers (α) or raises (β) the total S_z by one."),
+    dict(type="mc", question="The symmetry of the magnon chirality splitting Δω(q) in an altermagnet is …",
+         options={"a": "always s-wave", "b": "the same as the electronic NR spin splitting s(k) (d, g or i-wave)",
+                  "c": "always p-wave", "d": "unrelated to the spin group"},
+         answer="b", explanation="Both are fixed by the same spin group: RuO2 is d-wave for electrons and magnons."),
+    dict(type="mc", question="Which exchange paths split the magnon chiralities in RuO2?",
+         options={"a": "the nearest-neighbour inter-sublattice bonds", "b": "the c-axis bonds",
+                  "c": "the same-sublattice 6.35 Å bonds along [110] and [1-10], which are inequivalent", "d": "none"},
+         answer="c", explanation="Crystal symmetry (O positions) makes the [110] and [1-10] bonds of one sublattice different and swaps them on the other: J7 ≠ J8 gives Δω ∝ qx·qy."),
+    dict(type="num", question="Hands-on: how many symmetry classes of Ru–Ru bonds does SymPhase find in RuO2 up to 6.5 Å?",
+         answer=8, tol=0.1, hint="symphase magnons --list-bonds --rmax 6.5 (or res['classes'])",
+         explanation="J1 … J8; the last two have identical length 6.35 Å but are not related by any crystal operation."),
+    dict(type="text", question="Hands-on: BNS number labelling the collinear spin space group of MnTe (examples/vasp/MnTe_altermagnet_INCAR)?",
+         answer=["194.269"], hint="analyze_tensors(...)['spin_group']['ssg']['number']",
+         explanation="P6_3'/m'mc' (194.269), consistent with the spin Laue group ²6/²m¹m²m."),
+    dict(type="mc", question="Why is there no magnon chirality splitting in bcc Cr (AFM with opposite spins at (0,0,0) and (½,½,½))?",
+         options={"a": "the exchange is too small", "b": "the sublattices are connected by a translation [C2⊥||τ]",
+                  "c": "Cr is non-magnetic", "d": "there is a splitting"},
+         answer="b", explanation="[C2⊥||τ] maps α onto β at the same q, so both chiralities are degenerate everywhere (as for electrons)."),
+    dict(type="mc", question="Why does non-collinear LSWT use a local frame (u_i, v_i) for every spin?",
+         options={"a": "to make the code faster", "b": "Holstein–Primakoff bosons describe deviations from each spin's own direction v_i",
+                  "c": "because DMI requires it", "d": "it is only a plotting convention"},
+         answer="b", explanation="The bosons live in the plane ⊥ v_i (u_i = x_i + i y_i); the global spectrum is independent of the in-plane choice of x_i."),
+    dict(type="num", question="Hands-on: how many zero-energy (Goldstone) modes does the 120° triangular antiferromagnet have at Γ of its 3-sublattice cell?",
+         answer=3, tol=0.1, hint="res['n_goldstone'] for examples/vasp/Triangular_120AFM_INCAR with J = 1",
+         explanation="ω(k), ω(k+K), ω(k−K) all vanish at k = 0: the three generators of SO(3) are all broken by the coplanar order."),
+    dict(type="mc", question="Which formula is the LSWT dispersion of the nearest-neighbour 120° triangular Heisenberg AFM (γ_k = Σ cos(k·δ)/3)?",
+         options={"a": "ω = 2JS(1 − γ_k)", "b": "ω = 3JS √((1 − γ_k)(1 + 2γ_k))", "c": "ω = 6JS |sin k|", "d": "ω = 3JS γ_k"},
+         answer="b", explanation="SymPhase reproduces it to 10⁻⁴ meV (tutorial 6 and the tests)."),
+    dict(type="num", question="Hands-on: canted chain with J = 1 meV and staggered D = 0.2 meV: by how many degrees are the spins canted away from antiparallel after --relax?",
+         answer=11.31, tol=0.05, unit="degrees", hint="180° − angle between the relaxed directions",
+         explanation="φ = arctan(D/J) = 11.31°; the canting gives a weak ferromagnetic moment ⊥ to the Néel vector."),
+    dict(type="mc", question="To obtain a canted (weak-ferromagnetic) state rather than a spiral in a two-sublattice chain, the DM vectors must be …",
+         options={"a": "uniform along the chain (same D for every i → i+1 bond)", "b": "staggered, so that D·(S_A × S_B) has the same sign on both bonds",
+                  "c": "parallel to the spins", "d": "zero"},
+         answer="b", explanation="A uniform D twists every bond the same way (spiral); the staggered pattern of J_DM.dat favours one fixed canting angle."),
+    dict(type="mc", question="Hands-on: which non-relativistic spin-splitting form does SymPhase find for the coplanar 120° triangular antiferromagnet?",
+         options={"a": "none", "b": "d-wave", "c": "f-wave (odd in k)", "d": "s-wave"}, answer="c",
+         hint="analyze_tensors(...)['spin_group']['spin_splitting']",
+         explanation="The coplanar spin-only element C2(n)T forces s_z(−k) = −s_z(k); the lowest allowed form is cubic (f-wave), s_z ∝ kx(kx² − 3ky²)."),
+    dict(type="num", question="Configurational entropy (k_B per atom) of a high-entropy half-Heusler with sublattices 'TiZrHf | Ni | Sn'?",
+         answer=0.3662, tol=0.002, unit="k_B/atom", hint="parse_mixing('TiZrHf|Ni|Sn')",
+         explanation="−(3 · ⅓ ln ⅓)/3 = ln 3 / 3 = 0.366 k_B per atom."),
+    dict(type="num", question="Hands-on: mixing entropy only (vib='none'): temperature at which (Ti0.5Zr0.5)NiSn (E_hull = 5 meV/atom) reaches the hull?",
+         answer=251, tol=2, unit="K", hint="FiniteTHull(..., vib='none').stabilisation_temperature(...)",
+         explanation="k_B T ln2 / 3 = 5 meV → T* = 251 K."),
+    dict(type="num", question="Debye model: zero-point vibrational energy per atom for θ_D = 400 K, in meV/atom?",
+         answer=38.77, tol=0.2, unit="meV/atom",
+         explanation="F_vib(T = 0) = (9/8) k_B θ_D = 1.125 × 0.08617 meV/K × 400 K = 38.8 meV/atom."),
+    dict(type="mc", question="Which statement about vib='bartel' is correct?",
+         options={"a": "it needs phonopy files", "b": "it uses the SISSO descriptor of Bartel et al. via pymatgen, needs structures, valid 300–2000 K",
+                  "c": "it works at 0 K only", "d": "it replaces the mixing entropy"},
+         answer="b", explanation="GibbsComputedStructureEntry estimates G(T) from volume and mass; mixing entropy is still added on top."),
+]
+build_bank(os.path.join(DATA, "quiz_magnons.json"), "Quiz 3 — spin groups, magnons (collinear and non-collinear) & finite-T hulls", M)
+
+
 
 def quiz_nb(name, title, qs, bank, intro, helper):
     cells = [md(f"# {title}\n\n{intro}\n\n**How to answer:** replace `...` by your answer and run the cell — "
@@ -621,3 +774,20 @@ tins = HullAnalysis(load_csv(f"{EX}/hull/TiNiSn_ternary.csv"))
 tzns = HullAnalysis(load_csv(f"{EX}/hull/TiZrNiSn_quaternary.csv"))
 he   = HullAnalysis(load_csv(f"{EX}/hull/TiZrHfNiSn_5component.csv"))
 # explore e.g.  nial.print_table(),  [r for r in tins.table() if r['name']=='TiNiSn-HH']""")
+
+quiz_nb("09_quiz_spin_groups_magnons_finiteT.ipynb",
+        "Quiz 3 — spin-space groups, magnons (collinear & non-collinear) and finite-T hulls (20 questions)",
+        M, "magnons", "Work through tutorials **06**, **07** and **08** first. Questions 8, 9, 12, 14, 16 and 18 are hands-on.",
+        """import numpy as np, spglib, math
+from symphase import analyze_tensors
+from symphase.tensors import read_poscar, read_incar
+from symphase.magnons import analyse, read_exchange_file
+from symphase.hull import load_csv
+from symphase.thermo import FiniteTHull, parse_mixing
+p = read_poscar(f"{EX}/vasp/RuO2_Neel001_noSOC/POSCAR")
+ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0, 1, 1, 1, 1]))
+ruo2 = analyse(p["lattice"], p["frac"], [0, 0, 1, 1, 1, 1], ["Ru"] * 2 + ["O"] * 4,
+               np.array([[0, 0, 1.2], [0, 0, -1.2]] + [[0, 0, 0]] * 4), ds.rotations, ds.translations, rmax=6.5)
+mnte = analyze_tensors(f"{EX}/vasp/MnTe_altermagnet_INCAR", tensors="charge")
+tri  = analyze_tensors(f"{EX}/vasp/Triangular_120AFM_INCAR", tensors="charge")
+# explore e.g.  len(ruo2['classes']),  mnte['spin_group']['ssg'],  tri['spin_group']['spin_splitting']""")
