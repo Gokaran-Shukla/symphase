@@ -180,24 +180,30 @@ and builds the hull for \emph{any} number of elements — in parallel.
 \begin{frame}{Architecture}
 \centering
 \begin{tikzpicture}[font=\small,
-  box/.style={draw=navy,fill=navylight,rounded corners=3pt,minimum width=3.0cm,minimum height=0.95cm,align=center,line width=0.7pt},
-  cmd/.style={fill=navy,text=white,rounded corners=3pt,minimum width=3.0cm,minimum height=0.75cm,font=\small\ttfamily\bfseries},
-  outb/.style={draw=accent,fill=accent!8,rounded corners=3pt,minimum width=3.2cm,minimum height=0.95cm,align=center,line width=0.7pt},
-  arr/.style={-{Stealth[length=2.5mm]},line width=0.9pt,navy}]
-  \node[cmd] (t) at (0,2.2) {symphase tensors};
-  \node[cmd] (h) at (5.2,2.2) {symphase hull};
-  \node[cmd] (r) at (10.4,2.2) {symphase run};
-  \node[box] (ti) at (0,0.8) {POSCAR · INCAR\\OUTCAR · OSZICAR};
-  \node[box] (hi) at (5.2,0.8) {VASP runs · CSV\\Materials Project};
-  \node[box] (ri) at (10.4,0.8) {\textbf{elements only}\\\texttt{Ti Ni Sn}};
-  \node[outb] (to) at (0,-1.1) {MSG \& spin group\\$\Pop,\Top,\Pop\Top,\Mop,\dots$\\$\sig_{ij},\ \sig^{k}_{ij}$ (spin, orbital)};
-  \node[outb] (ho) at (5.2,-1.1) {$\Eform$, $\Ehull$, decomposition\\stability margin\\figures, screening};
-  \node[outb] (ro) at (10.4,-1.1) {OQMD/MP phases, hull,\\figures, POSCARs,\\VASP + Ibex array, report};
-  \foreach \a/\b in {t/ti,h/hi,r/ri} \draw[arr] (\a)--(\b);
-  \foreach \a/\b in {ti/to,hi/ho,ri/ro} \draw[arr] (\a)--(\b);
-  \draw[arr,accent,dashed] (ro.west) to[bend left=12] node[below,font=\scriptsize,text=accent]{finished VASP runs} (ho.east);
-  \draw[arr,accent,dashed] (ho.west) to[bend left=12] node[below,font=\scriptsize,text=accent]{stable phases} (to.east);
-  \node[font=\scriptsize,text=greyt] at (5.2,-2.55) {spglib (symmetry) \;·\; pymatgen/Qhull (hull) \;·\; NumPy SVD (tensors) \;·\; multiprocessing / mpi4py (parallel)};
+  box/.style={draw=navy,fill=navylight,rounded corners=4pt,text width=4.0cm,minimum height=1.05cm,align=center,line width=0.7pt},
+  cmd/.style={fill=navy,text=white,rounded corners=4pt,text width=4.0cm,minimum height=0.72cm,align=center,font=\small\ttfamily\bfseries},
+  outb/.style={draw=accent,fill=accent!8,rounded corners=4pt,text width=4.0cm,minimum height=1.5cm,align=center,line width=0.8pt,font=\footnotesize},
+  tag/.style={draw=accent,fill=white,rounded corners=2pt,font=\scriptsize\bfseries,text=accent,inner sep=2.5pt},
+  arr/.style={-{Stealth[length=2.5mm]},line width=0.9pt,navy},
+  fb/.style={-{Stealth[length=2.5mm]},line width=0.9pt,accent,dashed,rounded corners=5pt}]
+  \foreach \x/\c/\n in {0/symphase tensors/t, 5.2/symphase hull/h, 10.4/symphase run/r}
+    \node[cmd] (\n) at (\x,2.35) {\c};
+  \node[box] (ti) at (0,1.0)   {POSCAR · INCAR\\OUTCAR · OSZICAR};
+  \node[box] (hi) at (5.2,1.0) {VASP runs · CSV\\Materials Project};
+  \node[box] (ri) at (10.4,1.0){\textbf{elements only}\\\texttt{Ti Ni Sn}};
+  \node[outb] (to) at (0,-0.85)   {MSG \& spin group\\$\Pop,\Top,\Pop\Top,\Mop,\dots$\\$\sig_{ij},\ \sig^{k}_{ij}$ (spin, orbital)};
+  \node[outb] (ho) at (5.2,-0.85) {$\Eform$, $\Ehull$, decomposition\\stability margin\\figures, screening};
+  \node[outb] (ro) at (10.4,-0.85){OQMD / MP phases, hull\\figures, POSCARs\\VASP + Ibex array, report};
+  \foreach \a/\b in {t/ti,h/hi,r/ri,ti/to,hi/ho,ri/ro} \draw[arr] (\a)--(\b);
+  % feedback loops below the output boxes, labels centred on the horizontal legs
+  \coordinate (y) at (0,-2.25);
+  \coordinate (A1) at ([xshift=-10mm]ro.south); \coordinate (B1) at ([xshift=10mm]ho.south);
+  \coordinate (A2) at ([xshift=-10mm]ho.south); \coordinate (B2) at ([xshift=10mm]to.south);
+  \draw[fb] (A1) -- (A1 |- y) -- (B1 |- y) -- (B1);
+  \draw[fb] (A2) -- (A2 |- y) -- (B2 |- y) -- (B2);
+  \node[tag] at ($(A1 |- y)!0.5!(B1 |- y)$) {finished VASP runs};
+  \node[tag] at ($(A2 |- y)!0.5!(B2 |- y)$) {stable phases};
+  \node[font=\scriptsize,text=greyt] at (5.2,-2.95) {spglib (symmetry) \;·\; pymatgen / Qhull (hull) \;·\; NumPy SVD (tensors) \;·\; multiprocessing / mpi4py (parallel)};
 \end{tikzpicture}
 \end{frame}
 
