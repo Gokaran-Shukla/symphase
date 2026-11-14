@@ -142,3 +142,17 @@ def test_incar_saxis_rotation():
         fh.write("LSORBIT = .TRUE.\nSAXIS = 1 0 0\nMAGMOM = 0 0 1.2  0 0 -1.2  12*0\n")
     r = analyze_tensors(tmp)
     assert r["magnetic"]["bns_number"] == "58.398"            # Néel vector rotated to x
+
+
+def test_moo2_monoclinic_odd_y_rule():
+    r = analyze_tensors(f"{EX}/vasp/MoO2_monoclinic", tensors="charge,spin,orbital")
+    assert r["magnetic"]["bns_number"] == "14.76" and r["magnetic"]["magnetic_point_group"] == "2/m1'"
+    assert r["tensors"]["charge"]["n_even"] == 4 and r["tensors"]["charge"]["even"]["σ_xz"] != "0"
+    for kind in ("spin", "orbital"):
+        t = r["tensors"][kind]
+        assert t["n_even"] == 13 and t["n_odd"] == 0
+        for name, v in t["even"].items():
+            idx = name.split("^")[1].replace("_", "")      # e.g. 'xxy'
+            assert (v != "0") == (idx.count("y") % 2 == 1), name
+    sg = r["spin_group"]["tensors"]
+    assert sg["spin"]["n_even"] == 0 and sg["orbital"]["n_even"] == 13

@@ -14,7 +14,7 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 | `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening; parallel (all cores or MPI) |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (34 slides, Beamer source included)
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (35 slides, Beamer source included)
 📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 3 tutorials, 2 quizzes × 20 self-checking questions
 
 ---
@@ -93,6 +93,12 @@ symphase tensors --analysis spin              # spin group only
 python -c "from symphase import analyze_tensors as a; print(a('.')['spin_group']['spin_splitting'])"
 ```
 
+### Low-symmetry example: monoclinic MoO₂
+`examples/vasp/MoO2_monoclinic` (P2₁/c, POSCAR + INCAR, unique axis b ∥ y): grey group P2₁/c1′, MPG 2/m1′;
+σ<sub>ij</sub> has 4 independent components (incl. σ<sub>xz</sub>); spin and orbital Hall tensors have **13**
+independent components each — exactly those with an odd number of y indices — including unconventional channels
+(flow x, E ∥ y → S<sub>z</sub> and S<sub>x</sub>). Without SOC all spin components vanish, the orbital ones survive.
+
 Conventions: J<sub>i</sub> = σ<sub>ij</sub>E<sub>j</sub>, J<sup>S<sub>k</sub></sup><sub>i</sub> = σ<sup>k</sup><sub>ij</sub>E<sub>j</sub> (i flow, j field, k polarisation).
 For g′ = gT the T-odd part picks a factor −1 (Seemann *et al.*, PRB 92, 155138 (2015)); Onsager is imposed on σ<sub>ij</sub>.
 Moments are treated as axial vectors coupled to the lattice (relativistic analysis; without SOC the true symmetry is a larger spin group).
@@ -133,10 +139,10 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 
 | notebook | content |
 |---|---|
-| `01_tutorial_symmetry_tensors.ipynb` | Pt, Fe, altermagnetic RuO₂, Néel-vector rotation, operations, **spin groups** (RuO₂, MnTe, Cr, Mn₂Au) |
+| `01_tutorial_symmetry_tensors.ipynb` | Pt, Fe, altermagnetic RuO₂, **monoclinic MoO₂**, Néel-vector rotation, operations, **spin groups** (RuO₂, MnTe, Cr, Mn₂Au) |
 | `02_tutorial_convex_hull.ipynb` | 2-, 3-, 4-, 5-element hulls, slices, screening, parallel benchmark |
 | `03_tutorial_automatic_workflow.ipynb` | `symphase run`, OQMD/MP, VASP + Ibex round trip |
-| `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on) |
+| `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on, incl. MoO₂) |
 | `05_quiz_convex_hull.ipynb` | **20 questions** (conceptual + hands-on) |
 
 ```python

@@ -122,13 +122,12 @@
    "key": "ImMi"
   },
   {
-   "type": "num",
-   "question": "Hands-on: run analyze_tensors on examples/vasp/fcc_Pt. How many magnetic symmetry operations does it list (input cell)?",
-   "tol": 0.1,
-   "hint": "res['magnetic']['n_operations']",
-   "explanation": "48 operations of Fm-3m × {1, T} = 96 for the grey group Fm-3m1'.",
+   "type": "text",
+   "question": "Hands-on: what is the magnetic point group of monoclinic MoO2 (examples/vasp/MoO2_monoclinic)?",
+   "hint": "res['magnetic']['magnetic_point_group']",
+   "explanation": "MoO2 is non-magnetic: grey group P2_1/c1' (BNS 14.76), magnetic point group 2/m1'.",
    "id": 10,
-   "key": "Njk="
+   "key": "XSI5MTAydVwxbS8yIiAsIicxbS8yIls="
   },
   {
    "type": "text",
@@ -207,22 +206,24 @@
   },
   {
    "type": "num",
-   "question": "Hands-on: number of independent T-even spin Hall components of fcc Pt?",
+   "question": "Hands-on: how many independent T-even spin Hall components does monoclinic MoO2 have?",
    "tol": 0.1,
-   "explanation": "Cubic Oh symmetry leaves one component: σ^k_ij = σ_SH ε_kij.",
+   "hint": "res['tensors']['spin']['n_even']",
+   "explanation": "13 (cubic Pt has 1). The orbital Hall tensor has the same 13 components; without SOC all spin components vanish but the orbital ones survive.",
    "id": 18,
-   "key": "MQ=="
+   "key": "MzE="
   },
   {
    "type": "mc",
-   "question": "Why do orbital and spin conductivities obey identical symmetry constraints?",
+   "question": "MoO2 has point group 2/m with unique axis y. Which spin/orbital conductivity components σ^k_ij can be non-zero?",
    "options": {
-    "a": "because L = S in metals",
-    "b": "L and S are both axial, T-odd vectors",
-    "c": "orbital currents are always zero",
-    "d": "they do not — orbital tensors are rank 2"
+    "a": "only those with k ⊥ i ⊥ j",
+    "b": "those with an odd number of y indices among (k, i, j)",
+    "c": "those with an even number of y indices",
+    "d": "only σ^y_ij"
    },
-   "explanation": "The tensor shape only depends on how the operator transforms; L and S transform identically. Their magnitudes differ completely.",
+   "hint": "C2y maps x → −x, z → −z; the tensor is axial (det R = +1 for C2).",
+   "explanation": "Under C2y a component picks (−1)^(n_x+n_z); invariance needs n_x+n_z even, i.e. n_y odd. Inversion adds nothing for an axial rank-3 tensor. Examples: σ^y_xx, σ^y_yy, σ^x_xy (unconventional) and σ^z_xy (conventional).",
    "id": 19,
    "key": "ImIi"
   },

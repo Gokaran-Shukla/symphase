@@ -131,7 +131,7 @@
   \item \textbf{SymPhase at a glance} — three commands
   \item \textbf{Magnetic symmetry} — MSG, $\Pop$, $\Top$, $\Pop\Top$, $\Top\tau$; \textbf{spin groups}
   \item \textbf{Response tensors} — charge, spin, orbital conductivity
-  \item \textbf{Examples} — Pt, Fe, altermagnetic RuO$_2$
+  \item \textbf{Examples} — Pt, Fe, RuO$_2$, monoclinic MoO$_2$
 \end{enumerate}
 \column{0.48\textwidth}
 \begin{enumerate}\setcounter{enumi}{4}\setlength\itemsep{0.7em}
@@ -362,7 +362,7 @@ $\sig^{\rm odd}_{ij}=\epsilon_{ijk}h_k$ (Hall vector).
 \end{frame}
 
 % =============================================================================
-\sectionslide{4 \; Examples}{non-magnetic, ferromagnetic, altermagnetic}
+\sectionslide{4 \; Examples}{non-magnetic, ferromagnetic, altermagnetic, low symmetry}
 
 \begin{frame}{fcc Pt (grey group $Fm\bar3m1'$) and bcc Fe ($\mathbf m\parallel z$, $I4/mm'm'$)}
 \begin{columns}[T]
@@ -414,6 +414,50 @@ rotates collinear moments: one VASP run, all orientations.
 \begin{tcolorbox}[hl]
 SymPhase flags \emph{compensated, no $\Pop\Top$, no $\Top\tau$} $\Rightarrow$ altermagnet-like.
 \end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Low symmetry: monoclinic MoO$_2$ ($P2_1/c$, MPG $2/m1'$)}
+\begin{columns}[T]
+\column{0.40\textwidth}
+{\small Non-magnetic distorted rutile, unique axis $b\parallel y$; POSCAR + INCAR only.}\\[0.5em]
+\textbf{Charge} (4 independent):
+\[
+\sig=\begin{pmatrix}\sig_{xx}&0&\sig_{xz}\\0&\sig_{yy}&0\\\sig_{xz}&0&\sig_{zz}\end{pmatrix}
+\]
+\begin{tcolorbox}[sp]
+$\textcolor{opc}{C_{2y}}:\ x\to-x,\ z\to-z$ (axial tensor)\\[0.2em]
+$\sig^{k}_{ij}\neq0 \iff$ \textbf{odd number of $y$}\\
+$\Rightarrow$ \textbf{13} independent $\sig^{k}_{ij}$ for $\Sv$ and $\Lv$
+\end{tcolorbox}
+\column{0.57\textwidth}
+\textbf{Spin Hall tensor} ($\Top$-even), $\Jc^{\,\Sv_k}_i=\sig^{k}_{ij}\Ef_j$:
+{\footnotesize
+\[
+\sig^{\,x}=\begin{pmatrix}0&\sig^{x}_{xy}&0\\ \sig^{x}_{yx}&0&\sig^{x}_{yz}\\0&\sig^{x}_{zy}&0\end{pmatrix}\!,\quad
+\sig^{\,y}=\begin{pmatrix}\sig^{y}_{xx}&0&\sig^{y}_{xz}\\0&\sig^{y}_{yy}&0\\ \sig^{y}_{zx}&0&\sig^{y}_{zz}\end{pmatrix}
+\]
+\vspace{-0.4em}
+\[
+\sig^{\,z}=\begin{pmatrix}0&\sig^{z}_{xy}&0\\ \sig^{z}_{yx}&0&\sig^{z}_{yz}\\0&\sig^{z}_{zy}&0\end{pmatrix}
+\]}
+\vspace{-0.6em}
+\begin{columns}[T]
+\column{0.48\linewidth}
+{\small\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{@{}lll@{}}
+\toprule
+flow & field & allowed $\Sv$ \\ \midrule
+$x$ & $\Ef\parallel y$ & $\Sv_z$, \textcolor{accent}{$\Sv_x$} \\
+$z$ & $\Ef\parallel y$ & $\Sv_x$, \textcolor{accent}{$\Sv_z$} \\
+$z$ & $\Ef\parallel x$ & $\Sv_y$ \\ \bottomrule
+\end{tabular}\\[0.1em]
+{\scriptsize\textcolor{accent}{orange} = unconventional}}
+\column{0.5\linewidth}
+\begin{tcolorbox}[hl,halign=flush left]
+\textbf{No SOC:} all $\sig^{k}_{ij}(\Sv)\to0$;\\ the 13 $\sig^{k}_{ij}(\Lv)$ survive.
+\end{tcolorbox}
+\end{columns}
 \end{columns}
 \end{frame}
 
@@ -654,7 +698,7 @@ sbatch jobs/ibex_symphase_mpi.slurm
 \begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.2cm}@{}}
 \toprule
 notebook & content\\ \midrule
-01 & symmetry \& tensors: Pt, Fe, RuO$_2$ \\
+01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
 02 & hull: 2, 3, 4, 5 elements, slices, screening, benchmark\\
 03 & elements-only pipeline, Ibex workflow\\
 04 & \textbf{Quiz 1}: 20 questions, symmetry\\
@@ -672,8 +716,8 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{1.1}
-\centering\small
+\renewcommand{\arraystretch}{1.0}
+\centering\footnotesize
 \begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
 test & expected & ok \\ \midrule
@@ -684,13 +728,14 @@ RuO$_2$, Néel $\parallel[100]$ & $Pnn'm'$, AHE allowed & \textcolor{spinc}{\che
 non-collinear, \texttt{SAXIS}$\parallel x$ & moments rotated to $x$ & \textcolor{spinc}{\checkmark} \\
 hull: process / MPI & identical to serial & \textcolor{spinc}{\checkmark} \\
 Ibex script & file orders consistent, array dry run & \textcolor{spinc}{\checkmark} \\
-spin groups: RuO$_2$, MnTe, Cr, Mn$_2$Au & d-wave, g-wave, AFM, PT-AFM & \textcolor{spinc}{\checkmark} \\
+spin groups (RuO$_2$, MnTe, Cr, Mn$_2$Au) & d-wave, g-wave, AFM, PT-AFM & \textcolor{spinc}{\checkmark} \\
 INCAR \texttt{SAXIS} rotation & Néel $\to x$: $Pnn'm'$ & \textcolor{spinc}{\checkmark} \\
+MoO$_2$ ($P2_1/c$) & $2/m1'$, 13 SHE/OHE comps (odd-$y$ rule) & \textcolor{spinc}{\checkmark} \\
 quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\footnotesize Automated tests: \texttt{pytest tests/} (22 tests). OQMD/MP download checked against the documented API with a mock server.}
+{\footnotesize Automated tests: \texttt{pytest tests/} (23 tests). OQMD/MP download checked against the documented API with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}

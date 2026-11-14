@@ -1,0 +1,10 @@
+SYSTEM  = MoO2 monoclinic (non-magnetic metal), SOC run for spin/orbital Hall
+PREC    = Accurate
+ENCUT   = 520
+ISMEAR  = 1 ; SIGMA = 0.1
+EDIFF   = 1E-7
+ISPIN   = 1
+LSORBIT = .TRUE.          ! SOC: needed for the (relativistic) spin Hall effect
+MAGMOM  = 36*0            ! 12 atoms (Z = 4) x 3 components, non-magnetic
+SAXIS   = 0 0 1
+LWANNIER90 = .TRUE.

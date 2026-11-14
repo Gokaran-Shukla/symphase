@@ -96,7 +96,23 @@ Check the spin-splitter form yourself:"""),
     code("""r = analyze_tensors(f"{EX}/vasp/RuO2_Neel001_noSOC", tensors="spin")
 odd = r["tensors"]["spin"]["odd"]
 print("σ^z_xy =", odd["σ^z_xy"], "   σ^z_yx =", odd["σ^z_yx"])"""),
-    md("""## 5. Reading the symmetry elements and operations
+    md(r"""## 5. Low symmetry: monoclinic MoO₂ ($P2_1/c$)
+
+MoO₂ is a distorted-rutile, non-magnetic metal (structure from AMCSD 0011769, unique axis **b ∥ y**). Only POSCAR + INCAR are needed.
+In point group $2/m$ the 2-fold axis $C_{2y}$ flips $x$ and $z$; for an axial rank-3 tensor ($\det R=+1$) a component
+$\sigma^k_{ij}$ survives only if it contains an **odd number of $y$ indices**; inversion gives no further constraint."""),
+    code("""r = analyze_tensors(f"{EX}/vasp/MoO2_monoclinic", tensors="charge,spin,orbital")
+m, t = r["magnetic"], r["tensors"]
+print("MSG:", m["bns_symbol"], "| MPG:", m["magnetic_point_group"])
+print("charge: T-even", t["charge"]["n_even"], "independent ->", {k: v for k, v in t["charge"]["even"].items() if v != "0"})
+print("spin Hall (T-even):", t["spin"]["n_even"], "independent; orbital Hall:", t["orbital"]["n_even"])
+rep = r["report"]; i = rep.index("T-even (intrinsic SHE)"); print(rep[i:rep.index("T-odd (magnetic SHE", i)])"""),
+    md("""Unconventional channels appear: e.g. flow $x$ with $E\\parallel y$ carries both $S_z$ (conventional) **and** $S_x$.
+Without SOC (spin group) every spin component vanishes, while the 13 orbital components survive — the orbital Hall effect needs no SOC:"""),
+    code("""sg = r["spin_group"]["tensors"]
+print("NR spin Hall components:", sg["spin"]["n_even"], " | SOC-only:", len(sg["spin"]["soc_only_even"]))
+print("NR orbital Hall components:", sg["orbital"]["n_even"])"""),
+    md("""## 6. Reading the symmetry elements and operations
 
 `res["magnetic"]` contains the lists of mirrors, M·T planes, rotation axes and every operation (rotation matrix in lattice and Cartesian coordinates, translation, time reversal)."""),
     code("""m = analyze_tensors(f"{EX}/vasp/RuO2_Neel100_SOC")["magnetic"]
@@ -104,7 +120,7 @@ print("mirror planes      :", *m["mirrors"], sep="\\n   ")
 print("mirror planes × T  :", *m["mirrors_T"], sep="\\n   ")
 print("rotations × T      :", *m["rotations_T"], sep="\\n   ")
 print("number of operations:", m["n_operations"])"""),
-    md("""## 6. Command line, JSON and useful options
+    md("""## 7. Command line, JSON and useful options
 
 ```bash
 cd my_vasp_run/
@@ -120,7 +136,7 @@ symphase tensors --json res.json --out report.txt
 * The magnetic group couples spin and lattice (relativistic). Without SOC the true symmetry is a larger *spin group*.
 * Small induced moments can lower the symmetry: tune `mmin` / `mag_symprec`.
 * Tensors are given in the POSCAR Cartesian frame unless `frame="std"`."""),
-    md(r"""## 7. Spin groups — non-relativistic altermagnetism (no SOC)
+    md(r"""## 8. Spin groups — non-relativistic altermagnetism (no SOC)
 
 Without spin–orbit coupling spin and lattice transform independently: elements are pairs $[U\,||\,g]$
 ($U\in O(3)$ acting on spins, improper $U$ = rotation × $\mathcal T$). SymPhase finds, for every crystal operation $g$,
@@ -145,7 +161,7 @@ rep = r["report"]; print(rep[rep.index("SPIN GROUP"):])"""),
     code("""t = analyze_tensors(f"{EX}/vasp/RuO2_Neel001_noSOC", tensors="spin")["spin_group"]["tensors"]["spin"]
 print("NR T-odd (spin splitter):", {k: v for k, v in t["odd"].items() if v != "0"})
 print("SOC-only T-even (spin Hall):", t["soc_only_even"])"""),
-    md("""## 8. Exercise
+    md("""## 9. Exercise
 
 Rotate the bcc-Fe moment to [111] with `magmom="0.577 0.577 0.577  0.577 0.577 0.577"` (scaled by 2.2 if you like) and determine
 (i) the magnetic point group, (ii) the direction of the Hall vector, (iii) the number of independent T-odd spin-conductivity components.
@@ -358,9 +374,9 @@ S = [
          options={"a": "m-3m1'", "b": "4'/mmm'", "c": "4/mm'm'", "d": "all of them"},
          answer="c", hint="Compare the outputs for Pt, RuO2 [001] and Fe [001].",
          explanation="4/mm'm' (bcc Fe, m∥z) allows σ_xy^odd; m-3m1' is grey and 4'/mmm' (RuO2, Néel∥z) forbids the Hall vector."),
-    dict(type="num", question="Hands-on: run analyze_tensors on examples/vasp/fcc_Pt. How many magnetic symmetry operations does it list (input cell)?",
-         answer=96, tol=0.1, hint="res['magnetic']['n_operations']",
-         explanation="48 operations of Fm-3m × {1, T} = 96 for the grey group Fm-3m1'."),
+    dict(type="text", question="Hands-on: what is the magnetic point group of monoclinic MoO2 (examples/vasp/MoO2_monoclinic)?",
+         answer=["2/m1'", "2/m1’"], hint="res['magnetic']['magnetic_point_group']",
+         explanation="MoO2 is non-magnetic: grey group P2_1/c1' (BNS 14.76), magnetic point group 2/m1'."),
     dict(type="text", question="Hands-on: what is the BNS symbol of the magnetic space group of examples/vasp/bcc_Fe_m001 (m ∥ z)?",
          answer=["I4/mm'm'"], hint="res['magnetic']['bns_symbol']",
          explanation="I4/mm'm' (BNS 139.537): the 4-fold axis is along m; mirrors containing m are primed."),
@@ -381,12 +397,14 @@ S = [
     dict(type="mc", question="Hands-on: for RuO2 with Néel ∥ [100], the Hall vector is along …",
          options={"a": "[100]", "b": "[010]", "c": "[001]", "d": "zero"}, answer="b",
          explanation="h = (0, −σ_xz, 0): the crystal Hall vector is perpendicular to the Néel vector — a hallmark of the crystal Hall effect."),
-    dict(type="num", question="Hands-on: number of independent T-even spin Hall components of fcc Pt?",
-         answer=1, tol=0.1, explanation="Cubic Oh symmetry leaves one component: σ^k_ij = σ_SH ε_kij."),
-    dict(type="mc", question="Why do orbital and spin conductivities obey identical symmetry constraints?",
-         options={"a": "because L = S in metals", "b": "L and S are both axial, T-odd vectors",
-                  "c": "orbital currents are always zero", "d": "they do not — orbital tensors are rank 2"},
-         answer="b", explanation="The tensor shape only depends on how the operator transforms; L and S transform identically. Their magnitudes differ completely."),
+    dict(type="num", question="Hands-on: how many independent T-even spin Hall components does monoclinic MoO2 have?",
+         answer=13, tol=0.1, hint="res['tensors']['spin']['n_even']",
+         explanation="13 (cubic Pt has 1). The orbital Hall tensor has the same 13 components; without SOC all spin components vanish but the orbital ones survive."),
+    dict(type="mc", question="MoO2 has point group 2/m with unique axis y. Which spin/orbital conductivity components σ^k_ij can be non-zero?",
+         options={"a": "only those with k ⊥ i ⊥ j", "b": "those with an odd number of y indices among (k, i, j)",
+                  "c": "those with an even number of y indices", "d": "only σ^y_ij"},
+         answer="b", hint="C2y maps x → −x, z → −z; the tensor is axial (det R = +1 for C2).",
+         explanation="Under C2y a component picks (−1)^(n_x+n_z); invariance needs n_x+n_z even, i.e. n_y odd. Inversion adds nothing for an axial rank-3 tensor. Examples: σ^y_xx, σ^y_yy, σ^x_xy (unconventional) and σ^z_xy (conventional)."),
     dict(type="mc", question="SymPhase analyses a calculation WITHOUT spin–orbit coupling. Which statement is right?",
          options={"a": "the result is exact", "b": "the true symmetry is a larger spin group, so some components allowed by the magnetic group may vanish without SOC",
                   "c": "no magnetic group can be defined", "d": "all spin tensors vanish"},
@@ -487,12 +505,13 @@ def quiz_nb(name, title, qs, bank, intro, helper):
 
 
 quiz_nb("04_quiz_symmetry_tensors.ipynb", "Quiz 1 — magnetic symmetry & conductivity tensors (20 questions)",
-        S, "symmetry", "Work through **01_tutorial_symmetry_tensors.ipynb** first. Questions 10–18 are hands-on.",
+        S, "symmetry", "Work through **01_tutorial_symmetry_tensors.ipynb** first. Questions 10–18 are hands-on; Q10, Q18 and Q19 use monoclinic MoO₂.",
         """from symphase import analyze_tensors
 pt  = analyze_tensors(f"{EX}/vasp/fcc_Pt")
 fe  = analyze_tensors(f"{EX}/vasp/bcc_Fe_m001")
 rz  = analyze_tensors(f"{EX}/vasp/RuO2_Neel001_noSOC")
 rx  = analyze_tensors(f"{EX}/vasp/RuO2_Neel100_SOC")
+moo = analyze_tensors(f"{EX}/vasp/MoO2_monoclinic")
 # explore e.g.  fe['magnetic'], fe['tensors']['spin']['n_odd'], print(rz['report'])""")
 quiz_nb("05_quiz_convex_hull.ipynb", "Quiz 2 — convex hull & phase stability (20 questions)",
         H, "hull", "Work through **02_tutorial_convex_hull.ipynb** first. Questions 9–15 and 18 are hands-on (toy data).",
