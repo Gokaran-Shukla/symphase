@@ -46,6 +46,10 @@ def _gauss(x, s):
     return np.exp(-0.5 * (x / s) ** 2) / (s * math.sqrt(2 * math.pi))
 
 
+def _lorentz(x, s):
+    return (s / math.pi) / (x * x + s * s)
+
+
 class MagnonPhononVertex:
     """three-boson vertex and linewidths for a symphase.magphon.MagnonPhonon model"""
 
@@ -166,8 +170,9 @@ class MagnonPhononVertex:
         F = np.array(np.meshgrid(*f, indexing="ij")).reshape(3, -1).T
         return F @ (2 * np.pi * np.linalg.inv(self.lat).T)
 
-    def phonon_linewidth(self, q, T=300.0, grid=(60, 1, 1), sigma=0.2, modes=None):
+    def phonon_linewidth(self, q, T=300.0, grid=(60, 1, 1), sigma=0.2, modes=None, broadening="gauss"):
         """FWHM (meV) of every phonon at q from scattering and two-magnon decay; returns ω, γ, γ_scatt, γ_pair"""
+        _gauss = _lorentz if broadening == "lorentz" else globals()["_gauss"]   # noqa: F811
         q = np.asarray(q, float)
         om, fs = self.phonons(q)
         ks = self.kgrid(grid)
@@ -191,8 +196,9 @@ class MagnonPhononVertex:
         gp *= 2 * math.pi / nk
         return dict(omega=om, gamma=gs + gp, gamma_scatt=gs, gamma_pair=gp)
 
-    def magnon_linewidth(self, k, T=300.0, grid=(60, 1, 1), sigma=0.2):
+    def magnon_linewidth(self, k, T=300.0, grid=(60, 1, 1), sigma=0.2, broadening="gauss"):
         """FWHM (meV) of every magnon at k from phonon emission, absorption and fusion"""
+        _gauss = _lorentz if broadening == "lorentz" else globals()["_gauss"]   # noqa: F811
         k = np.asarray(k, float)
         ek, _ = self.magnon(k)
         nk_ = bose(ek, T)
@@ -223,6 +229,69 @@ class MagnonPhononVertex:
         f = 2 * math.pi / len(qs)
         return dict(epsilon=ek, gamma=f * (g_em + g_ab + g_fu), gamma_emit=f * g_em, gamma_abs=f * g_ab,
                     gamma_fusion=f * g_fu, n=nk_)
+
+    # ---------------------------------------------------------------- self-energies (beyond the golden rule)
+    def phonon_poles(self, q, nu, T=300.0, grid=(60, 1, 1)):
+        """weights w and poles e of Π_ν(q, ω) = (1/N) Σ w / (ω − e + iη)"""
+        q = np.asarray(q, float)
+        om, fs = self.phonons(q)
+        if fs[nu] is None:
+            return om[nu], np.zeros(0), np.zeros(0)
+        W, E = [], []
+        for k in self.kgrid(grid):
+            e1, _ = self.magnon(k)
+            e2, _ = self.magnon(k + q)
+            e3, _ = self.magnon(-k)
+            n1, n2, n3 = bose(e1, T), bose(e2, T), bose(e3, T)
+            Sm = np.abs(self.scattering(k, q, fs[nu])) ** 2          # [n(k+q), m(k)]
+            Pm = np.abs(self.pair(k, q, fs[nu])) ** 2                # [n(k+q), m(−k)]
+            W.append((Sm * (n1[None, :] - n2[:, None])).ravel())
+            E.append((e2[:, None] - e1[None, :]).ravel())
+            occ = 1 + n2[:, None] + n3[None, :]
+            W.append((0.5 * Pm * occ).ravel())
+            E.append((e2[:, None] + e3[None, :]).ravel())
+            W.append((-0.5 * Pm * occ).ravel())                      # anti-resonant (all-annihilation) term
+            E.append((-(e2[:, None] + e3[None, :])).ravel())
+        nk = len(self.kgrid(grid))
+        return om[nu], np.concatenate(W) / nk, np.concatenate(E)
+
+    def magnon_poles(self, k, n, T=300.0, grid=(60, 1, 1)):
+        """weights and poles of Σ_n(k, ω) = (1/N) Σ w / (ω − e + iη): emission, absorption, fusion, all-creation"""
+        k = np.asarray(k, float)
+        ek, _ = self.magnon(k)
+        W, E = [], []
+        qs = self.kgrid(grid)
+        for q in qs:
+            om, fs = self.phonons(q)
+            omm, fsm = self.phonons(-q)
+            ekq, ekmq, eqk = self.magnon(k + q)[0], self.magnon(k - q)[0], self.magnon(q - k)[0]
+            for nu in range(len(om)):
+                if fs[nu] is not None:
+                    Nq = bose(om[nu], T)
+                    Sa = np.abs(self.scattering(k, q, fs[nu])[:, n]) ** 2            # final m at k+q
+                    W.append(Sa * (Nq - bose(ekq, T)))
+                    E.append(ekq - om[nu])
+                    Pf = np.abs(self.pair(k - q, q, fs[nu])[n, :]) ** 2              # partner m at q−k
+                    W.append(Pf * (bose(eqk, T) - Nq))
+                    E.append(om[nu] - eqk)
+                    W.append(-Pf * (1 + bose(eqk, T) + Nq))                          # all-creation (anti-resonant)
+                    E.append(-(eqk + om[nu]))
+                if fsm[nu] is not None:
+                    Nm = bose(omm[nu], T)
+                    Se = np.abs(self.scattering(k, -q, fsm[nu])[:, n]) ** 2          # final m at k−q
+                    W.append(Se * (1 + Nm + bose(ekmq, T)))
+                    E.append(ekmq + omm[nu])
+        return ek[n], np.concatenate(W) / len(qs), np.concatenate(E)
+
+    @staticmethod
+    def self_energy(w, e, omegas, eta):
+        omegas = np.asarray(omegas, float)
+        return np.array([np.sum(w / (x - e + 1j * eta)) for x in omegas])
+
+    @staticmethod
+    def spectral(omega0, sigma_w, omegas, eta0=1e-3):
+        """A(ω) = −(1/π) Im 1/(ω − ω0 − Σ(ω) + iη0)"""
+        return -np.imag(1.0 / (np.asarray(omegas) - omega0 - sigma_w + 1j * eta0)) / math.pi
 
     # ---------------------------------------------------------------- Gilbert + phonon friction
     def damped_modes(self, k, alpha=0.0, eta=0.0, coupling=True):
@@ -334,6 +403,42 @@ def plot_linewidths(lw, res=None, save=None, scale=1.0, title=None, figsize=(7.6
     ax.plot([], [], color="#c0392b", lw=6, alpha=0.4, label="magnons ± γ/2" + (f" (×{scale:g})" if scale != 1 else ""))
     ax.legend(loc="upper left", fontsize=9)
     ax.set_title(title or f"two-magnon striction linewidths at T = {lw['T']:g} K", fontsize=11)
+    if save:
+        fig.savefig(save)
+    return fig
+
+
+def magnon_spectral_map(mp, qs, xs, omegas, T=300.0, grid=(200, 1, 1), eta=0.1, band=0, every=2):
+    """magnon spectral function A(k, ω) along a path from the second-order magnon–phonon self-energy"""
+    vx = MagnonPhononVertex(mp)
+    idx = list(range(0, len(qs), every))
+    A, e0s, shift, width = [], [], [], []
+    for i in idx:
+        k = np.asarray(qs[i], float)
+        if np.linalg.norm(k) < 1e-9:
+            k = k + 1e-4 * np.asarray(qs[min(i + 1, len(qs) - 1)], float)
+        e0, W, E = vx.magnon_poles(k, band, T=T, grid=grid)
+        S = vx.self_energy(W, E, omegas, eta)
+        A.append(vx.spectral(e0, S, omegas, eta0=1e-3))
+        s0 = vx.self_energy(W, E, [e0], eta)[0]
+        e0s.append(e0), shift.append(s0.real), width.append(-2 * s0.imag)
+    return dict(x=np.asarray(xs)[idx], omega=np.asarray(omegas), A=np.array(A), eps0=np.array(e0s),
+                re_sigma=np.array(shift), gamma=np.array(width), T=T)
+
+
+def plot_spectral_map(sm, save=None, title=None, figsize=(7.4, 4.6), vmax=None):
+    import matplotlib.pyplot as plt
+    from . import hull_plots  # noqa: F401
+    fig, ax = plt.subplots(figsize=figsize)
+    A = np.log10(np.clip(sm["A"].T, 1e-4, None))
+    pc = ax.pcolormesh(sm["x"], sm["omega"], A, shading="nearest", cmap="magma", vmin=-3, vmax=vmax or A.max())
+    ax.plot(sm["x"], sm["eps0"], "--", color="w", lw=1.0, label="bare magnon")
+    cb = fig.colorbar(pc, ax=ax)
+    cb.set_label("log₁₀ A(k, ω)")
+    ax.set_ylabel("ω (meV)")
+    ax.set_xlabel("k (1/Å)")
+    ax.legend(loc="upper left", fontsize=9, labelcolor="w", framealpha=0)
+    ax.set_title(title or f"magnon spectral function (magnon–phonon self-energy), T = {sm['T']:g} K", fontsize=10)
     if save:
         fig.savefig(save)
     return fig

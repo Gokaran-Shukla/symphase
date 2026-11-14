@@ -793,6 +793,13 @@ def main(argv=None):
     ap.add_argument("--lw-sigma", type=float, default=0.2, help="Gaussian width of the energy δ (meV) [0.2]")
     ap.add_argument("--alpha", type=float, default=0.0, help="Gilbert damping α of the spins (linearised LLG)")
     ap.add_argument("--phonon-damping", type=float, default=0.0, help="phonon friction η = phonon FWHM (meV)")
+    ap.add_argument("--spectral", action="store_true",
+                    help="magnon spectral function A(k, ω) from the magnon–phonon self-energy (with --phonons, --linewidth T)")
+    ap.add_argument("--hf", type=float, default=None, metavar="T",
+                    help="four-magnon (Hartree–Fock) renormalised magnons at temperature T (K)")
+    ap.add_argument("--hf-order", choices=("first", "sc"), default="first",
+                    help="'first' = 1/S correction (Oguchi, Dyson) or 'sc' = self-consistent [first]")
+    ap.add_argument("--hf-grid", type=int, nargs="+", default=[64], help="k grid of the HF correlations [64]")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -827,6 +834,8 @@ def main(argv=None):
         return _supercell_cli(args, lat, frac, types, symbols, mags, rots, trs, exch)
     if args.phonons or args.springs_nn:
         return _magphon_cli(args, lat, frac, types, symbols, mags, rots, trs, exch)
+    if args.hf is not None:
+        return _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch)
     res = analyse(lat, frac, types, symbols, mags, rots, trs, J=args.J, exchange=exch, K=args.K,
                   spin=args.spin, rmax=args.rmax, mmin=args.mmin, nproc=args.nproc, n_per=args.nq,
                   nmap=args.nmap, sg=sg, K_axis=args.K_axis, K_local=args.K_local, relax=args.relax,
@@ -896,6 +905,28 @@ def main(argv=None):
     return res
 
 
+def _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
+    from .magint import analyse_interacting, plot_interacting
+    res = analyse_interacting(lat, frac, types, symbols, mags, rots, trs, T=args.hf, order=args.hf_order,
+                              grid=tuple(args.hf_grid), n_per=args.nq, relax=args.relax, J=args.J, exchange=exch,
+                              K=args.K, spin=args.spin, rmax=args.rmax, mmin=args.mmin, K_axis=args.K_axis,
+                              K_local=args.K_local, field=args.field, g=args.g)
+    print(f"\n  four-magnon interactions (Hartree–Fock, {args.hf_order}{', ' + str(res['iterations']) + ' iterations' if args.hf_order == 'sc' else ''}), "
+          f"T = {args.hf:g} K, grid {args.hf_grid}")
+    if not res["collinear"]:
+        print("  NOTE: non-collinear order — cubic magnon terms (same order in 1/S) are not included")
+    r = res["ratio"]
+    print(f"  renormalisation ω_HF/ω_LSWT: {np.nanmin(r):.5f} … {np.nanmax(r):.5f}")
+    print(f"  ordered moment per site ⟨S^z'⟩ = {np.round(res['m_sub'], 4)}  (S = {np.round(res['model'].S, 3)})")
+    if args.plot and args.plot.lower() != "none":
+        stem, ext = os.path.splitext(args.plot)
+        plot_interacting(res, save=f"{stem}_hf{ext}")
+        np.savetxt(f"{stem}_hf.dat", np.column_stack([res["x"], res["omega0"], res["omega"]]),
+                   header="x(1/Å)  omega_LSWT_1..N  omega_HF_1..N (meV)")
+        print(f"  written: {stem}_hf{ext}, {stem}_hf.dat")
+    return res
+
+
 def _magphon_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
     from . import magphon as mpm
     springs, phon = None, None
@@ -943,6 +974,19 @@ def _magphon_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
             g = lw["damped_gamma"]
             print(f"  Gilbert α = {args.alpha:g}, phonon friction η = {args.phonon_damping:g} meV: coupled-mode FWHM "
                   f"{max(0.0, np.nanmin(g)):.4f} … {np.nanmax(g):.4f} meV")
+        if args.spectral:
+            from .magdamp import magnon_spectral_map, plot_spectral_map
+            emax = 1.25 * np.nanmax(res["omega0"])
+            sm = magnon_spectral_map(res["model"], res["q"], res["x"], np.linspace(0, emax, 400), T=T,
+                                     grid=tuple(args.lw_grid), eta=max(args.lw_sigma / 2, 0.02),
+                                     every=max(1, len(res["q"]) // 30))
+            res["spectral"] = sm
+            print(f"  magnon self-energy at the bare energies: Re Σ {np.min(sm['re_sigma']):+.3f} … "
+                  f"{np.max(sm['re_sigma']):+.3f} meV,  −2 Im Σ ≤ {np.max(sm['gamma']):.3f} meV")
+            if args.plot and args.plot.lower() != "none":
+                stem, ext = os.path.splitext(args.plot)
+                plot_spectral_map(sm, save=f"{stem}_spectral{ext}")
+                print(f"  written: {stem}_spectral{ext}")
         if args.plot and args.plot.lower() != "none":
             stem, ext = os.path.splitext(args.plot)
             plot_linewidths(lw, res, save=f"{stem}_linewidths{ext}")

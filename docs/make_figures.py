@@ -250,3 +250,48 @@ a2.set_title("AFM chain: Gilbert damping", fontsize=9.5); a2.set_ylim(0, 0.03)
 fig.tight_layout()
 fig.savefig(os.path.join(F, "damping.pdf")); fig.savefig(os.path.join(F, "damping.png"), dpi=160); plt.close(fig)
 print("figure damping")
+
+# ---------------------------------------------------------------- outlook: magnon–magnon interactions, self-energies
+import spglib as _sg2
+from symphase.magint import FourMagnonHF
+from symphase.magnons import analyse as _an
+from symphase.magphon import analyse_mp as _amp
+from symphase.magdamp import MagnonPhononVertex as _MPV
+def _hfm(kind, S, J, grid):
+    _a = 3.0
+    if kind == "afm":
+        lat_, fr_ = np.diag([2 * _a, 12, 12]), np.array([[0, 0, 0], [0.5, 0, 0]])
+    else:
+        lat_, fr_ = np.array([[_a, _a, 0], [_a, -_a, 0], [0, 0, 12.]]), np.array([[0, 0, 0], [0.5, 0.5, 0]])
+    ds_ = _sg2.get_symmetry_dataset((lat_, fr_, [0, 0]))
+    m_ = _an(lat_, fr_, [0, 0], ["Fe"] * 2, np.array([[0, 0, 2 * S], [0, 0, -2 * S]]), ds_.rotations, ds_.translations,
+             J=[J], spin=S, rmax=3.1, return_model=True)
+    return FourMagnonHF.from_model(lat_, fr_, m_).solve(grid=grid), lat_
+Ss = [0.5, 1.0, 1.5, 2.5, 5.0]
+zc, zs = [], []
+for S_ in Ss:
+    h_, _ = _hfm("afm", S_, 3.0, (600, 1, 1)); kk = np.array([0.3, 0, 0]); zc.append(h_.spectrum([kk])[0][0] / h_.bare_spectrum([kk])[0][0])
+    h_, l_ = _hfm("sq", S_, 1.0, (32, 32, 1)); kk = np.array([0.1, 0.05, 0]) @ (2 * np.pi * np.linalg.inv(l_).T)
+    zs.append(h_.spectrum([kk])[0][0] / h_.bare_spectrum([kk])[0][0])
+xs_ = np.linspace(0, 2.1, 100)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.5))
+a1.plot(xs_, 1 + (1 - 2 / np.pi) * xs_ / 2, color="#c0392b", lw=2, label="chain: 1 + (1−2/π)/2S")
+a1.plot(xs_, 1 + 0.15795 * xs_ / 2, color="#16325c", lw=2, label="square: 1 + 0.158/2S (Oguchi)")
+a1.plot(1 / np.array(Ss), zc, "o", color="#c0392b", mfc="w", ms=7); a1.plot(1 / np.array(Ss), zs, "s", color="#16325c", mfc="w", ms=7)
+a1.set_xlabel("1/S"); a1.set_ylabel("Z = ω$_{HF}$/ω$_{LSWT}$"); a1.legend(fontsize=8, loc="upper left")
+a1.set_title("four-magnon HF: zero-point renormalisation (symbols)", fontsize=9.5)
+_a = 3.0; _l1, _f1 = np.diag([_a, 12, 12]), np.zeros((1, 3)); _d1 = _sg2.get_symmetry_dataset((_l1, _f1, [0]))
+_X = np.array([np.pi / _a, 0, 0]); _ws = np.linspace(5, 27, 4401)
+for dj, c in ((1.0, "#16325c"), (3.0, "#c0392b")):
+    rr = _amp(_l1, _f1, [0], ["Fe"], np.array([[0, 0, 2.0]]), _d1.rotations, _d1.translations, springs=[(0, 0, [1, 0, 0], 600.0, 300.0)],
+              dJdr=[dj], J=[-5.0], K=0.3, K_axis=[0, 0, 1], spin=1.0, rmax=3.1, n_per=4,
+              path=[("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))], masses=[55.845])
+    v_ = _MPV(rr["model"]); e0, W_, E_ = v_.magnon_poles(_X, 0, T=300, grid=(1200, 1, 1))
+    A_ = v_.spectral(e0, v_.self_energy(W_, E_, _ws, 0.08), _ws, 1e-3)
+    a2.semilogy(_ws, np.clip(A_, 1e-4, None), color=c, lw=1.8, label=f"dJ/dr = {dj:g} meV/Å")
+a2.axvline(20.6, ls=":", color="k"); a2.text(20.75, 3e-4, "bare", fontsize=8)
+a2.set_xlabel("ω (meV)"); a2.set_ylabel("A(X, ω)"); a2.legend(fontsize=8, loc="upper left"); a2.set_ylim(1e-4, 50)
+a2.set_title("magnon spectral function: split-off state at strong coupling", fontsize=9.5)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "interactions.pdf")); fig.savefig(os.path.join(F, "interactions.png"), dpi=160); plt.close(fig)
+print("figure interactions")

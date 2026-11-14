@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -779,3 +779,83 @@ def test_gilbert_damping_fm_exact_and_afm_exchange_enhanced():
         assert abs(ex[0] - 2e-3 * (2 * 4.0 + 2 * 0.15) * 1.5) < 1e-5            # exchange-enhanced, k-independent
     o, g, wm = vx.damped_modes(np.array([0.5, 0, 0]), alpha=0.0, eta=0.3, coupling=False)
     assert np.allclose([gg for gg, w in zip(g, wm) if w < 0.5], 0.3)
+
+
+# ---------------------------------------------------------------- four-magnon interactions (Hartree–Fock)
+def _hf_model(kind, S, J, K=0.0, grid=(400, 1, 1), T=0.0, order="first"):
+    from symphase.magint import FourMagnonHF
+    from symphase.magnons import analyse
+    import spglib
+    a = 3.0
+    if kind == "fm":
+        lat, fr, mg, ty = np.diag([a, 12, 12]), np.zeros((1, 3)), np.array([[0, 0, 2 * S]]), [0]
+    elif kind == "afm":
+        lat, fr, ty = np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [0.5, 0, 0]]), [0, 0]
+        mg = np.array([[0, 0, 2 * S], [0, 0, -2 * S]])
+    else:
+        lat, fr, ty = np.array([[a, a, 0], [a, -a, 0], [0, 0, 12.]]), np.array([[0, 0, 0], [0.5, 0.5, 0]]), [0, 0]
+        mg = np.array([[0, 0, 2 * S], [0, 0, -2 * S]])
+    ds = spglib.get_symmetry_dataset((lat, fr, ty))
+    m = analyse(lat, fr, ty, ["Fe"] * len(ty), mg, ds.rotations, ds.translations, J=[J], K=K,
+                K_axis=[0, 0, 1] if K else None, spin=S, rmax=3.1, return_model=True)
+    return FourMagnonHF.from_model(lat, fr, m).solve(grid=grid, T=T, order=order), lat
+
+
+def test_four_magnon_dyson_ferromagnet():
+    from symphase.magint import _bose
+    hf0, _ = _hf_model("fm", 1.5, -5.0, K=0.3, T=0.0)
+    k = np.array([1.0, 0, 0])
+    assert abs(hf0.spectrum([k])[0][0] - hf0.bare_spectrum([k])[0][0]) < 1e-10        # FM ground state exact
+    hf, _ = _hf_model("fm", 1.5, -5.0, K=0.3, T=200.0)
+    ks = hf.kgrid((400, 1, 1))
+    e0 = np.array([hf.bare_spectrum([q])[0][0] for q in ks])
+    c = np.mean((1 - np.cos(3.0 * ks[:, 0])) * _bose(e0, 200.0))
+    E0, gap = hf.bare_spectrum([k])[0][0], 2 * 0.3 * 1.5
+    assert abs(hf.spectrum([k])[0][0] - (gap + (E0 - gap) * (1 - c / 1.5))) < 1e-8
+
+
+@pytest.mark.parametrize("S", [0.5, 1.0])
+def test_four_magnon_oguchi_chain(S):
+    hf, _ = _hf_model("afm", S, 3.0, grid=(800, 1, 1))
+    k = np.array([0.3, 0, 0])
+    assert abs(hf.spectrum([k])[0][0] / hf.bare_spectrum([k])[0][0] - (1 + (1 - 2 / np.pi) / (2 * S))) < 1e-5
+
+
+def test_four_magnon_oguchi_square_lattice():
+    hf, lat = _hf_model("square", 0.5, 1.0, grid=(32, 32, 1))
+    for kf in ([0.05, 0.02, 0], [0.31, 0, 0]):
+        k = np.array(kf) @ (2 * np.pi * np.linalg.inv(lat).T)
+        assert abs(hf.spectrum([k])[0][0] / hf.bare_spectrum([k])[0][0] - 1.15795) < 3e-4
+
+
+def test_four_magnon_self_consistent_and_breakdown():
+    hf1, _ = _hf_model("fm", 1.5, -5.0, K=0.3, T=100.0)
+    hfs, _ = _hf_model("fm", 1.5, -5.0, K=0.3, T=100.0, order="sc")
+    k = np.array([1.0, 0, 0])
+    assert hfs.iterations > 2 and hfs.spectrum([k])[0][0] < hf1.spectrum([k])[0][0]
+    with pytest.raises(ValueError, match="destroys the order"):
+        _hf_model("fm", 1.5, -5.0, K=0.3, T=200.0, order="sc")
+
+
+# ---------------------------------------------------------------- self-energies beyond the golden rule
+def test_self_energy_imag_part_equals_golden_rule_and_sum_rule():
+    from symphase.magphon import analyse_mp
+    from symphase.magdamp import MagnonPhononVertex
+    lat, fr, R, T = _chain()
+    r = analyse_mp(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, springs=[(0, 0, [1, 0, 0], 600., 300.)],
+                   dJdr=[1.0], J=[-5.0], K=0.3, K_axis=[0, 0, 1], spin=1.0, rmax=3.1, n_per=4,
+                   path=[("G", (0, 0, 0)), ("X", (0.5, 0, 0))], masses=[55.845])
+    vx = MagnonPhononVertex(r["model"])
+    q = np.array([0.9, 0, 0])
+    om, fs = vx.phonons(q)
+    nu = int(np.argmax([abs(x[0, 0]) if x is not None else 0 for x in fs]))
+    w0, W, E = vx.phonon_poles(q, nu, T=300, grid=(600, 1, 1))
+    g = vx.phonon_linewidth(q, T=300, grid=(600, 1, 1), sigma=0.05, modes=[nu], broadening="lorentz")["gamma"][nu]
+    assert abs(-2 * vx.self_energy(W, E, [w0], 0.05)[0].imag - g) < 1e-12
+    k = np.array([np.pi / 3, 0, 0])
+    e0, W, E = vx.magnon_poles(k, 0, T=300, grid=(200, 1, 1))
+    gm = vx.magnon_linewidth(k, T=300, grid=(200, 1, 1), sigma=0.05, broadening="lorentz")["gamma"][0]
+    assert abs(-2 * vx.self_energy(W, E, [e0], 0.05)[0].imag - gm) < 1e-12
+    ws = np.linspace(e0 - 15, e0 + 15, 6001)
+    A = vx.spectral(e0, vx.self_energy(W, E, ws, 0.05), ws, eta0=1e-3)
+    assert abs(np.trapezoid(A, ws) - 1) < 5e-3

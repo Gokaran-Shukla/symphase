@@ -1,0 +1,227 @@
+{
+ "title": "Quiz 9 — magnon–magnon interactions and self-energies",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "Where do four-magnon interactions come from in spin-wave theory?",
+   "options": {
+    "a": "from the phonons",
+    "b": "from the quartic terms of the Holstein–Primakoff expansion (n_i n_j and the a†aa corrections of S±)",
+    "c": "from the Zeeman term",
+    "d": "they do not exist"
+   },
+   "explanation": "S⁺ = √2S (a − a†aa/4S) and Sᶻ = S − n produce quartic boson terms on every bond.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does the Hartree–Fock (Wick) decoupling do?",
+   "options": {
+    "a": "drops all quartic terms",
+    "b": "replaces O1O2O3O4 by Σ_pairings ⟨O_aO_b⟩ O_cO_d — a renormalised quadratic Hamiltonian",
+    "c": "diagonalises H exactly",
+    "d": "adds phonons"
+   },
+   "explanation": "With thermal correlations ⟨a†a⟩, ⟨aa⟩ from the spin-wave spectrum.",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: FM chain (S = 1.5, J = −5 meV) at T = 0: HF − LSWT magnon energy at k = 1 Å⁻¹ (meV)?",
+   "tol": 1e-06,
+   "explanation": "The fully polarised ferromagnet is an exact eigenstate: no zero-point correction.",
+   "id": 3,
+   "key": "MC4w"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: same chain at T = 200 K, first-order HF energy at k = 1 Å⁻¹ (meV, 2 decimals)?",
+   "tol": 0.02,
+   "hint": "hf_model('fm', 1.5, -5.0, K=0.3, T=200).spectrum([[1,0,0]])",
+   "explanation": "19.57 meV vs 30.75 meV in LSWT — Dyson's thermal softening, reproduced exactly.",
+   "id": 4,
+   "key": "NzUuOTE="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: AFM chain, S = 1/2: renormalisation factor Z = ω_HF/ω_LSWT (4 decimals)?",
+   "tol": 0.0002,
+   "explanation": "Z = 1 + (1 − 2/π)/(2S) = 1.3634.",
+   "id": 5,
+   "key": "NDM2My4x"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: square-lattice AFM, S = 1/2: Z (3 decimals)?",
+   "tol": 0.002,
+   "explanation": "Oguchi's spin-wave velocity renormalisation Z_c = 1 + 0.158/(2S).",
+   "id": 6,
+   "key": "ODUxLjE="
+  },
+  {
+   "type": "mc",
+   "question": "Physically, the Oguchi factor Z_c > 1 means …",
+   "options": {
+    "a": "thermal softening",
+    "b": "zero-point (quantum) fluctuations reduce the ordered moment but stiffen the spin waves",
+    "c": "a phase transition",
+    "d": "phonon hardening"
+   },
+   "explanation": "Bond correlations ⟨a_ia_j⟩ from zero-point motion renormalise the exchange upwards by r/2S.",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: what happens to ⟨S^z⟩ of the S = 1/2 AFM chain as the k grid is refined?",
+   "options": {
+    "a": "it converges to 0.30",
+    "b": "it decreases without bound (logarithmic divergence): no long-range order in 1D",
+    "c": "it equals 1/2",
+    "d": "it oscillates"
+   },
+   "explanation": "∫dk/|k| diverges in 1D: spin-wave theory signals the absence of Néel order.",
+   "id": 8,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: FM chain at T = 100 K, SELF-CONSISTENT HF energy at k = 1 Å⁻¹ (meV, 2 decimals)?",
+   "tol": 0.03,
+   "hint": "hf_model('fm', 1.5, -5.0, K=0.3, T=100, order='sc')",
+   "explanation": "26.25 meV (first order: 27.28 meV): self-consistency enhances the softening.",
+   "id": 9,
+   "key": "NTIuNjI="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: self-consistent HF for the FM chain at 200 K …",
+   "options": {
+    "a": "converges quickly",
+    "b": "has no solution — the spin-wave Hamiltonian becomes unstable (no 1D order at T > 0)",
+    "c": "gives negative temperatures",
+    "d": "equals LSWT"
+   },
+   "explanation": "SymPhase stops with an explanatory error (Mermin–Wagner physics).",
+   "id": 10,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "For which magnets is the HF result the complete 1/S correction?",
+   "options": {
+    "a": "all",
+    "b": "collinear magnets; non-collinear orders also have cubic terms of the same order (not included)",
+    "c": "only ferromagnets",
+    "d": "none"
+   },
+   "explanation": "Cubic terms contribute at second order with the same power of 1/S in non-collinear structures.",
+   "id": 11,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How is the self-energy related to the golden-rule linewidth γ?",
+   "options": {
+    "a": "γ = Re Σ",
+    "b": "γ = −2 Im Σ(ω0) (exactly, with the same broadening)",
+    "c": "γ = |Σ|",
+    "d": "no relation"
+   },
+   "explanation": "Checked to 10⁻¹² in the tests; Re Σ and the ω-dependence are new information.",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: −2 Im Σ of the longitudinal phonon at q = 0.9 Å⁻¹ (dJ/dr = 1, T = 300 K, η = 0.05, grid 600) in meV (4 decimals)?",
+   "tol": 0.0005,
+   "explanation": "≈ 0.0185 meV, identical to the Lorentzian golden rule.",
+   "id": 13,
+   "key": "NTgxMC4w"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: Re Σ of the zone-boundary magnon (dJ/dr = 1 meV/Å, 300 K) in meV (3 decimals)?",
+   "tol": 0.003,
+   "explanation": "−0.044 meV: a small downward shift; the spectral peak moves to ≈ 20.57 meV.",
+   "id": 14,
+   "key": "NDQwLjAt"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: dJ/dr = 3 meV/Å — where is the spectral peak of the zone-boundary magnon (bare 20.6 meV)?",
+   "options": {
+    "a": "at 20.6 meV",
+    "b": "at ≈ 23.17 meV: a split-off state above the phonon-emission continuum edge",
+    "c": "at 0",
+    "d": "there is none"
+   },
+   "explanation": "Re Σ diverges at the 1D continuum edge (22.85 meV); a sharp state forms above it.",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: spectral weight within ±1 meV of that split-off peak (2 decimals)?",
+   "tol": 0.02,
+   "explanation": "≈ 0.22: most of the weight is smeared over the continuum — far from a Lorentzian quasiparticle.",
+   "id": 16,
+   "key": "MjIuMA=="
+  },
+  {
+   "type": "mc",
+   "question": "What does the sum rule ∫A(ω)dω = 1 check?",
+   "options": {
+    "a": "the phonon masses",
+    "b": "the analytic structure (causality, normalisation) of the self-energy and the ω window",
+    "c": "the temperature",
+    "d": "nothing"
+   },
+   "explanation": "It holds to ≈ 2×10⁻⁴ for the 1D magnon spectral function.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why are the 'anti-resonant' (all-creation / all-annihilation) terms kept?",
+   "options": {
+    "a": "they dominate Im Σ",
+    "b": "they contribute to Re Σ (energy shift) although they never conserve energy",
+    "c": "they are not kept",
+    "d": "for speed"
+   },
+   "explanation": "Their poles lie at negative ω, so they only shift the energy.",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which CLI options compute the four-magnon renormalisation?",
+   "options": {
+    "a": "--relax",
+    "b": "--hf T [--hf-order first|sc] [--hf-grid ...]",
+    "c": "--spiral auto",
+    "d": "--supercell"
+   },
+   "explanation": "Writes *_hf.png/.dat with LSWT and HF bands.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which CLI option draws the magnon spectral function from the magnon–phonon self-energy?",
+   "options": {
+    "a": "--spectral (with --phonons and --linewidth T)",
+    "b": "--plot none",
+    "c": "--hf",
+    "d": "--scan"
+   },
+   "explanation": "Writes *_spectral.png (log A(k, ω) along the path).",
+   "id": 20,
+   "key": "ImEi"
+  }
+ ]
+}

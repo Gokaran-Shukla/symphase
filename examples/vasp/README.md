@@ -22,3 +22,5 @@ contain only POSCAR + INCAR (moments from `MAGMOM`).
 | `Distorted_spiral_K` | J₁–J₂ chain + in-plane easy axis | — | distorted spiral (3q harmonic), `--scan` |
 | `Skyrmion_triangular` | triangular FM + interfacial DMI + field | — | 3Q skyrmion crystal, N_sk = −3 per 10×10 cell |
 | `MagnonPhonon_FM_chain` | FM chain + springs + magnetoelastic ∂J/∂d | — | magnon polarons, 1.11 meV anticrossing gap |
+| `AFM_chain_HF` | AFM chain, two Mn | — | four-magnon HF: Oguchi Z = 1 + (1−2/π)/2S |
+| `Square_AFM_HF` | √2 square-lattice AFM, Cu S = ½ | — | Oguchi Z<sub>c</sub> = 1.15794, ⟨S<sup>z</sup>⟩ = 0.31 |

@@ -1839,3 +1839,171 @@ quiz_nb("21_quiz_two_magnon_damping.ipynb", "Quiz 8 — two-magnon striction and
         DM_HELPER + "\nr = fm_chain(); vx = MagnonPhononVertex(r['model'])\nqph = np.array([0.9, 0, 0]); om, fs = vx.phonons(qph)\n"
         "nu = int(np.argmax([abs(x[0, 0]) if x is not None else 0 for x in fs]))\nX = np.array([np.pi / a, 0, 0])\n"
         "ra = afm_chain(); va = MagnonPhononVertex(ra['model'])")
+
+
+# =============================================================================
+# 22  magnon–magnon interactions + self-energies;  23 quiz
+# =============================================================================
+IN_HELPER = 'import numpy as np, spglib, math, warnings\nimport matplotlib.pyplot as plt\nwarnings.simplefilter("ignore")\nfrom symphase.magint import FourMagnonHF, analyse_interacting, plot_interacting, _bose\nfrom symphase.magnons import analyse\nfrom symphase.magphon import analyse_mp\nfrom symphase.magdamp import MagnonPhononVertex, magnon_spectral_map, plot_spectral_map\na = 3.0\ndef hf_model(kind, S, J, K=0.0, grid=(400, 1, 1), T=0.0, order="first"):\n    if kind == "fm":\n        lat, fr, mg, ty = np.diag([a, 12, 12]), np.zeros((1, 3)), np.array([[0, 0, 2 * S]]), [0]\n    elif kind == "afm":\n        lat, fr, ty = np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [0.5, 0, 0]]), [0, 0]\n        mg = np.array([[0, 0, 2 * S], [0, 0, -2 * S]])\n    else:\n        lat, fr, ty = np.array([[a, a, 0], [a, -a, 0], [0, 0, 12.]]), np.array([[0, 0, 0], [0.5, 0.5, 0]]), [0, 0]\n        mg = np.array([[0, 0, 2 * S], [0, 0, -2 * S]])\n    ds = spglib.get_symmetry_dataset((lat, fr, ty))\n    m = analyse(lat, fr, ty, ["Fe"] * len(ty), mg, ds.rotations, ds.translations, J=[J], K=K,\n                K_axis=[0, 0, 1] if K else None, spin=S, rmax=3.1, return_model=True)\n    return FourMagnonHF.from_model(lat, fr, m).solve(grid=grid, T=T, order=order), lat\nlat1, fr1 = np.diag([a, 12, 12]), np.zeros((1, 3)); ds1 = spglib.get_symmetry_dataset((lat1, fr1, [0]))\ndef fm_chain_mp(dJdr=1.0, n_per=60):\n    return analyse_mp(lat1, fr1, [0], ["Fe"], np.array([[0, 0, 2.0]]), ds1.rotations, ds1.translations,\n                      springs=[(0, 0, [1, 0, 0], 600.0, 300.0)], dJdr=[dJdr], J=[-5.0], K=0.3, K_axis=[0, 0, 1], spin=1.0,\n                      rmax=3.1, n_per=n_per, path=[("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))], masses=[55.845])\nX = np.array([np.pi / a, 0, 0])\n'
+
+save([
+    md(r"""# SymPhase tutorial 22 — magnon–magnon interactions and self-energies beyond the golden rule
+
+**Part A — four-magnon interactions.** Holstein–Primakoff to quartic order in local frames,
+$S^+=\sqrt{2S}(a-a^\dagger aa/4S)$, $S^z{}'=S-a^\dagger a$, gives for every bond the quartic terms
+$(\mathbf v_i\cdot J\cdot\mathbf v_j)\,n_in_j-\sum_{\alpha\beta}(\mathbf e_i^\alpha\cdot J\cdot\mathbf e_j^\beta)\frac{\sqrt{S_iS_j}}8\big[L_i^\alpha C_j^\beta/S_j+C_i^\alpha L_j^\beta/S_i\big]$.
+They are decoupled with Wick's theorem (**Hartree–Fock**) using the thermal correlations $\langle a^\dagger a\rangle,\langle aa\rangle$:
+`order="first"` = the $1/S$ correction (Oguchi, Dyson), `order="sc"` = self-consistent spin-wave theory.
+
+**Part B — self-energies.** From the magnon–magnon–phonon vertex of tutorial 20 the full complex, frequency-dependent
+self-energies $\Sigma(\omega)$ and spectral functions $A(\omega)=-\frac1\pi\mathrm{Im}\,[\omega-\omega_0-\Sigma(\omega)]^{-1}$: energy shifts, non-Lorentzian
+lineshapes and split-off states that the golden rule (which only gives $-2\,\mathrm{Im}\,\Sigma(\omega_0)$) cannot describe."""),
+    SETUP,
+    code(IN_HELPER),
+    md(r"""## A1. Ferromagnet: no zero-point correction, thermal softening (Dyson)
+
+For a ferromagnet the ground state is exact: at $T=0$ the HF correction vanishes. At finite $T$ the first-order result is Dyson's
+$\varepsilon_k(T)=\Delta+(\varepsilon_k^0-\Delta)\,[1-\frac1{NS}\sum_q(1-\cos qa)\,n_q]$:"""),
+    code("""hf0, _ = hf_model("fm", 1.5, -5.0, K=0.3, T=0.0); k = np.array([1.0, 0, 0])
+print("T = 0: HF − LSWT =", hf0.spectrum([k])[0][0] - hf0.bare_spectrum([k])[0][0], "meV")
+Ts = [0, 25, 50, 100, 150, 200]; ratio = []
+for T in Ts:
+    hf, _ = hf_model("fm", 1.5, -5.0, K=0.3, T=T)
+    ks = hf.kgrid((400, 1, 1)); e0 = np.array([hf.bare_spectrum([q])[0][0] for q in ks])
+    c = np.mean((1 - np.cos(a * ks[:, 0])) * _bose(e0, T)); E0 = hf.bare_spectrum([k])[0][0]
+    E = hf.spectrum([k])[0][0]; ratio.append((E - 0.9) / (E0 - 0.9))
+    print(f"T = {T:4d} K: ε(k) HF = {E:8.4f}  Dyson = {0.9 + (E0 - 0.9) * (1 - c / 1.5):8.4f}  LSWT = {E0:.4f} meV")
+fig, ax = plt.subplots(figsize=(4.8, 3.2)); ax.plot(Ts, ratio, "o-", color="#c0392b")
+ax.set_xlabel("T (K)"); ax.set_ylabel("stiffness D(T)/D(0)"); ax.set_title("thermal magnon softening (1D FM chain)", fontsize=10)"""),
+    md(r"""## A2. Antiferromagnet: zero-point fluctuations stiffen the spin waves (Oguchi)
+
+At $T=0$ the HF correction rescales the AFM spectrum by $Z=1+r/2S$, $r=1-\frac1N\sum_k\sqrt{1-\gamma_k^2}$:
+$r=1-2/\pi=0.3634$ (chain), $0.1579$ (square lattice; $Z_c=1.158$ for $S=\frac12$)."""),
+    code("""for S in (0.5, 1.0, 2.5):
+    hf, _ = hf_model("afm", S, 3.0, grid=(800, 1, 1)); kk = np.array([0.3, 0, 0])
+    print(f"chain  S = {S}: Z = {hf.spectrum([kk])[0][0] / hf.bare_spectrum([kk])[0][0]:.6f}   1 + (1 − 2/π)/2S = {1 + (1 - 2/np.pi)/(2*S):.6f}")
+hf, lat = hf_model("square", 0.5, 1.0, grid=(40, 40, 1))
+for kf in ([0.05, 0.02, 0], [0.31, 0, 0]):
+    kk = np.array(kf) @ (2 * np.pi * np.linalg.inv(lat).T)
+    print(f"square S = 1/2, k = {kf}: Z = {hf.spectrum([kk])[0][0] / hf.bare_spectrum([kk])[0][0]:.5f}  (Oguchi 1.15795)")"""),
+    md(r"""### Ordered moment
+$\langle S^z\rangle=S-\langle a^\dagger a\rangle$. On the square lattice the zero-point reduction is $\approx0.197$ (grid-converged value; the
+log-singular BZ sum converges slowly). **In 1D** it diverges logarithmically with the grid — no long-range order, as it must be:"""),
+    code("""for g in (40, 80):
+    hf, _ = hf_model("square", 0.5, 1.0, grid=(g, g, 1)); print(f"square S=1/2, grid {g}²: ⟨S^z⟩ = {hf.sublattice_magnetisation((g, g, 1))[0]:.4f}")
+for g in (200, 800, 3200):
+    hf, _ = hf_model("afm", 0.5, 3.0, grid=(g, 1, 1)); print(f"chain  S=1/2, grid {g}: ⟨S^z⟩ = {hf.sublattice_magnetisation((g, 1, 1))[0]:.4f}")"""),
+    md(r"""## A3. Self-consistent spin-wave theory and its breakdown
+
+`order="sc"` iterates the Hartree–Fock correlations. In the 1D ferromagnet thermal fluctuations grow with $T$; at 200 K there is **no**
+self-consistent solution — the spin-wave Hamiltonian becomes unstable (Mermin–Wagner: no 1D order at $T>0$):"""),
+    code("""for T in (50.0, 100.0, 200.0):
+    try:
+        h1, _ = hf_model("fm", 1.5, -5.0, K=0.3, T=T); hs, _ = hf_model("fm", 1.5, -5.0, K=0.3, T=T, order="sc")
+        print(f"T = {T:5.0f} K: first order {h1.spectrum([k])[0][0]:.4f}, self-consistent {hs.spectrum([k])[0][0]:.4f} meV ({hs.iterations} iterations)")
+    except ValueError as err:
+        print(f"T = {T:5.0f} K: {str(err)[:150]}...")"""),
+    md(r"""## B1. Self-energies: $-2\,\mathrm{Im}\,\Sigma(\omega_0)$ is the golden rule
+
+With the same Lorentzian broadening the identity is exact; the real part is new information (energy shift):"""),
+    code("""vx = MagnonPhononVertex(fm_chain_mp(1.0)["model"])
+e0, W, E = vx.magnon_poles(X, 0, T=300, grid=(300, 1, 1))
+s0 = vx.self_energy(W, E, [e0], 0.05)[0]
+g = vx.magnon_linewidth(X, T=300, grid=(300, 1, 1), sigma=0.05, broadening="lorentz")["gamma"][0]
+print(f"magnon at X (dJ/dr = 1 meV/Å): −2 Im Σ = {-2*s0.imag:.6f}  golden rule = {g:.6f} meV;  Re Σ = {s0.real:+.4f} meV")
+ws = np.linspace(e0 - 15, e0 + 15, 6001); A = vx.spectral(e0, vx.self_energy(W, E, ws, 0.05), ws, 1e-3)
+print("∫A dω =", round(np.trapezoid(A, ws), 4), ";  peak at", round(ws[np.argmax(A)], 3), "meV (bare", round(e0, 3), ")")"""),
+    md(r"""## B2. Strong coupling: the golden rule breaks down
+
+With $\mathrm dJ/\mathrm dr=3$ meV/Å the zone-boundary magnon sits inside the phonon-emission continuum; Re Σ has a square-root
+singularity at the continuum edge (1D) and a **sharp split-off state** appears above it, carrying only part of the weight:"""),
+    code("""fig, ax = plt.subplots(figsize=(6.4, 3.6))
+for dj, c in ((1.0, "#16325c"), (3.0, "#c0392b")):
+    v = MagnonPhononVertex(fm_chain_mp(dj)["model"]); e0, W, E = v.magnon_poles(X, 0, T=300, grid=(300, 1, 1))
+    A = v.spectral(e0, v.self_energy(W, E, ws, 0.05), ws, 1e-3); i = int(np.argmax(A))
+    print(f"dJ/dr = {dj}: peak {ws[i]:.3f} meV (bare {e0:.2f}); weight within ±1 meV of the peak {np.trapezoid(A[abs(ws-ws[i])<1], ws[abs(ws-ws[i])<1]):.3f}")
+    ax.semilogy(ws, np.clip(A, 1e-4, None), color=c, lw=1.8, label=f"dJ/dr = {dj} meV/Å")
+ax.axvline(e0, ls=":", color="k"); ax.set_xlabel("ω (meV)"); ax.set_ylabel("A(X, ω)"); ax.legend(); ax.set_xlim(10, 27)"""),
+    md("## B3. Spectral map along Γ–X"),
+    code("""r = fm_chain_mp(1.0)
+sm = magnon_spectral_map(r["model"], r["q"], r["x"], np.linspace(0, 26, 300), T=300.0, grid=(200, 1, 1), eta=0.1, every=3)
+plot_spectral_map(sm);"""),
+    md("""## Command line
+```bash
+cd examples/vasp/Square_AFM_HF   && symphase magnons --J 1.0 --rmax 3.1 --spin 0.5 --hf 0 --hf-grid 40 40          # Oguchi
+cd examples/vasp/AFM_chain_HF    && symphase magnons --J 3.0 --rmax 3.1 --spin 1 --hf 0 --hf-grid 800
+symphase magnons ... --hf 100 --hf-order sc                                                       # self-consistent
+cd examples/vasp/MagnonPhonon_FM_chain && symphase magnons --J -5 --K 0.3 --K-axis 0 0 1 --spin 1 --rmax 3.1 \\
+        --phonons springs.dat --dJdr 1 --linewidth 300 --spectral
+```
+Limits: exact to $1/S$ for collinear magnets; cubic magnon terms of non-collinear orders and second-order four-magnon damping are not
+included. Continue with **23_quiz_magnon_interactions.ipynb**."""),
+], "22_tutorial_magnon_interactions.ipynb")
+
+IQ = [
+    dict(type="mc", question="Where do four-magnon interactions come from in spin-wave theory?",
+         options={"a": "from the phonons", "b": "from the quartic terms of the Holstein–Primakoff expansion (n_i n_j and the a†aa corrections of S±)",
+                  "c": "from the Zeeman term", "d": "they do not exist"},
+         answer="b", explanation="S⁺ = √2S (a − a†aa/4S) and Sᶻ = S − n produce quartic boson terms on every bond."),
+    dict(type="mc", question="What does the Hartree–Fock (Wick) decoupling do?",
+         options={"a": "drops all quartic terms", "b": "replaces O1O2O3O4 by Σ_pairings ⟨O_aO_b⟩ O_cO_d — a renormalised quadratic Hamiltonian",
+                  "c": "diagonalises H exactly", "d": "adds phonons"},
+         answer="b", explanation="With thermal correlations ⟨a†a⟩, ⟨aa⟩ from the spin-wave spectrum."),
+    dict(type="num", question="Hands-on: FM chain (S = 1.5, J = −5 meV) at T = 0: HF − LSWT magnon energy at k = 1 Å⁻¹ (meV)?",
+         answer=0.0, tol=1e-6, explanation="The fully polarised ferromagnet is an exact eigenstate: no zero-point correction."),
+    dict(type="num", question="Hands-on: same chain at T = 200 K, first-order HF energy at k = 1 Å⁻¹ (meV, 2 decimals)?",
+         answer=19.57, tol=0.02, hint="hf_model('fm', 1.5, -5.0, K=0.3, T=200).spectrum([[1,0,0]])",
+         explanation="19.57 meV vs 30.75 meV in LSWT — Dyson's thermal softening, reproduced exactly."),
+    dict(type="num", question="Hands-on: AFM chain, S = 1/2: renormalisation factor Z = ω_HF/ω_LSWT (4 decimals)?",
+         answer=1.3634, tol=2e-4, explanation="Z = 1 + (1 − 2/π)/(2S) = 1.3634."),
+    dict(type="num", question="Hands-on: square-lattice AFM, S = 1/2: Z (3 decimals)?",
+         answer=1.158, tol=2e-3, explanation="Oguchi's spin-wave velocity renormalisation Z_c = 1 + 0.158/(2S)."),
+    dict(type="mc", question="Physically, the Oguchi factor Z_c > 1 means …",
+         options={"a": "thermal softening", "b": "zero-point (quantum) fluctuations reduce the ordered moment but stiffen the spin waves",
+                  "c": "a phase transition", "d": "phonon hardening"},
+         answer="b", explanation="Bond correlations ⟨a_ia_j⟩ from zero-point motion renormalise the exchange upwards by r/2S."),
+    dict(type="mc", question="Hands-on: what happens to ⟨S^z⟩ of the S = 1/2 AFM chain as the k grid is refined?",
+         options={"a": "it converges to 0.30", "b": "it decreases without bound (logarithmic divergence): no long-range order in 1D",
+                  "c": "it equals 1/2", "d": "it oscillates"},
+         answer="b", explanation="∫dk/|k| diverges in 1D: spin-wave theory signals the absence of Néel order."),
+    dict(type="num", question="Hands-on: FM chain at T = 100 K, SELF-CONSISTENT HF energy at k = 1 Å⁻¹ (meV, 2 decimals)?",
+         answer=26.25, tol=0.03, hint="hf_model('fm', 1.5, -5.0, K=0.3, T=100, order='sc')",
+         explanation="26.25 meV (first order: 27.28 meV): self-consistency enhances the softening."),
+    dict(type="mc", question="Hands-on: self-consistent HF for the FM chain at 200 K …",
+         options={"a": "converges quickly", "b": "has no solution — the spin-wave Hamiltonian becomes unstable (no 1D order at T > 0)",
+                  "c": "gives negative temperatures", "d": "equals LSWT"},
+         answer="b", explanation="SymPhase stops with an explanatory error (Mermin–Wagner physics)."),
+    dict(type="mc", question="For which magnets is the HF result the complete 1/S correction?",
+         options={"a": "all", "b": "collinear magnets; non-collinear orders also have cubic terms of the same order (not included)",
+                  "c": "only ferromagnets", "d": "none"},
+         answer="b", explanation="Cubic terms contribute at second order with the same power of 1/S in non-collinear structures."),
+    dict(type="mc", question="How is the self-energy related to the golden-rule linewidth γ?",
+         options={"a": "γ = Re Σ", "b": "γ = −2 Im Σ(ω0) (exactly, with the same broadening)", "c": "γ = |Σ|", "d": "no relation"},
+         answer="b", explanation="Checked to 10⁻¹² in the tests; Re Σ and the ω-dependence are new information."),
+    dict(type="num", question="Hands-on: −2 Im Σ of the longitudinal phonon at q = 0.9 Å⁻¹ (dJ/dr = 1, T = 300 K, η = 0.05, grid 600) in meV (4 decimals)?",
+         answer=0.0185, tol=5e-4, explanation="≈ 0.0185 meV, identical to the Lorentzian golden rule."),
+    dict(type="num", question="Hands-on: Re Σ of the zone-boundary magnon (dJ/dr = 1 meV/Å, 300 K) in meV (3 decimals)?",
+         answer=-0.044, tol=0.003, explanation="−0.044 meV: a small downward shift; the spectral peak moves to ≈ 20.57 meV."),
+    dict(type="mc", question="Hands-on: dJ/dr = 3 meV/Å — where is the spectral peak of the zone-boundary magnon (bare 20.6 meV)?",
+         options={"a": "at 20.6 meV", "b": "at ≈ 23.17 meV: a split-off state above the phonon-emission continuum edge", "c": "at 0", "d": "there is none"},
+         answer="b", explanation="Re Σ diverges at the 1D continuum edge (22.85 meV); a sharp state forms above it."),
+    dict(type="num", question="Hands-on: spectral weight within ±1 meV of that split-off peak (2 decimals)?",
+         answer=0.22, tol=0.02, explanation="≈ 0.22: most of the weight is smeared over the continuum — far from a Lorentzian quasiparticle."),
+    dict(type="mc", question="What does the sum rule ∫A(ω)dω = 1 check?",
+         options={"a": "the phonon masses", "b": "the analytic structure (causality, normalisation) of the self-energy and the ω window",
+                  "c": "the temperature", "d": "nothing"},
+         answer="b", explanation="It holds to ≈ 2×10⁻⁴ for the 1D magnon spectral function."),
+    dict(type="mc", question="Why are the 'anti-resonant' (all-creation / all-annihilation) terms kept?",
+         options={"a": "they dominate Im Σ", "b": "they contribute to Re Σ (energy shift) although they never conserve energy", "c": "they are not kept", "d": "for speed"},
+         answer="b", explanation="Their poles lie at negative ω, so they only shift the energy."),
+    dict(type="mc", question="Which CLI options compute the four-magnon renormalisation?",
+         options={"a": "--relax", "b": "--hf T [--hf-order first|sc] [--hf-grid ...]", "c": "--spiral auto", "d": "--supercell"},
+         answer="b", explanation="Writes *_hf.png/.dat with LSWT and HF bands."),
+    dict(type="mc", question="Which CLI option draws the magnon spectral function from the magnon–phonon self-energy?",
+         options={"a": "--spectral (with --phonons and --linewidth T)", "b": "--plot none", "c": "--hf", "d": "--scan"},
+         answer="a", explanation="Writes *_spectral.png (log A(k, ω) along the path)."),
+]
+build_bank(os.path.join(DATA, "quiz_interactions.json"), "Quiz 9 — magnon–magnon interactions and self-energies", IQ)
+quiz_nb("23_quiz_magnon_interactions.ipynb", "Quiz 9 — magnon–magnon interactions and self-energies (20 questions)",
+        IQ, "interactions", "Work through **22_tutorial_magnon_interactions.ipynb** first. Questions 3–6, 8–10 and 13–16 are hands-on.",
+        IN_HELPER + "\nkq = np.array([1.0, 0, 0])")

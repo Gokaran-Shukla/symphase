@@ -733,6 +733,18 @@ exact linearised LLG. \cmd{--linewidth T --alpha --phonon-damping}.}
 AFM: LLG = energy-dissipation formula, $\gamma=2\alpha(2J+2K)S$; AFM optical phonon decays into two magnons at $T=0$.}
 \end{frame}
 
+\begin{frame}{Magnon--magnon interactions and self-energies beyond the golden rule}
+\noindent{\footnotesize Holstein--Primakoff to quartic order in local frames, Wick (Hartree--Fock) decoupling with thermal $\langle a^\dagger a\rangle,\langle aa\rangle$:
+first order $=\textcolor{spinc}{1/S}$ correction, or self-consistent. From the vertex $M(\mathbf k,\mathbf q)$: complex $\textcolor{red!70!black}{\Sigma(\omega)}$ and
+$A(\omega)=-\frac1\pi\mathrm{Im}\,[\omega-\omega_0-\textcolor{red!70!black}{\Sigma(\omega)}]^{-1}$. \cmd{--hf T [--hf-order sc]}, \cmd{--spectral}.}
+\vspace{0.25em}
+
+\centering\includegraphics[width=0.84\textwidth]{figures/interactions.pdf}
+
+{\tiny Dyson FM ($T$-softening) exact; Oguchi $Z=1+(1-2/\pi)/2S$ (chain), $Z_c=1.15795$ (square, $S=\frac12$); 1D $\langle S^z\rangle$ diverges, SC-HF breaks down (Mermin--Wagner);
+$-2\,\mathrm{Im}\,\Sigma(\omega_0)=\gamma_{\rm golden}$ to $10^{-12}$, $\int A=1$; strong coupling: split-off state above the emission continuum (weight 0.22).}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -941,7 +953,7 @@ sbatch jobs/ibex_symphase_mpi.slurm
 \begin{columns}[T]
 \column{0.5\textwidth}
 \renewcommand{\arraystretch}{1.25}
-{\scriptsize\renewcommand{\arraystretch}{1.08}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
+{\scriptsize\renewcommand{\arraystretch}{0.98}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
 \toprule
 notebook & content\\ \midrule
 01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
@@ -957,7 +969,8 @@ notebook & content\\ \midrule
 17 & Kubo magnitudes with symmetry\\
 18 & TDEP / SSCHA anharmonic phonons\\
 20 & two-magnon striction, damping\\
-04, 05, 09, 11, 13, 16, 19, 21 & \textbf{8 quizzes $\times$ 20 questions}\\ \bottomrule
+22 & four-magnon HF, self-energies\\
+04, 05, 09, 11, 13, 16, 19, 21, 23 & \textbf{9 quizzes $\times$ 20 questions}\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -998,11 +1011,13 @@ QHA & \texttt{PhonopyQHA}; $\gamma=0$, Grüneisen relation & \textcolor{spinc}{\
 Kubo & Haldane, Kane–Mele quantised; 3D units & \textcolor{spinc}{\checkmark} \\
 TDEP / SSCHA & exact oscillator, Gibbs–Bogoliubov bound & \textcolor{spinc}{\checkmark} \\
 two-magnon / damping & frozen-phonon supercell, 1D roots, FM/AFM LLG & \textcolor{spinc}{\checkmark} \\
-quiz keys & 160 / 160 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+four-magnon HF & Dyson FM, Oguchi chain/square, 1D breakdown & \textcolor{spinc}{\checkmark} \\
+self-energies & $-2\,\mathrm{Im}\,\Sigma=\gamma$ golden rule, $\int A=1$ & \textcolor{spinc}{\checkmark} \\
+quiz keys & 180 / 180 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (79); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (86); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -1018,7 +1033,7 @@ quiz keys & 160 / 160 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item magnon–magnon (four-magnon) interactions, magnon–phonon self-energies beyond the golden rule
+  \item second-order four-magnon damping; cubic magnon terms in non-collinear magnets
   \item Edelstein, nonlinear Hall, torkance tensors
   \item Fermi-surface (1/$\Gamma$) Kubo terms and orbital Hall from \texttt{hr.dat} + $L$ matrices
   \item direct TDEP force-constant input (phonon dispersions at $T$)
