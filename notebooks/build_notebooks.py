@@ -2007,3 +2007,180 @@ build_bank(os.path.join(DATA, "quiz_interactions.json"), "Quiz 9 — magnon–ma
 quiz_nb("23_quiz_magnon_interactions.ipynb", "Quiz 9 — magnon–magnon interactions and self-energies (20 questions)",
         IQ, "interactions", "Work through **22_tutorial_magnon_interactions.ipynb** first. Questions 3–6, 8–10 and 13–16 are hands-on.",
         IN_HELPER + "\nkq = np.array([1.0, 0, 0])")
+
+
+# =============================================================================
+# 24  cubic magnon terms + four-magnon damping;  25 quiz
+# =============================================================================
+NL_HELPER = 'import math, numpy as np, spglib\nimport matplotlib.pyplot as plt\nfrom symphase.magint import FourMagnonHF, MagnonSelfEnergy\nfrom symphase.magcheck import BosonCluster, classical_expansion\nfrom symphase.magnons import relax_spins, make_path, analyse\nfrom symphase.tensors import read_poscar, read_incar\na = 3.0\n\ndef canted_chain(h=4.2):\n    """AFM chain, XYZ exchange (Jy = 1.3), field h along −z: canted, gapped — the ED test bed"""\n    J = np.diag([1.0, 1.3, 1.0]); S = np.array([1.0, 1.0])\n    pairs = [(0, 1, np.array([a, 0, 0.]), J), (1, 0, np.array([a, 0, 0.]), J)]\n    hfield = np.array([[0, 0, -h]] * 2)\n    dirs, _, _ = relax_spins(np.array([[0, 1, 0.5], [0, -1, 0.5]]), S, [0, 1], pairs, [None, None], hfield=hfield,\n                             steps=200000, tol=1e-15)\n    return FourMagnonHF(np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], dirs, S, pairs, None, hfield)\n\ndef triangular(S=0.5, G=36):\n    """120° triangular AFM (√3×√3 cell of examples/vasp/Triangular_120AFM_INCAR), J = 1 meV"""\n    d = "../examples/vasp/Triangular_120AFM_INCAR"\n    p = read_poscar(f"{d}/POSCAR"); mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)\n    ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0, 0]))\n    m = analyse(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, ds.rotations, ds.translations, J=[1.0], spin=S,\n                rmax=3.1, return_model=True)\n    hf = FourMagnonHF.from_model(np.asarray(p["lattice"], float), np.asarray(p["frac"], float), m).solve(grid=(G, G, 1))\n    return hf, MagnonSelfEnergy(hf)\n\ndef canted_square(hr, S=1.0):\n    """square-lattice Heisenberg AFM (J = 1 meV) in a field h = hr·h_s along z (h_s = 8JS), √2 cell"""\n    lat = np.array([[a, a, 0], [a, -a, 0], [0, 0, 12.]])\n    pairs = [(0, 1, np.array(d, float), np.eye(3)) for d in ([a, 0, 0], [-a, 0, 0], [0, a, 0], [0, -a, 0])]\n    s = math.sqrt(1 - hr ** 2)\n    hf = FourMagnonHF(lat, np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], np.array([[s, 0, hr], [-s, 0, hr]]),\n                      np.array([S, S]), pairs, None, np.array([[0, 0, -8 * hr * S]] * 2))\n    return hf, MagnonSelfEnergy(hf), lat\n\ndef square_fm(J=-2.0, K=0.5, S=1.0):\n    """square-lattice ferromagnet, easy axis z (gap 2KS)"""\n    pairs = [(0, 0, np.array([a, 0, 0.]), J * np.eye(3)), (0, 0, np.array([0, a, 0.]), J * np.eye(3))]\n    hf = FourMagnonHF(np.diag([a, a, 12.]), np.zeros((1, 3)), [0], np.array([[0, 0, 1.]]), np.array([S]), pairs,\n                      [np.diag([0, 0, -K])], None)\n    return hf, MagnonSelfEnergy(hf)\n\ndef ed_check(h=4.2, nmax=8):\n    """exact diagonalisation (3-cell cluster) vs bubble + tadpole and four-magnon sunset; returns rows per mode"""\n    hf = canted_chain(h); se = MagnonSelfEnergy(hf)\n    cl = BosonCluster(hf, 3, nmax); qs = cl.kpoints(); k = qs[1]; e = se._mset(k)[0]\n    H2 = cl.quadratic()\n    ed3 = cl.second_order(H2, cl.operator(se.terms3), e)\n    hf.update(qs, 0.0); ed4 = cl.second_order(H2, cl.operator(se.terms4) - cl.operator(cl.hf_terms()), e); hf.hf = None\n    rows = []\n    for n in range(2):\n        _, w, ee = se.cubic_poles(k, n, 0.0, qs=qs); bub = float(np.sum(w / (e[n] - ee)).real)\n        tad = se.tadpole(k, n, 0.0, ks=qs)\n        _, w, ee = se.quartic_poles(k, n, 0.0, qs=qs); sun = float(np.sum(w / (e[n] - ee)).real)\n        rows.append(dict(n=n, eps=e[n], ed3=ed3[n]["second"], bubble=bub, tadpole=tad, ed4=ed4[n]["second"], sunset=sun))\n    return rows\n\ndef tri_velocity(se, hf, kf=0.03):\n    """2S·δε/ε of the three Goldstone branches at small k (x direction): HF (first order), Re Σ³, total"""\n    k = np.array([kf * 2 * np.pi / a, 0, 0])\n    o = se.onshell(k, 0.0, (36, 36, 1), eta=0.01)\n    dhf = hf.first_order_shift([k])[0]\n    S2 = 2 * hf.S[0]\n    return dict(e0=o["e0"], hf=S2 * dhf / o["e0"], re3=S2 * o["re3"] / o["e0"],\n                total=S2 * (dhf + o["re3"] + o["tad"]) / o["e0"], gamma3=o["gamma3"])\n'
+
+save([
+    md(r"""# SymPhase tutorial 24 — cubic magnon interactions and second-order four-magnon damping
+
+Tutorial 22 treated the quartic terms at first order (Hartree–Fock). Two pieces were missing:
+
+**Cubic terms.** In a non-collinear magnet the bond energy contains $(S-n_i)\,\mathbf v_i\!\cdot\!J\!\cdot\!\mathbf S_j^\perp$ — its expansion gives
+three-boson terms $-n_iL_j$ and $-S_iC_j/4S_j$ (plus single-ion and Zeeman contributions). They vanish for collinear order.
+At second order they give the **one-loop bubble** (decay $\alpha_k\to\alpha_q\alpha_{k-q}$, absorption, source) — the same order $1/S$ as Hartree–Fock —
+and a static **tadpole** from the linear terms that normal ordering produces (the $O(1/S)$ shift of the classical canting angles).
+Together: the complete $1/S$ spectrum $\varepsilon+\delta\varepsilon_{\rm HF}+\mathrm{Re}\,\Sigma^{(3)}(\varepsilon)+\Sigma_{\rm tad}$ and **spontaneous magnon decay** $\Gamma^{(3)}=-2\,\mathrm{Im}\,\Sigma^{(3)}$ even at $T=0$.
+
+**Four-magnon sunset.** The quartic vertex at second order: $2\leftrightarrow2$ scattering, $1\leftrightarrow3$ decay ($O(1/S^2)$) — the intrinsic thermal magnon–magnon damping of collinear magnets.
+
+Both use the general bosonic formula $\Sigma(\omega)=r!\sum|c|^2\,[\prod_{\rm cr}(1+n)\prod_{\rm an}n-\prod_{\rm cr}n\prod_{\rm an}(1+n)]/(\omega-\sum_{\rm cr}\varepsilon+\sum_{\rm an}\varepsilon+i\eta)$
+with the vertex $c$ obtained by Fourier + Bogoliubov transformation of the real-space Holstein–Primakoff terms (`MagnonSelfEnergy`)."""),
+    SETUP,
+    code(NL_HELPER),
+    md(r"""## 1. Validation I — the Holstein–Primakoff terms equal the classical expansion
+
+For random non-collinear spins, random exchange tensors, anisotropy and field, the cubic (and quartic) terms evaluated with complex numbers $z_i$
+equal the $\lambda^3$ ($\lambda^4$) Taylor coefficient of the *exact* classical energy with $S^{z'}=S-|z|^2$, $S^+=z\sqrt{2S-|z|^2}$:"""),
+    code("""rng = np.random.default_rng(2); M = 3
+lat = np.diag([M * a, 4.0, 12]); cart = np.array([[m * a + 0.1 * m, 0.2 * m, 0] for m in range(M)])
+pairs = [(m, (m + 1) % M, cart[(m + 1) % M] - cart[m] + (lat[0] if (m + 1) % M == 0 else 0), rng.normal(size=(3, 3))) for m in range(M)]
+pairs += [(m, m, lat[1].copy(), rng.normal(size=(3, 3))) for m in range(M)]
+dirs = rng.normal(size=(M, 3)); dirs /= np.linalg.norm(dirs, axis=1)[:, None]
+toy = FourMagnonHF(lat, cart, list(range(M)), dirs, rng.uniform(0.6, 2, M), pairs, [None] * M, None)
+r = classical_expansion(toy)
+print("cubic   : classical %.8f   Holstein–Primakoff %.8f" % r["cubic"])
+print("quartic : classical %.8f   Holstein–Primakoff %.8f" % r["quartic"])"""),
+    md(r"""## 2. Validation II — exact diagonalisation
+
+A canted AFM chain (XYZ exchange, field near saturation) on a periodic 3-cell cluster: the bosonic Hamiltonian $H_2+\lambda H_3$ and
+$H_2+\lambda\,{:}H_4{:}$ (${:}H_4{:}=H_4-H_{\rm HF}$) are diagonalised exactly in momentum sectors; the $\lambda^2$ coefficient of the one-magnon
+energy must equal bubble + tadpole and the sunset on the same 3-point $k$ grid:"""),
+    code("""rows = ed_check()
+for r in rows:
+    print(f"mode {r['n']} (ε = {r['eps']:.4f} meV)")
+    print(f"   cubic  : ED {r['ed3']:+.6f}   bubble {r['bubble']:+.6f} + tadpole {r['tadpole']:+.6f} = {r['bubble'] + r['tadpole']:+.6f}")
+    print(f"   quartic: ED {r['ed4']:+.6f}   sunset {r['sunset']:+.6f}")"""),
+    md(r"""Without the tadpole the cubic result would be off by 0.08 meV: in this canted state the linear terms are finite.
+
+## 3. Triangular-lattice antiferromagnet: the complete $1/S$ spectrum
+
+The 120° state (no linear terms by symmetry). Linear spin-wave ordered moment $S-0.261$; near the three Goldstone modes the first-order
+Hartree–Fock shift alone opens a spurious gap that the cubic bubble cancels — the Goldstone theorem holds order by order.
+The velocities: $c_\parallel(1-0.115/2S)$, $c_\perp(1+0.083/2S)$ (Chubukov, Sachdev, Senthil 1994)."""),
+    code("""hf, se = triangular(S=0.5)
+print("⟨S⟩ =", np.round(hf.sublattice_magnetisation((30, 30, 1)), 4), "(S − 0.2535 on this grid; S − 0.261 converged)")
+print("linear terms:", np.abs(se.linear_terms(0.0, (12, 12, 1))[0]).max())
+v = tri_velocity(se, hf)
+for n in range(3):
+    print(f"branch {n}: ε = {v['e0'][n]:.4f}   2S·δε/ε:  HF {v['hf'][n]:+9.3f}   Re Σ³ {v['re3'][n]:+9.3f}   total {v['total'][n]:+.3f}")
+print("c_∥ branch: −0.118 vs −0.115 (Chubukov et al.); c_⊥ branches: HF ≈ +37 and Re Σ³ ≈ −37 cancel to ≈ +0.09 (literature +0.083)")"""),
+    md("Along the Brillouin-zone path (strong downward renormalisation, flat regions and decays — Starykh, Chubukov, Abanov; Chernyshev, Zhitomirsky):"),
+    code("""d = "../examples/vasp/Triangular_120AFM_INCAR"
+p = read_poscar(f"{d}/POSCAR"); mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)
+ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0, 0]))
+from symphase.magint import analyse_interacting, plot_interacting
+res = analyse_interacting(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, ds.rotations, ds.translations, T=0.0,
+                          grid=(24, 24, 1), n_per=12, cubic=True, sigma=0.04, every=2, J=[1.0], spin=0.5, rmax=3.1)
+plot_interacting(res, title="triangular AFM, S = 1/2: complete 1/S spectrum and T = 0 decay rate");"""),
+    md(r"""## 4. Field-induced spontaneous magnon decay (square-lattice AFM)
+
+In a field the spins cant, cubic terms appear, and above $h^*\approx0.76\,h_s$ magnons decay into two magnons at $T=0$
+(Zhitomirsky, Chernyshev 1999). Maximum decay rate along Γ–X:"""),
+    code("""hrs = [0.6, 0.68, 0.72, 0.76, 0.8, 0.85, 0.9]; gm = []
+for hr in hrs:
+    hfq, seq, latq = canted_square(hr)
+    qq, _, _ = make_path(latq, [("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))], 8)
+    gm.append(max(seq.onshell(x, 0.0, (24, 24, 1), sigma=0.04, tadpole=False)["gamma3"].max() for x in qq[1:]))
+    print(f"h/h_s = {hr:.2f}: max Γ³ = {gm[-1]:.3f} meV")
+fig, ax = plt.subplots(figsize=(4.8, 3.2)); ax.plot(hrs, gm, "o-", color="#c0392b"); ax.axvline(0.76, ls=":", color="k")
+ax.set_xlabel("h / h_s"); ax.set_ylabel("max Γ³ (meV)"); ax.set_title("onset of magnon decay", fontsize=10)"""),
+    md("Below threshold the small values are smearing tails: they shrink when the grid is refined and σ reduced."),
+    md(r"""## 5. Four-magnon damping at finite temperature (square-lattice ferromagnet)
+
+No decays at $T=0$ (number-conserving vertex); thermal $2\leftrightarrow2$ scattering gives a damping that grows steeply with $T$ and is
+suppressed at small $k$ (on-shell vertex → 0, Dyson):"""),
+    code("""fm, sf = square_fm()
+kfs = [0.1, 0.2, 0.3, 0.4]
+for T in (0.0, 20.0, 40.0):
+    g4 = [sf.onshell(np.array([kf * 2 * np.pi / a, 0, 0]), T, (12, 12, 1), cubic=False, quartic=True, eta=0.2, sigma=0.2)["gamma4"][0]
+          for kf in kfs]
+    print(f"T = {T:4.0f} K: Γ⁴ =", np.round(g4, 4), "meV")"""),
+    md(r"""## 6. Spectral function of a decaying magnon
+
+The pole representation works with the spectral-function helpers of tutorial 20:"""),
+    code("""from symphase.magdamp import MagnonPhononVertex as MPV
+k = np.array([2 * np.pi / (3 * a) * 1.2, 0.0, 0])
+e0, W, E = se.cubic_poles(k, 2, 0.0, (36, 36, 1))
+ws = np.linspace(0, 3, 1500); sig = MPV.self_energy(W, E, ws, 0.03)
+A = MPV.spectral(e0, sig, ws, 1e-3)
+fig, ax = plt.subplots(figsize=(5.4, 3.2)); ax.plot(ws, A, color="#16325c"); ax.axvline(e0, ls=":", color="k")
+ax.set_xlabel("ω (meV)"); ax.set_ylabel("A(k, ω)"); ax.set_title("cubic self-energy: broadened, shifted magnon", fontsize=10)"""),
+    md("""## Command line
+```bash
+cd examples/vasp/Triangular_120AFM_INCAR
+symphase magnons --J 1 --spin 0.5 --rmax 3.1 --hf 0 --hf-grid 30 30 --cubic --se-sigma 0.03 --nq 16 --se-every 2
+symphase magnons ... --hf 40 --damping4 --grid4 12 12          # four-magnon damping Γ⁴
+```
+Output: `*_hf.png` (bands with Γ shading + linewidth panel), `*_selfenergy.dat` (ε, δε_HF, Re Σ³, Σ_tad, Re Σ⁴, ω, Γ³, Γ⁴).
+Limits: on-shell perturbation theory (no self-consistency near decay thresholds); single-ion anisotropy enters the quartic terms at harmonic
+level only; Goldstone modes exactly at their zero are excluded. Continue with **25_quiz_nonlinear_spin_waves.ipynb**."""),
+], "24_tutorial_cubic_four_magnon_damping.ipynb")
+
+NQ = [
+    dict(type="mc", question="Where do cubic (three-magnon) terms come from?",
+         options={"a": "from phonons", "b": "from (S − n_i) v_i·J·S_j^⊥ (and single-ion/Zeeman terms) — non-zero only when v_i·J·e_j ≠ 0, i.e. non-collinear order",
+                  "c": "from the quartic HP expansion", "d": "from the Zeeman term in collinear magnets only"},
+         answer="b", explanation="For collinear spins v_i·J·e_j = 0 (isotropic J), so cubic terms vanish."),
+    dict(type="mc", question="At which order in 1/S does the cubic one-loop bubble contribute to the spectrum?",
+         options={"a": "1/S² ", "b": "1/S — the same order as Hartree–Fock", "c": "S", "d": "never"},
+         answer="b", explanation="(√S)² vertices × 1/(S·energy): the complete 1/S spectrum needs both."),
+    dict(type="mc", question="What is the tadpole?",
+         options={"a": "a phonon", "b": "the second-order effect of linear terms from normal-ordering H₃ — the O(1/S) shift of the classical angles",
+                  "c": "the four-magnon sunset", "d": "a numerical artefact"},
+         answer="b", explanation="Σ_tad = −Σ_m 2Re(h_m g_m)/ε_0m; zero in the 120° structure by symmetry, finite in canted states."),
+    dict(type="num", question="Hands-on: ed_check() — exact-diagonalisation second-order shift of mode 0 (meV, 3 decimals)?",
+         answer=-0.7175, tol=0.002, explanation="−0.7175 meV = bubble (−0.7941) + tadpole (+0.0766)."),
+    dict(type="num", question="Hands-on: the tadpole contribution of mode 0 in ed_check() (meV, 3 decimals)?",
+         answer=0.0766, tol=0.002, explanation="+0.077 meV: without it the cubic result would disagree with exact diagonalisation."),
+    dict(type="num", question="Hands-on: four-magnon sunset of mode 0 in ed_check() (meV, 4 decimals)?",
+         answer=-0.0059, tol=2e-4, explanation="−0.00590 meV, equal to exact diagonalisation of H₂ + λ:H₄:."),
+    dict(type="mc", question="Why is H₄ − H_HF used in the exact-diagonalisation check of the sunset?",
+         options={"a": "for speed", "b": "Wick: H₄ − H_HF = :H₄: + const (normal-ordered in magnon operators), whose 2nd-order shift is the sunset",
+                  "c": "to remove the field", "d": "H_HF is zero"},
+         answer="b", explanation="Its first-order shift vanishes, as the check confirms."),
+    dict(type="num", question="Hands-on: triangular AFM, S = 1/2: linear-spin-wave ordered moment ⟨S⟩ on the 30×30 grid (4 decimals)?",
+         answer=0.2465, tol=1e-3, explanation="S − 0.2535 (converges to S − 0.261)."),
+    dict(type="num", question="Hands-on: triangular AFM — 2S·δε/ε of the c_∥ Goldstone branch at |k|a = 0.188 (3 decimals)?",
+         answer=-0.118, tol=0.006, explanation="≈ −0.118 vs the analytic −0.115 (Chubukov, Sachdev, Senthil)."),
+    dict(type="mc", question="Hands-on: near the ±K Goldstone branches, what do the HF and cubic terms do separately?",
+         options={"a": "both vanish", "b": "each is ≈ ±37ε (a spurious gap); they cancel — Goldstone modes stay gapless", "c": "both are positive", "d": "HF is zero"},
+         answer="b", explanation="The Goldstone theorem holds only for the complete 1/S result."),
+    dict(type="mc", question="Why is the first-order HF shift [T†H_HF T]_nn used instead of diagonalising H + H_HF?",
+         options={"a": "it is faster", "b": "strict order-by-order 1/S expansion; diagonalising mixes orders and breaks Goldstone modes in non-collinear magnets",
+                  "c": "they always agree", "d": "for finite T only"},
+         answer="b", explanation="For collinear magnets (H_HF ∝ H) both are identical."),
+    dict(type="mc", question="Hands-on: square-lattice AFM in a field — magnons decay at T = 0 …",
+         options={"a": "at any field", "b": "only above h* ≈ 0.76 h_s", "c": "never", "d": "only at saturation"},
+         answer="b", explanation="Max Γ³ ≈ 0.03 meV (smearing tail) at 0.6 h_s vs ≈ 2 meV at 0.85 h_s (Zhitomirsky, Chernyshev)."),
+    dict(type="num", question="Hands-on: square FM (J = −2 meV, K = 0.5 meV, S = 1), k = 0.4·2π/a, T = 40 K, grid 12×12, η = σ = 0.2: Γ⁴ (meV, 2 decimals)?",
+         answer=1.30, tol=0.05, explanation="≈ 1.30 meV of thermal magnon–magnon damping."),
+    dict(type="num", question="Hands-on: the same ferromagnet at T = 0: Γ⁴ (meV)?",
+         answer=0.0, tol=1e-9, explanation="The ferromagnetic quartic vertex conserves magnon number: no decay at T = 0."),
+    dict(type="mc", question="Thermal factor of the 2→2 scattering channel X + B → C + D?",
+         options={"a": "1 + n_B", "b": "n_B(1+n_C)(1+n_D) − (1+n_B)n_C n_D", "c": "n_C n_D", "d": "1"},
+         answer="b", explanation="General rule Π_cr(1+n)Π_an n − Π_cr n Π_an(1+n); positive on shell."),
+    dict(type="mc", question="At which order in 1/S is the four-magnon sunset?",
+         options={"a": "1/S", "b": "1/S² — the leading damping of collinear magnets", "c": "S⁰", "d": "1/S³"},
+         answer="b", explanation="Two quartic vertices (∝ S⁰ each) over an energy ∝ S."),
+    dict(type="mc", question="Which CLI options add the cubic terms and the four-magnon damping?",
+         options={"a": "--relax --scan", "b": "--hf T --cubic  /  --hf T --damping4 [--grid4 ...]", "c": "--spectral", "d": "--supercell"},
+         answer="b", explanation="Output: *_hf.png and *_selfenergy.dat."),
+    dict(type="mc", question="Why are Goldstone modes exactly at their zero excluded from the on-shell results?",
+         options={"a": "they are unstable", "b": "ε = 0: the on-shell 1/S expansion is singular there (the correction itself must vanish)", "c": "they have no vertex", "d": "they are phonons"},
+         answer="b", explanation="Results are reported for ε > 10⁻³ of the bandwidth."),
+    dict(type="mc", question="What does symphase.magcheck provide?",
+         options={"a": "plots", "b": "independent checks: classical-energy expansion of the HP terms and exact diagonalisation of boson clusters",
+                  "c": "DFT inputs", "d": "symmetry tables"},
+         answer="b", explanation="Use it to verify vertices for your own models."),
+    dict(type="mc", question="Which part is NOT complete at the quartic level?",
+         options={"a": "exchange tensors", "b": "single-ion anisotropy (quartic terms harmonic only)", "c": "DMI", "d": "Zeeman"},
+         answer="b", explanation="Single-ion quartic terms also carry operator-ordering (S − 1/2) subtleties; they are left out consistently."),
+]
+build_bank(os.path.join(DATA, "quiz_nonlinear.json"), "Quiz 10 — cubic magnon terms and four-magnon damping", NQ)
+quiz_nb("25_quiz_nonlinear_spin_waves.ipynb", "Quiz 10 — cubic magnon terms and four-magnon damping (20 questions)",
+        NQ, "nonlinear", "Work through **24_tutorial_cubic_four_magnon_damping.ipynb** first. Questions 4–6, 8, 9, 13 and 14 are hands-on.",
+        NL_HELPER)

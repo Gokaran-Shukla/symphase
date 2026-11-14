@@ -295,3 +295,41 @@ a2.set_title("magnon spectral function: split-off state at strong coupling", fon
 fig.tight_layout()
 fig.savefig(os.path.join(F, "interactions.pdf")); fig.savefig(os.path.join(F, "interactions.png"), dpi=160); plt.close(fig)
 print("figure interactions")
+
+# ---------------------------------------------------------------- outlook: cubic terms, four-magnon damping
+from symphase.magint import analyse_interacting as _ai, FourMagnonHF as _F4, MagnonSelfEnergy as _MSE
+from symphase.magnons import make_path as _mkp
+from symphase.tensors import read_poscar as _rp, read_incar as _ri
+_d = os.path.join(H, "..", "examples", "vasp", "Triangular_120AFM_INCAR")
+_p = _rp(os.path.join(_d, "POSCAR")); _mg = np.array(_ri(os.path.join(_d, "INCAR"))["magmom"]).reshape(-1, 3)
+import spglib as _sg3
+_ds = _sg3.get_symmetry_dataset((_p["lattice"], _p["frac"], [0, 0, 0]))
+_r = _ai(_p["lattice"], _p["frac"], [0, 0, 0], ["Cr"] * 3, _mg, _ds.rotations, _ds.translations, T=0.0, grid=(30, 30, 1),
+         n_per=16, cubic=True, sigma=0.03, every=1, J=[1.0], spin=0.5, rmax=3.1)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.6), gridspec_kw=dict(width_ratios=[1.45, 1]))
+_i = _r["idx"]
+for n in range(3):
+    a1.plot(_r["x"], _r["omega0"][:, n], "--", color="0.55", lw=1.2, label="linear spin waves" if n == 0 else None)
+    w_, g_ = _r["omega_int"][_i, n], _r["gamma"][_i, n]
+    a1.plot(_r["x"][_i], w_, color="#c0392b", lw=1.8, label="complete 1/S (HF + cubic)" if n == 0 else None)
+    a1.fill_between(_r["x"][_i], w_ - g_ / 2, w_ + g_ / 2, color="#c0392b", alpha=0.25, lw=0)
+for t_, _ in _r["ticks"]:
+    a1.axvline(t_, color="0.85", lw=0.7, zorder=0)
+a1.set_xticks([t_ for t_, _ in _r["ticks"]]); a1.set_xticklabels([l_ for _, l_ in _r["ticks"]])
+a1.set_xlim(_r["x"][0], _r["x"][-1]); a1.set_ylim(0, 1.7); a1.set_ylabel("ε (meV)"); a1.legend(fontsize=8, loc="upper right")
+a1.set_title("triangular AFM, S = 1/2: spectrum + decay width (T = 0)", fontsize=9.5)
+_a = 3.0; _lat = np.array([[_a, _a, 0], [_a, -_a, 0], [0, 0, 12.]])
+_pairs = [(0, 1, np.array(d_, float), np.eye(3)) for d_ in ([_a, 0, 0], [-_a, 0, 0], [0, _a, 0], [0, -_a, 0])]
+_hrs = np.array([0.6, 0.66, 0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.85, 0.9]); _gm = []
+for hr in _hrs:
+    s_ = np.sqrt(1 - hr ** 2)
+    _hf = _F4(_lat, np.array([[0, 0, 0], [_a, 0, 0.]]), [0, 1], np.array([[s_, 0, hr], [-s_, 0, hr]]), np.array([1.0, 1.0]),
+              _pairs, None, np.array([[0, 0, -8 * hr]] * 2))
+    _se = _MSE(_hf); _qq, _, _ = _mkp(_lat, [("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))], 10)
+    _gm.append(max(_se.onshell(x_, 0.0, (32, 32, 1), sigma=0.03, tadpole=False)["gamma3"].max() for x_ in _qq[1:]))
+a2.plot(_hrs, _gm, "o-", color="#16325c", mfc="w"); a2.axvline(0.76, ls=":", color="k"); a2.text(0.765, 0.2 * max(_gm), "h* ≈ 0.76 h$_s$", fontsize=8)
+a2.set_xlabel("h / h$_s$"); a2.set_ylabel("max Γ³ along Γ–X (meV)")
+a2.set_title("square AFM in a field: onset of decay", fontsize=9.5)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "nonlinear.pdf")); fig.savefig(os.path.join(F, "nonlinear.png"), dpi=160); plt.close(fig)
+print("figure nonlinear")

@@ -13,11 +13,11 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 | `symphase tensors` | `POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR` of a VASP run (POSCAR + INCAR is enough) | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations; **spin group** (no SOC): **oriented spin-space-group number for any order** (collinear, coplanar, non-coplanar; Chen et al. 2024 via FindSpinGroup), altermagnet / AFM / FM class, spin Laue group, d/g/i-wave spin splitting, NR tensors, SOC-only components |
 | `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening, **finite-T hulls** (mixing entropy, harmonic, **quasi-harmonic** and **anharmonic** free energies); parallel (all cores or MPI) |
 | `symphase kubo` | POSCAR + INCAR/OUTCAR; postw90 `*-ahc/shc-fermiscan.dat`, any component table, or Wannier90 `seedname_hr.dat` | **magnitudes** of charge / spin / orbital conductivities constrained by symmetry: minimal component set + postw90 input, import and symmetry fit (full tensor, violation check), built-in Kubo solver (AHC, SHC) |
-| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames), **incommensurate single-Q spirals without supercells** (rotating frame, optimal q), a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors) **two-magnon striction + damping** (thermal magnon/phonon linewidths, Gilbert and lattice damping) and **magnon–magnon interactions + self-energies** (four-magnon Hartree–Fock, 1/S or self-consistent; complex Σ(ω), spectral functions beyond the golden rule): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
+| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames), **incommensurate single-Q spirals without supercells** (rotating frame, optimal q), a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors) **two-magnon striction + damping** (thermal magnon/phonon linewidths, Gilbert and lattice damping) **magnon–magnon interactions + self-energies** (four-magnon Hartree–Fock, 1/S or self-consistent; complex Σ(ω), spectral functions beyond the golden rule) and **non-linear spin waves** (cubic terms of non-collinear magnets — complete 1/S spectrum, spontaneous magnon decay — and second-order four-magnon damping): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (48 slides, Beamer source included)
-📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 14 tutorials, 9 quizzes × 20 self-checking questions
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (49 slides, Beamer source included)
+📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 15 tutorials, 10 quizzes × 20 self-checking questions
 🧭 **Supercell guide:** [`docs/SUPERCELL_WORKFLOW.md`](docs/SUPERCELL_WORKFLOW.md) — every step from exchange constants to DFT checks for multi-Q / conical / distorted states
 
 ---
@@ -207,6 +207,30 @@ correction; 1D ⟨S<sup>z</sup>⟩ diverges and self-consistent HF breaks down a
 ∫A dω = 1; at strong coupling a split-off state appears above the phonon-emission continuum. Not included: cubic terms of non-collinear
 orders and second-order four-magnon damping.
 
+### Cubic magnon terms and four-magnon damping (`MagnonSelfEnergy`, `symphase.magcheck`)
+In non-collinear magnets (S − n<sub>i</sub>) v<sub>i</sub>·J·S<sub>j</sub><sup>⊥</sup> (plus single-ion and Zeeman terms) gives **cubic** magnon terms.
+At second order they produce the one-loop bubble (decay, absorption, source) and a tadpole (the O(1/S) shift of the canting angles).
+Together with first-order Hartree–Fock this is the **complete 1/S spectrum** and the **spontaneous magnon decay rate** Γ³ at T = 0.
+The quartic vertex at second order (sunset) gives the **thermal four-magnon damping** Γ⁴ (2↔2 scattering, 1↔3 decay). Both use
+Σ(ω) = r! Σ |c|² [Π<sub>cr</sub>(1+n) Π<sub>an</sub>n − Π<sub>cr</sub>n Π<sub>an</sub>(1+n)] / (ω − Σ<sub>cr</sub>ε + Σ<sub>an</sub>ε + iη).
+```bash
+cd examples/vasp/Triangular_120AFM_INCAR
+symphase magnons --J 1 --spin 0.5 --rmax 3.1 --hf 0 --hf-grid 30 30 --cubic --se-sigma 0.03 --nq 16 --se-every 2
+symphase magnons ... --hf 40 --damping4 --grid4 12 12
+```
+Writes `*_hf.png` (bands with Γ shading + linewidth panel) and `*_selfenergy.dat`.
+Checks:
+- the cubic and quartic Holstein–Primakoff terms equal the exact classical-energy expansion (10⁻⁹; random tensors, anisotropy, field);
+- bubble + tadpole and the sunset equal exact diagonalisation of boson clusters (10⁻⁶; `symphase.magcheck`);
+- triangular AFM: c<sub>∥</sub>(1 − 0.118/2S) vs −0.115 (Chubukov–Sachdev–Senthil); the Hartree–Fock gap at ±K is cancelled by Σ³, so the Goldstone modes stay gapless;
+- square AFM in a field: decays only above h* ≈ 0.76 h<sub>s</sub> (Zhitomirsky–Chernyshev);
+- ferromagnet: Γ⁴(T = 0) = 0.
+
+The 1/S Hartree–Fock shift is taken at first order, [T†H<sub>HF</sub>T]<sub>nn</sub> (`first_order_shift`).
+Limits:
+- on-shell perturbation theory, so it is not self-consistent near decay thresholds;
+- single-ion anisotropy enters the quartic terms only at harmonic level.
+
 ### Finite-temperature hulls
 G<sub>i</sub>(T) = E<sub>i</sub> + F<sup>vib</sup><sub>i</sub>(T) − T S<sup>conf</sup><sub>i</sub>
 ```bash
@@ -330,6 +354,8 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 | `21_quiz_two_magnon_damping.ipynb` | **20 questions**: two-magnon striction and damping |
 | `22_tutorial_magnon_interactions.ipynb` | four-magnon Hartree–Fock (Dyson, Oguchi, self-consistent, 1D breakdown), self-energies, spectral functions, split-off states |
 | `23_quiz_magnon_interactions.ipynb` | **20 questions**: magnon–magnon interactions and self-energies |
+| `24_tutorial_cubic_four_magnon_damping.ipynb` | cubic terms (bubble + tadpole), exact-diagonalisation checks, triangular AFM 1/S spectrum and decay, field-induced decay threshold, four-magnon damping |
+| `25_quiz_nonlinear_spin_waves.ipynb` | **20 questions**: cubic magnon terms and four-magnon damping |
 | `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on, incl. MoO₂) |
 | `05_quiz_convex_hull.ipynb` | **20 questions** (conceptual + hands-on) |
 

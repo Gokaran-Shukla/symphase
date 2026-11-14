@@ -800,6 +800,16 @@ def main(argv=None):
     ap.add_argument("--hf-order", choices=("first", "sc"), default="first",
                     help="'first' = 1/S correction (Oguchi, Dyson) or 'sc' = self-consistent [first]")
     ap.add_argument("--hf-grid", type=int, nargs="+", default=[64], help="k grid of the HF correlations [64]")
+    ap.add_argument("--cubic", action="store_true",
+                    help="with --hf: add the cubic (three-magnon) terms of non-collinear orders — one-loop bubble + tadpole "
+                         "(complete 1/S spectrum) and the spontaneous-decay rate Γ³")
+    ap.add_argument("--damping4", action="store_true",
+                    help="with --hf: second-order four-magnon (sunset) self-energy — thermal magnon–magnon damping Γ⁴")
+    ap.add_argument("--se-grid", type=int, nargs="+", default=None, help="k grid of the cubic bubble [--hf-grid]")
+    ap.add_argument("--grid4", type=int, nargs="+", default=None, help="k grid (per internal momentum) of the four-magnon sunset [24]")
+    ap.add_argument("--se-eta", type=float, default=0.05, help="Lorentzian broadening of the self-energies (meV) [0.05]")
+    ap.add_argument("--se-sigma", type=float, default=None, help="Gaussian δ width for the linewidths (meV) [Lorentzian]")
+    ap.add_argument("--se-every", type=int, default=1, help="evaluate the self-energies on every n-th path point [1]")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -905,22 +915,52 @@ def main(argv=None):
     return res
 
 
+def _grid4_default(g):
+    g = list(g) + [1] * (3 - len(g))
+    cap = {1: 24, 2: 12, 3: 6}[max(1, sum(m > 1 for m in g))]
+    return tuple(min(m, cap) if m > 1 else 1 for m in g)
+
+
 def _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
     from .magint import analyse_interacting, plot_interacting
     res = analyse_interacting(lat, frac, types, symbols, mags, rots, trs, T=args.hf, order=args.hf_order,
                               grid=tuple(args.hf_grid), n_per=args.nq, relax=args.relax, J=args.J, exchange=exch,
                               K=args.K, spin=args.spin, rmax=args.rmax, mmin=args.mmin, K_axis=args.K_axis,
-                              K_local=args.K_local, field=args.field, g=args.g)
+                              K_local=args.K_local, field=args.field, g=args.g, cubic=args.cubic, quartic=args.damping4,
+                              se_grid=tuple(args.se_grid) if args.se_grid else None,
+                              grid4=tuple(args.grid4) if args.grid4 else _grid4_default(args.hf_grid) if args.damping4 else None,
+                              eta=args.se_eta, sigma=args.se_sigma, every=args.se_every)
     print(f"\n  four-magnon interactions (Hartree–Fock, {args.hf_order}{', ' + str(res['iterations']) + ' iterations' if args.hf_order == 'sc' else ''}), "
           f"T = {args.hf:g} K, grid {args.hf_grid}")
-    if not res["collinear"]:
-        print("  NOTE: non-collinear order — cubic magnon terms (same order in 1/S) are not included")
+    if not res["collinear"] and not args.cubic:
+        print("  NOTE: non-collinear order — cubic magnon terms (same order in 1/S) are added with --cubic")
     r = res["ratio"]
-    print(f"  renormalisation ω_HF/ω_LSWT: {np.nanmin(r):.5f} … {np.nanmax(r):.5f}")
+    if "omega_1S" in res and args.cubic:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            r1 = res["omega_1S"] / res["omega0"]
+        print(f"  complete 1/S renormalisation (ε + δε_HF + Re Σ³ + Σ_tad)/ε: {np.nanmin(r1):.5f} … {np.nanmax(r1):.5f}")
+    else:
+        print(f"  renormalisation ω_HF/ω_LSWT: {np.nanmin(r):.5f} … {np.nanmax(r):.5f}")
     print(f"  ordered moment per site ⟨S^z'⟩ = {np.round(res['m_sub'], 4)}  (S = {np.round(res['model'].S, 3)})")
+    if "omega_1S" in res:
+        i = res["idx"]
+        if args.cubic:
+            eta, _ = res["se"].linear_terms(args.hf, tuple(args.se_grid or args.hf_grid))
+            print(f"  cubic terms: Re Σ³ {np.nanmin(res['re3']):+.4f} … {np.nanmax(res['re3']):+.4f} meV, tadpole "
+                  f"{np.nanmin(res['tad']):+.4f} … {np.nanmax(res['tad']):+.4f} meV (|linear terms| {np.abs(eta).max():.2e}), "
+                  f"decay rate Γ³ ≤ {np.nanmax(res['gamma3']):.4f} meV")
+        if args.damping4:
+            print(f"  four-magnon sunset: Re Σ⁴ {np.nanmin(res['re4']):+.4f} … {np.nanmax(res['re4']):+.4f} meV, "
+                  f"Γ⁴ ≤ {np.nanmax(res['gamma4']):.4f} meV")
     if args.plot and args.plot.lower() != "none":
         stem, ext = os.path.splitext(args.plot)
         plot_interacting(res, save=f"{stem}_hf{ext}")
+        if "omega_1S" in res:
+            i = res["idx"]
+            np.savetxt(f"{stem}_selfenergy.dat", np.column_stack([res["x"][i], res["omega0"][i], res["d_hf"][i], res["re3"][i],
+                       res["tad"][i], res["re4"][i], res["omega_int"][i], res["gamma3"][i], res["gamma4"][i]]),
+                       header="x(1/Å)  ω_LSWT  δε_HF  ReΣ3  Σ_tad  ReΣ4  ω_int  Γ3  Γ4  (each 1..N, meV)")
+            print(f"  written: {stem}_selfenergy.dat")
         np.savetxt(f"{stem}_hf.dat", np.column_stack([res["x"], res["omega0"], res["omega"]]),
                    header="x(1/Å)  omega_LSWT_1..N  omega_HF_1..N (meV)")
         print(f"  written: {stem}_hf{ext}, {stem}_hf.dat")

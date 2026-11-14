@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions", "nonlinear"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -859,3 +859,122 @@ def test_self_energy_imag_part_equals_golden_rule_and_sum_rule():
     ws = np.linspace(e0 - 15, e0 + 15, 6001)
     A = vx.spectral(e0, vx.self_energy(W, E, ws, 0.05), ws, eta0=1e-3)
     assert abs(np.trapezoid(A, ws) - 1) < 5e-3
+
+
+# ---------------------------------------------------------------- cubic terms, second-order self-energies
+def _canted_chain_model(h=4.2):
+    from symphase.magint import FourMagnonHF
+    from symphase.magnons import relax_spins
+    a = 3.0
+    J = np.diag([1.0, 1.3, 1.0])
+    S = np.array([1.0, 1.0])
+    pairs = [(0, 1, np.array([a, 0, 0.]), J), (1, 0, np.array([a, 0, 0.]), J)]
+    hfield = np.array([[0, 0, -h]] * 2)
+    dirs, _, _ = relax_spins(np.array([[0, 1, 0.5], [0, -1, 0.5]]), S, [0, 1], pairs, [None, None], hfield=hfield,
+                             steps=200000, tol=1e-15)
+    return FourMagnonHF(np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], dirs, S, pairs, None, hfield)
+
+
+def _random_noncollinear(seed, aniso, field, M, chain):
+    from symphase.magint import FourMagnonHF
+    rng = np.random.default_rng(seed)
+    a = 3.0
+    lat = np.diag([M * a, 12, 12]) if chain else np.diag([M * a, 4.0, 12])
+    cart = np.array([[m * a + 0.1 * m, 0.2 * m, 0] for m in range(M)])
+    dirs = rng.normal(size=(M, 3))
+    pairs = [(m, (m + 1) % M, cart[(m + 1) % M] - cart[m] + (lat[0] if (m + 1) % M == 0 else 0), rng.normal(size=(3, 3)))
+             for m in range(M)]
+    if not chain:
+        pairs += [(m, m, lat[1].copy(), rng.normal(size=(3, 3))) for m in range(M)]
+    return FourMagnonHF(lat, cart, list(range(M)), dirs / np.linalg.norm(dirs, axis=1)[:, None], rng.uniform(0.6, 2, M),
+                        pairs, [rng.normal(size=(3, 3)) if aniso else None for _ in range(M)],
+                        rng.normal(size=(M, 3)) if field else None)
+
+
+def test_cubic_quartic_terms_equal_classical_expansion():
+    from symphase.magcheck import classical_expansion
+    r = classical_expansion(_random_noncollinear(1, True, True, 2, True))          # tensors, anisotropy, field
+    assert abs(r["cubic"][0] - r["cubic"][1]) < 1e-6 * abs(r["cubic"][0])
+    r = classical_expansion(_random_noncollinear(2, False, False, 3, False))        # 2D, exchange tensors
+    assert abs(r["cubic"][0] - r["cubic"][1]) < 1e-6 * abs(r["cubic"][0])
+    assert abs(r["quartic"][0] - r["quartic"][1]) < 1e-6 * abs(r["quartic"][0])
+
+
+def test_cubic_and_quartic_self_energies_equal_exact_diagonalisation():
+    from symphase.magint import MagnonSelfEnergy
+    from symphase.magcheck import BosonCluster
+    hf = _canted_chain_model()
+    se = MagnonSelfEnergy(hf)
+    cl = BosonCluster(hf, 3, 8)
+    qs = cl.kpoints()
+    k = qs[1]
+    e = se._mset(k)[0]
+    H2 = cl.quadratic()
+    ed3 = cl.second_order(H2, cl.operator(se.terms3), e)
+    hf.update(qs, 0.0)
+    ed4 = cl.second_order(H2, cl.operator(se.terms4) - cl.operator(cl.hf_terms()), e)
+    hf.hf = None
+    for n in range(2):
+        assert abs(ed3[n]["level"] - e[n]) < 1e-6
+        _, w, ee = se.cubic_poles(k, n, 0.0, qs=qs)
+        tad = se.tadpole(k, n, 0.0, ks=qs)
+        assert abs(tad) > 0.02                                                       # the tadpole is needed
+        assert abs(ed3[n]["second"] - (np.sum(w / (e[n] - ee)).real + tad)) < 2e-5
+        _, w, ee = se.quartic_poles(k, n, 0.0, qs=qs)
+        assert abs(ed4[n]["first"]) < 1e-5                                          # :H4: has no first-order shift
+        assert abs(ed4[n]["second"] - np.sum(w / (e[n] - ee)).real) < 2e-6
+
+
+def test_triangular_afm_one_over_S_velocity_and_goldstone():
+    from symphase.magnons import analyse
+    from symphase.magint import FourMagnonHF, MagnonSelfEnergy
+    from symphase.tensors import read_poscar, read_incar
+    d = f"{EX}/vasp/Triangular_120AFM_INCAR"
+    p = read_poscar(f"{d}/POSCAR")
+    mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)
+    R, T = _sym(p["lattice"], p["frac"], [0, 0, 0])
+    m = analyse(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, R, T, J=[1.0], spin=0.5, rmax=3.1, return_model=True)
+    hf = FourMagnonHF.from_model(np.asarray(p["lattice"], float), np.asarray(p["frac"], float), m).solve(grid=(36, 36, 1))
+    assert abs(hf.sublattice_magnetisation((30, 30, 1))[0] - (0.5 - 0.2535)) < 2e-3      # S − 0.261 (converged)
+    se = MagnonSelfEnergy(hf)
+    assert np.abs(se.linear_terms(0.0, (12, 12, 1))[0]).max() < 1e-9                    # 120°: no tadpole
+    k = np.array([0.03 * 2 * np.pi / 3.0, 0, 0])
+    o = se.onshell(k, 0.0, (36, 36, 1), eta=0.01)
+    dhf = hf.first_order_shift([k])[0]
+    tot = (dhf + o["re3"] + o["tad"]) / o["e0"]
+    assert abs(tot[2] - (-0.115)) < 0.006                                  # c_∥ (1 − 0.115/2S), Chubukov et al.
+    for n in (0, 1):                                                       # ±K Goldstone modes: HF gap cancelled
+        assert abs(dhf[n] / o["e0"][n]) > 30 and abs(tot[n]) < 0.15
+
+
+def test_collinear_has_no_cubic_terms_and_ferromagnet_no_T0_damping():
+    from symphase.magint import FourMagnonHF, MagnonSelfEnergy
+    hf, _ = _hf_model("afm", 1.0, 3.0, K=0.2, grid=(40, 1, 1))
+    assert all(abs(c) < 1e-12 for c, _ in MagnonSelfEnergy(hf).terms3)
+    a = 3.0
+    pairs = [(0, 0, np.array([a, 0, 0.]), -2 * np.eye(3)), (0, 0, np.array([0, a, 0.]), -2 * np.eye(3))]
+    fm = FourMagnonHF(np.diag([a, a, 12.]), np.zeros((1, 3)), [0], np.array([[0, 0, 1.]]), np.array([1.0]), pairs,
+                      [np.diag([0, 0, -0.5])], None)
+    se = MagnonSelfEnergy(fm)
+    k = np.array([0.4 * 2 * np.pi / a, 0, 0])
+    o0 = se.onshell(k, 0.0, (12, 12, 1), cubic=False, quartic=True, eta=0.2, sigma=0.2)
+    o1 = se.onshell(k, 40.0, (12, 12, 1), cubic=False, quartic=True, eta=0.2, sigma=0.2)
+    assert abs(o0["gamma4"][0]) < 1e-12 and abs(o0["re4"][0]) < 1e-12
+    assert 0.9 < o1["gamma4"][0] < 1.7 and o1["re4"][0] < 0
+
+
+def test_field_induced_magnon_decay_threshold_square_afm():
+    from symphase.magint import FourMagnonHF, MagnonSelfEnergy
+    from symphase.magnons import make_path
+    a = 3.0
+    lat = np.array([[a, a, 0], [a, -a, 0], [0, 0, 12.]])
+    pairs = [(0, 1, np.array(d, float), np.eye(3)) for d in ([a, 0, 0], [-a, 0, 0], [0, a, 0], [0, -a, 0])]
+    qs, _, _ = make_path(lat, [("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))], 8)
+    gmax = {}
+    for hr in (0.6, 0.85):
+        s = math.sqrt(1 - hr ** 2)
+        hf = FourMagnonHF(lat, np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], np.array([[s, 0, hr], [-s, 0, hr]]),
+                          np.array([1.0, 1.0]), pairs, None, np.array([[0, 0, -8 * hr]] * 2))
+        se = MagnonSelfEnergy(hf)
+        gmax[hr] = max(se.onshell(q, 0.0, (32, 32, 1), sigma=0.04, tadpole=False)["gamma3"].max() for q in qs[1:])
+    assert gmax[0.6] < 0.05 and gmax[0.85] > 1.0                          # decays only above h* ≈ 0.76 h_s

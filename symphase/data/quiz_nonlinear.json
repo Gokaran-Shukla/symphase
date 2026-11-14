@@ -1,0 +1,230 @@
+{
+ "title": "Quiz 10 — cubic magnon terms and four-magnon damping",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "Where do cubic (three-magnon) terms come from?",
+   "options": {
+    "a": "from phonons",
+    "b": "from (S − n_i) v_i·J·S_j^⊥ (and single-ion/Zeeman terms) — non-zero only when v_i·J·e_j ≠ 0, i.e. non-collinear order",
+    "c": "from the quartic HP expansion",
+    "d": "from the Zeeman term in collinear magnets only"
+   },
+   "explanation": "For collinear spins v_i·J·e_j = 0 (isotropic J), so cubic terms vanish.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "At which order in 1/S does the cubic one-loop bubble contribute to the spectrum?",
+   "options": {
+    "a": "1/S² ",
+    "b": "1/S — the same order as Hartree–Fock",
+    "c": "S",
+    "d": "never"
+   },
+   "explanation": "(√S)² vertices × 1/(S·energy): the complete 1/S spectrum needs both.",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What is the tadpole?",
+   "options": {
+    "a": "a phonon",
+    "b": "the second-order effect of linear terms from normal-ordering H₃ — the O(1/S) shift of the classical angles",
+    "c": "the four-magnon sunset",
+    "d": "a numerical artefact"
+   },
+   "explanation": "Σ_tad = −Σ_m 2Re(h_m g_m)/ε_0m; zero in the 120° structure by symmetry, finite in canted states.",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: ed_check() — exact-diagonalisation second-order shift of mode 0 (meV, 3 decimals)?",
+   "tol": 0.002,
+   "explanation": "−0.7175 meV = bubble (−0.7941) + tadpole (+0.0766).",
+   "id": 4,
+   "key": "NTcxNy4wLQ=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the tadpole contribution of mode 0 in ed_check() (meV, 3 decimals)?",
+   "tol": 0.002,
+   "explanation": "+0.077 meV: without it the cubic result would disagree with exact diagonalisation.",
+   "id": 5,
+   "key": "NjY3MC4w"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: four-magnon sunset of mode 0 in ed_check() (meV, 4 decimals)?",
+   "tol": 0.0002,
+   "explanation": "−0.00590 meV, equal to exact diagonalisation of H₂ + λ:H₄:.",
+   "id": 6,
+   "key": "OTUwMC4wLQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Why is H₄ − H_HF used in the exact-diagonalisation check of the sunset?",
+   "options": {
+    "a": "for speed",
+    "b": "Wick: H₄ − H_HF = :H₄: + const (normal-ordered in magnon operators), whose 2nd-order shift is the sunset",
+    "c": "to remove the field",
+    "d": "H_HF is zero"
+   },
+   "explanation": "Its first-order shift vanishes, as the check confirms.",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: triangular AFM, S = 1/2: linear-spin-wave ordered moment ⟨S⟩ on the 30×30 grid (4 decimals)?",
+   "tol": 0.001,
+   "explanation": "S − 0.2535 (converges to S − 0.261).",
+   "id": 8,
+   "key": "NTY0Mi4w"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: triangular AFM — 2S·δε/ε of the c_∥ Goldstone branch at |k|a = 0.188 (3 decimals)?",
+   "tol": 0.006,
+   "explanation": "≈ −0.118 vs the analytic −0.115 (Chubukov, Sachdev, Senthil).",
+   "id": 9,
+   "key": "ODExLjAt"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: near the ±K Goldstone branches, what do the HF and cubic terms do separately?",
+   "options": {
+    "a": "both vanish",
+    "b": "each is ≈ ±37ε (a spurious gap); they cancel — Goldstone modes stay gapless",
+    "c": "both are positive",
+    "d": "HF is zero"
+   },
+   "explanation": "The Goldstone theorem holds only for the complete 1/S result.",
+   "id": 10,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why is the first-order HF shift [T†H_HF T]_nn used instead of diagonalising H + H_HF?",
+   "options": {
+    "a": "it is faster",
+    "b": "strict order-by-order 1/S expansion; diagonalising mixes orders and breaks Goldstone modes in non-collinear magnets",
+    "c": "they always agree",
+    "d": "for finite T only"
+   },
+   "explanation": "For collinear magnets (H_HF ∝ H) both are identical.",
+   "id": 11,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: square-lattice AFM in a field — magnons decay at T = 0 …",
+   "options": {
+    "a": "at any field",
+    "b": "only above h* ≈ 0.76 h_s",
+    "c": "never",
+    "d": "only at saturation"
+   },
+   "explanation": "Max Γ³ ≈ 0.03 meV (smearing tail) at 0.6 h_s vs ≈ 2 meV at 0.85 h_s (Zhitomirsky, Chernyshev).",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: square FM (J = −2 meV, K = 0.5 meV, S = 1), k = 0.4·2π/a, T = 40 K, grid 12×12, η = σ = 0.2: Γ⁴ (meV, 2 decimals)?",
+   "tol": 0.05,
+   "explanation": "≈ 1.30 meV of thermal magnon–magnon damping.",
+   "id": 13,
+   "key": "My4x"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the same ferromagnet at T = 0: Γ⁴ (meV)?",
+   "tol": 1e-09,
+   "explanation": "The ferromagnetic quartic vertex conserves magnon number: no decay at T = 0.",
+   "id": 14,
+   "key": "MC4w"
+  },
+  {
+   "type": "mc",
+   "question": "Thermal factor of the 2→2 scattering channel X + B → C + D?",
+   "options": {
+    "a": "1 + n_B",
+    "b": "n_B(1+n_C)(1+n_D) − (1+n_B)n_C n_D",
+    "c": "n_C n_D",
+    "d": "1"
+   },
+   "explanation": "General rule Π_cr(1+n)Π_an n − Π_cr n Π_an(1+n); positive on shell.",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "At which order in 1/S is the four-magnon sunset?",
+   "options": {
+    "a": "1/S",
+    "b": "1/S² — the leading damping of collinear magnets",
+    "c": "S⁰",
+    "d": "1/S³"
+   },
+   "explanation": "Two quartic vertices (∝ S⁰ each) over an energy ∝ S.",
+   "id": 16,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which CLI options add the cubic terms and the four-magnon damping?",
+   "options": {
+    "a": "--relax --scan",
+    "b": "--hf T --cubic  /  --hf T --damping4 [--grid4 ...]",
+    "c": "--spectral",
+    "d": "--supercell"
+   },
+   "explanation": "Output: *_hf.png and *_selfenergy.dat.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why are Goldstone modes exactly at their zero excluded from the on-shell results?",
+   "options": {
+    "a": "they are unstable",
+    "b": "ε = 0: the on-shell 1/S expansion is singular there (the correction itself must vanish)",
+    "c": "they have no vertex",
+    "d": "they are phonons"
+   },
+   "explanation": "Results are reported for ε > 10⁻³ of the bandwidth.",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does symphase.magcheck provide?",
+   "options": {
+    "a": "plots",
+    "b": "independent checks: classical-energy expansion of the HP terms and exact diagonalisation of boson clusters",
+    "c": "DFT inputs",
+    "d": "symmetry tables"
+   },
+   "explanation": "Use it to verify vertices for your own models.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which part is NOT complete at the quartic level?",
+   "options": {
+    "a": "exchange tensors",
+    "b": "single-ion anisotropy (quartic terms harmonic only)",
+    "c": "DMI",
+    "d": "Zeeman"
+   },
+   "explanation": "Single-ion quartic terms also carry operator-ordering (S − 1/2) subtleties; they are left out consistently.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

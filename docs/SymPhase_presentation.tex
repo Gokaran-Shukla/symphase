@@ -745,6 +745,18 @@ $A(\omega)=-\frac1\pi\mathrm{Im}\,[\omega-\omega_0-\textcolor{red!70!black}{\Sig
 $-2\,\mathrm{Im}\,\Sigma(\omega_0)=\gamma_{\rm golden}$ to $10^{-12}$, $\int A=1$; strong coupling: split-off state above the emission continuum (weight 0.22).}
 \end{frame}
 
+\begin{frame}{Cubic magnon terms and second-order four-magnon damping}
+\noindent{\footnotesize Non-collinear: $(S-n_i)\,\mathbf v_i\!\cdot\!J\!\cdot\!\mathbf S_j^\perp\to$ \textcolor{red!70!black}{$H_3$}; one-loop bubble + tadpole $=$ the rest of the
+\textcolor{spinc}{$1/S$} spectrum, spontaneous decay $\Gamma^{(3)}$ at $T=0$. Quartic vertex at 2nd order (sunset): thermal $2\!\leftrightarrow\!2$ damping $\Gamma^{(4)}$.
+$\Sigma(\omega)=r!\sum|c|^2[\prod_{\rm cr}(1{+}n)\prod_{\rm an}n-\prod_{\rm cr}n\prod_{\rm an}(1{+}n)]/(\omega-E+i\eta)$. \cmd{--hf T --cubic --damping4}.}
+\vspace{0.2em}
+
+\centering\includegraphics[width=0.86\textwidth]{figures/nonlinear.pdf}
+
+{\tiny HP terms = exact classical expansion ($10^{-9}$); bubble+tadpole and sunset = exact diagonalisation of boson clusters ($10^{-6}$);
+triangular: $c_\parallel(1-0.118/2S)$ vs $-0.115$ (Chubukov et al.), HF gap at $\pm K$ cancelled by $\Sigma^{(3)}$ (Goldstone); decay onset $h^*\approx0.76h_s$; FM: $\Gamma^{(4)}(T{=}0)=0$.}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -953,7 +965,7 @@ sbatch jobs/ibex_symphase_mpi.slurm
 \begin{columns}[T]
 \column{0.5\textwidth}
 \renewcommand{\arraystretch}{1.25}
-{\scriptsize\renewcommand{\arraystretch}{0.98}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
+{\scriptsize\renewcommand{\arraystretch}{0.88}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
 \toprule
 notebook & content\\ \midrule
 01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
@@ -970,7 +982,8 @@ notebook & content\\ \midrule
 18 & TDEP / SSCHA anharmonic phonons\\
 20 & two-magnon striction, damping\\
 22 & four-magnon HF, self-energies\\
-04, 05, 09, 11, 13, 16, 19, 21, 23 & \textbf{9 quizzes $\times$ 20 questions}\\ \bottomrule
+24 & cubic terms, four-magnon damping\\
+quizzes & \textbf{10 $\times$ 20 questions}: 04, 05, 09, 11, 13, 16, 19, 21, 23, 25\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -1013,11 +1026,12 @@ TDEP / SSCHA & exact oscillator, Gibbs–Bogoliubov bound & \textcolor{spinc}{\c
 two-magnon / damping & frozen-phonon supercell, 1D roots, FM/AFM LLG & \textcolor{spinc}{\checkmark} \\
 four-magnon HF & Dyson FM, Oguchi chain/square, 1D breakdown & \textcolor{spinc}{\checkmark} \\
 self-energies & $-2\,\mathrm{Im}\,\Sigma=\gamma$ golden rule, $\int A=1$ & \textcolor{spinc}{\checkmark} \\
-quiz keys & 180 / 180 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+cubic + sunset & = classical expansion, = exact diagonalisation, $c_\parallel$ & \textcolor{spinc}{\checkmark} \\
+quiz keys & 200 / 200 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (86); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (92); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -1033,7 +1047,7 @@ quiz keys & 180 / 180 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item second-order four-magnon damping; cubic magnon terms in non-collinear magnets
+  \item self-consistent (non-perturbative) magnon decay near thresholds; single-ion anisotropy at $O(1/S)$
   \item Edelstein, nonlinear Hall, torkance tensors
   \item Fermi-surface (1/$\Gamma$) Kubo terms and orbital Hall from \texttt{hr.dat} + $L$ matrices
   \item direct TDEP force-constant input (phonon dispersions at $T$)
