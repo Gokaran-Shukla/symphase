@@ -1435,3 +1435,243 @@ quiz_nb("16_quiz_ossg_magnon_phonon_qha.ipynb",
         "Quiz 6 — spin-space-group numbers, magnon–phonon coupling, quasi-harmonic & anharmonic hulls (20 questions)",
         OL, "magphon_qha", "Work through tutorials **14** and **15** first. Questions 2–4, 8, 9, 11, 15, 16, 18 and 19 are hands-on.",
         OL_HELPER + "\nents = load_csv(qcsv); noanh = copy.deepcopy(ents)\nfor e in noanh: e.data.pop('anh_a', None)")
+
+
+# =============================================================================
+# 17  Kubo magnitudes;  18  self-consistent anharmonic phonons;  19 quiz
+# =============================================================================
+KS_HELPER = """import numpy as np, math, os, copy, warnings
+import matplotlib.pyplot as plt
+warnings.simplefilter("ignore")
+from symphase import analyze_tensors
+from symphase.tensors import read_poscar
+from symphase.kubo import (SymTensor, plan, KuboTB, compute_symmetric, format_fit, read_hr, read_centres,
+                           read_postw90_ahc, read_postw90_shc, haldane_hr, kane_mele_hr, honeycomb_lattice)
+from symphase.qha import quartic_oscillator, AnharmonicF, FreeEnergySurface, QHA
+from symphase.thermo import FiniteTHull
+from symphase.hull import load_csv
+KB = f"{EX}/kubo"
+lat, frac = honeycomb_lattice(); cen = frac @ lat
+def haldane(M=0.0, phi=math.pi / 2, efs=(0.0,), n=(60, 60)):
+    R, H = haldane_hr(M=M, phi=phi)
+    return KuboTB(lat, R, H, centres=cen, dims=2).conductivity([("charge", 0, 0, 1)], list(efs), n, 1e-6)[:, 0]
+def kane_mele(efs=(0.0,), n=(60, 60)):
+    R, H = kane_mele_hr()
+    return KuboTB(lat, R, H, centres=np.r_[cen, cen], dims=2, spin_order="blocks").conductivity(
+        [("spin", 2, 0, 1), ("charge", 0, 0, 1)], list(efs), n, 1e-6)
+scph_csv = f"{EX}/hull/NiAl_scph.csv\""""
+KS_HELPER = KS_HELPER.replace('NiAl_scph.csv\\"', 'NiAl_scph.csv"')
+
+save([
+    md(r"""# SymPhase tutorial 17 — magnitudes from Wannier-based Kubo codes, constrained by symmetry
+
+Symmetry fixes the **shape** of a response tensor; the **magnitude** needs a Kubo calculation on a Wannier Hamiltonian.
+`symphase kubo` links the two:
+
+| step | what | command |
+|---|---|---|
+| plan | minimal set of components to compute (+ postw90 input blocks, a check component) | `symphase kubo plan --kind spin` |
+| import | postw90 `*-ahc-fermiscan.dat`, `*-shc-fermiscan.dat` (+ `.win`), any `component value` table | `symphase kubo import ...` |
+| fit | least-squares fit of the independent parameters → full tensor, violation, forbidden non-zero components | automatic |
+| compute | built-in reference Kubo solver on `seedname_hr.dat` (AHC, SHC) for the pivot components only | `symphase kubo compute ...` |
+
+Conventions as in postw90: $\sigma_{ij}=-\frac{e^2}{\hbar}\int\!\sum_n f_n\Omega_{n,ij}$,
+$\Omega_{n,ij}=-2\,\mathrm{Im}\sum_{m\ne n}\frac{\langle n|\partial_iH|m\rangle\langle m|\partial_jH|n\rangle}{(E_n-E_m)^2+\eta^2}$; spin: $\partial_iH\to\frac12\{\sigma_k,\partial_iH\}$
+(units $\hbar/e$). $J^{S_k}_i=\sigma^k_{ij}E_j$ ↔ postw90 `shc_alpha=i, shc_beta=j, shc_gamma=k`."""),
+    SETUP,
+    code(KS_HELPER),
+    md("## 1. Plan: what must postw90 compute for fcc Pt?"),
+    code("""st = SymTensor.from_analysis(analyze_tensors(f"{KB}/Pt_postw90", tensors="spin", ossg="no"), "spin")
+txt, blocks = plan(st)
+print(txt); print("\\n--- first postw90 block ---\\n" + blocks[0])"""),
+    md("One number is enough. Import a postw90 SHC Fermi scan of $\\sigma^z_{xy}$ (**toy numbers**) and let symmetry fill the tensor:"),
+    code("""scan = read_postw90_shc(f"{KB}/Pt_postw90/Pt-shc-fermiscan.dat", win=f"{KB}/Pt_postw90/Pt.win")
+fit = st.fit(scan[0.0])
+print(format_fit(st, fit, unit="(ħ/e) S/cm"))
+efs = sorted(scan); vals = [st.fit(scan[e])["full"][0 * 9 + 1 * 3 + 2] for e in efs]
+fig, ax = plt.subplots(figsize=(4.8, 3)); ax.plot(efs, vals, "o-", color="#16325c")
+ax.set_xlabel("E$_F$ (eV)"); ax.set_ylabel("σ$^x_{yz}$ ((ħ/e) S/cm)"); ax.set_title("filled by symmetry from σ$^z_{xy}$", fontsize=10)"""),
+    md("## 2. Import with a symmetry check: anomalous Hall of bcc Fe ($\\mathbf m\\parallel z$)\n\nThe toy postw90 file contains small forbidden $\\sigma_{yz},\\sigma_{zx}$ (as from an unconverged k mesh or a wrong frame):"),
+    code("""stc = SymTensor.from_analysis(analyze_tensors(f"{KB}/Fe_postw90", tensors="charge", ossg="no"), "charge", parts=("odd",))
+f2 = stc.fit(read_postw90_ahc(f"{KB}/Fe_postw90/Fe-ahc-fermiscan.dat")[0.0])
+print(format_fit(stc, f2, unit="S/cm"))"""),
+    md(r"""## 3. Built-in Kubo solver — analytic checks
+
+**Haldane model** (honeycomb, $t_1=1$, $t_2=0.1$, $\phi=\pi/2$): $|\sigma_{xy}|=e^2/h$ in the topological gap, 0 for a large sublattice mass $M$.
+**Kane–Mele** ($S_z$ conserved): quantised spin Hall $|\sigma^z_{xy}|=(\hbar/e)\,e^2/h$, no charge Hall."""),
+    code("""Ms = np.linspace(0, 1.0, 11)
+sx = [abs(haldane(M=m)[0]) for m in Ms]
+fig, ax = plt.subplots(figsize=(5, 3.2)); ax.plot(Ms, sx, "o-", color="#c0392b")
+ax.axvline(3 * math.sqrt(3) * 0.1, ls=":", color="k"); ax.set_xlabel("M (eV)"); ax.set_ylabel("|σ$_{xy}$| (e²/h)")
+ax.set_title("Haldane: Chern transition at M = 3√3 t₂", fontsize=10)
+print("Kane–Mele at E_F = 0: σ^z_xy, σ_xy =", np.round(kane_mele()[0], 6))"""),
+    md("Units in 3D: stacking Haldane layers with spacing $c=5$ Å must give $(e^2/h)/c$:"),
+    code("""lat3 = lat.copy(); lat3[2, 2] = 5.0; R, H = haldane_hr()
+s3 = KuboTB(lat3, R, H, centres=frac @ lat3, dims=3).conductivity([("charge", 0, 0, 1)], [0.0], (60, 60, 1), 1e-6)[0, 0]
+print(f"σ_xy = {s3:.3f} S/cm;  (e²/h)/c = {3.874045865e-5 / 5e-8:.3f} S/cm")"""),
+    md(r"""## 4. Symmetry-driven Kubo run on a Wannier Hamiltonian
+
+`examples/kubo/Graphene_KaneMele` holds the model as a Wannier90 `kane_mele_hr.dat` + `centres.xyz`. SymPhase computes only the
+**pivot** components of the allowed tensor (P6/mmm1′: 3 independent), fills the rest by symmetry, and verifies one **non-pivot**
+component with an independent Kubo evaluation:"""),
+    code("""d = f"{KB}/Graphene_KaneMele"
+stg = SymTensor.from_analysis(analyze_tensors(d, tensors="spin", ossg="no"), "spin", parts=("even",))
+R, H = read_hr(f"{d}/kane_mele_hr.dat")
+model = KuboTB(read_poscar(f"{d}/POSCAR")["lattice"], R, H, centres=read_centres(f"{d}/centres.xyz"), dims=2, spin_order="blocks")
+for fit in compute_symmetric(model, stg, [0.0, 0.5], n=(60, 60), eta=1e-6):
+    print(f"E_F = {fit['E_F']} eV"); print(format_fit(stg, fit, unit="(ħ/e) e²/h")); print()"""),
+    md("""## 5. Command line
+```bash
+symphase kubo plan    -d examples/kubo/Pt_postw90 --kind spin
+symphase kubo import  -d examples/kubo/Pt_postw90 --kind spin --shc Pt_postw90/Pt-shc-fermiscan.dat --win Pt_postw90/Pt.win --ef 0
+symphase kubo import  -d examples/kubo/Fe_postw90 --kind charge --part odd --ahc Fe_postw90/Fe-ahc-fermiscan.dat --ef 0
+symphase kubo import  -d MyMaterial --kind orbital --table ohc_components.txt     # any code: 'σ^z_xy 1234.5' lines
+symphase kubo compute -d examples/kubo/Graphene_KaneMele --kind spin --hr .../kane_mele_hr.dat --centres .../centres.xyz \\
+                      --spin-order blocks --dims 2 --grid 60 60
+```
+The built-in solver uses the tight-binding convention (Wannier centres, no position-matrix `r.dat` terms) and the intrinsic
+(Fermi-sea, Berry-type) formula: T-odd spin and T-even charge components need Fermi-surface (∝ 1/Γ) or Boltzmann codes."""),
+], "17_tutorial_kubo_magnitudes.ipynb")
+
+save([
+    md(r"""# SymPhase tutorial 18 — self-consistent anharmonic phonons (TDEP / SSCHA) in free energies and hulls
+
+Strongly anharmonic solids need **temperature-dependent effective phonons**. TDEP fits effective force constants to MD at each $T$;
+the SSCHA minimises a variational free energy. Both give
+
+$$F(T) = F_\text{ph}[\omega_\text{eff}(T)](T) + \Delta F(T),\qquad \Delta F = \langle V - V_\text{eff}\rangle\ \ (\text{TDEP: } U_0)$$
+
+SymPhase reads them and uses them everywhere a free energy is needed:
+* **TDEP folders**: `outfile.free_energy` (T, F_ph, S, C_V; eV/atom) + `outfile.U0` (**second value** = baseline to add), one folder per temperature;
+* **tables** `T F` (SSCHA or any code) with units eV | meV | Ry | mRy | Ha | kJ/mol, per atom or per cell;
+* `AnharmonicF` → smooth $F(T)$ and $S=-\partial F/\partial T$;  `FreeEnergySurface` → anharmonic QHA over volumes;
+* hull: `--vib scph`, CSV columns `scph`, `e_static` (required when $F$ contains the static energy, as TDEP's $U_0$ and SSCHA totals do)."""),
+    SETUP,
+    code(KS_HELPER),
+    md(r"""## 1. Why self-consistent phonons? A quartic oscillator, exactly
+
+$V=\tfrac12kx^2+\lambda x^4$ ($k=2000$ meV/Å², $\lambda=1200$ meV/Å⁴, Fe mass). Exact quantum $F$ by diagonalisation vs the self-consistent
+harmonic approximation (SCHA: $M\omega_\text{eff}^2=k+12\lambda\langle x^2\rangle$, $F=F_\text{ph}(\omega_\text{eff})+\langle V-V_\text{eff}\rangle$) vs plain harmonic:"""),
+    code("""T = np.arange(0, 1601, 50)
+q = quartic_oscillator(2000.0, 1200.0, 55.845, T)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 3.4))
+a1.plot(T, q["scha"] - q["exact"], color="#16325c", lw=2, label="SCHA − exact")
+a1.plot(T, q["harmonic"] - q["exact"], color="0.5", lw=2, ls="--", label="harmonic − exact")
+a1.axhline(0, color="k", lw=0.6); a1.set_xlabel("T (K)"); a1.set_ylabel("ΔF (meV)"); a1.legend()
+a2.plot(T, q["w_eff"], color="#c0392b", lw=2); a2.set_xlabel("T (K)"); a2.set_ylabel("ω$_{eff}$ (meV)")
+a2.set_title("phonon hardening with temperature", fontsize=10)
+k = int(np.argmin(abs(T - 1000)))
+print(f"1000 K: SCHA error {q['scha'][k]-q['exact'][k]:+.3f} meV,  harmonic error {q['harmonic'][k]-q['exact'][k]:+.3f} meV;"
+      f"  SCHA ≥ exact everywhere: {bool(np.all(q['scha'] >= q['exact'] - 1e-9))}  (Gibbs–Bogoliubov bound)")"""),
+    md(r"""## 2. Reading TDEP folders
+
+`examples/hull/scph/Ni3Al-D019/T####/` contains `outfile.free_energy` and `outfile.U0` for every temperature (toy SCHA data,
+written in TDEP's layout). `AnharmonicF.from_tdep` adds the baseline and builds a smooth $F(T)$:"""),
+    code("""F = AnharmonicF.from_tdep(f"{EX}/hull/scph/Ni3Al-D019", e_static=-5.52)
+print("includes the static energy:", F.includes_static, " temperatures:", F.T.astype(int))
+for t in (300, 750, 1300):
+    print(f"T = {t:5d} K:  ΔF = F − E_static = {F.delta(t)*1e3:9.3f} meV/atom,  S = {F.entropy(t)/8.617333262e-5:.3f} k_B/atom")"""),
+    md(r"""## 3. Anharmonic quasi-harmonic approximation over volumes
+
+With total free energies at several volumes, `FreeEnergySurface` minimises over $V$ at every $T$. Check: built from the
+Debye–Grüneisen model it reproduces that model's $V(T)$ and $G(T)$:"""),
+    code("""qdg = QHA.debye_gruneisen(-5.0, 11.0, 180.0, 4.5, 450.0, 2.0)
+Vs = 11.0 * np.linspace(0.95, 1.07, 9)
+surf = FreeEnergySurface(Vs, [(lambda T, V=V: float(qdg.F(V, T))) for V in Vs])
+for t in (300, 900):
+    print(f"T = {t} K:  V surface {surf.equilibrium(t)[0]:.4f}  model {qdg.equilibrium(t)[0]:.4f} Å³;  "
+          f"G {surf.G(t):.6f} / {qdg.G(t):.6f} eV")"""),
+    md(r"""## 4. Finite-temperature hull with anharmonic free energies
+
+`examples/hull/NiAl_scph.csv`: the two Ni₃Al polymorphs come from TDEP-style folders, all other phases from SSCHA-style tables.
+D0₁₉ is harmonically softer (it would win entropy early) but also more anharmonic: its phonons **harden** on heating."""),
+    code("""ft = FiniteTHull(load_csv(scph_csv), vib="scph", mixing=False)
+Ts = ft.stabilisation_temperature("Ni3Al-D019", Tmax=1600)
+Tg = np.arange(0, 1601, 1.0)
+L, D = quartic_oscillator(2050, 500, 50, Tg), quartic_oscillator(1450, 1000, 50, Tg)
+dH = 25 + 3 * (D["harmonic"] - L["harmonic"]); dS = 25 + 3 * (D["scha"] - L["scha"])
+print(f"T* (SCHA, hull from TDEP folders): {Ts:.0f} K;   same model, harmonic phonons only: {Tg[np.argmax(dH <= 0)]:.0f} K")
+fig, ax = plt.subplots(figsize=(5.6, 3.4))
+ax.plot(Tg, dH, color="0.5", ls="--", lw=2, label="harmonic"); ax.plot(Tg, dS, color="#c0392b", lw=2, label="SCHA (anharmonic)")
+ax.axhline(0, color="k", lw=0.6); ax.set_xlabel("T (K)"); ax.set_ylabel("G(D0$_{19}$) − G(L1$_2$) (meV/atom)"); ax.legend()"""),
+    md("""Anharmonic hardening delays the transition by ≈ 235 K here — the harmonic approximation would be badly wrong.
+
+## 5. Command line
+```bash
+symphase hull --csv examples/hull/NiAl_scph.csv --temperatures 0 600 1200 --vib scph --no-mixing
+```
+CSV columns: `scph` (TDEP folder or table), `e_static` (eV/atom), `scph_unit`, `scph_per` (atom|cell), `scph_natom`, `scph_static`.
+Continue with **19_quiz_kubo_anharmonic_phonons.ipynb**."""),
+], "18_tutorial_selfconsistent_phonons.ipynb")
+
+KQ = [
+    dict(type="mc", question="What does symmetry alone NOT give for a response tensor?",
+         options={"a": "which components vanish", "b": "relations between components", "c": "the magnitudes", "d": "T-even/T-odd character"},
+         answer="c", explanation="Neumann's principle fixes the shape; magnitudes need a Kubo (or Boltzmann) calculation."),
+    dict(type="num", question="Hands-on: how many components must postw90 compute to know the full spin Hall tensor of fcc Pt?",
+         answer=1, tol=0.1, hint="SymTensor.from_analysis(...).n_par",
+         explanation="Cubic m-3m1′: σ^x_yz = σ^y_zx = σ^z_xy = −σ^x_zy = ... — one independent number."),
+    dict(type="mc", question="Which postw90 keywords select σ^z_xy (flow x, field y, spin z)?",
+         options={"a": "shc_alpha=3, shc_beta=1, shc_gamma=2", "b": "shc_alpha=1, shc_beta=2, shc_gamma=3",
+                  "c": "shc_alpha=2, shc_beta=1, shc_gamma=3", "d": "berry_task=ahc"},
+         answer="b", explanation="J^{S_k}_i = σ^k_ij E_j ↔ shc_alpha = i (flow), shc_beta = j (field), shc_gamma = k (spin)."),
+    dict(type="num", question="Hands-on: from the toy Pt scan, the value of σ^x_zy at E_F = 0 in (ħ/e) S/cm?",
+         answer=-1985.3, tol=0.5, hint="st.fit(scan[0.0])['full'][0*9 + 2*3 + 1]",
+         explanation="σ^x_zy = −σ^x_yz = −σ^z_xy = −1985.3 by cubic symmetry."),
+    dict(type="num", question="Hands-on: fitted anomalous Hall conductivity σ_xy of the toy bcc Fe file at E_F = 0 (S/cm)?",
+         answer=751.6, tol=0.5, explanation="Only h_z is allowed for m ∥ z; the fit keeps σ_xy and discards the forbidden parts."),
+    dict(type="mc", question="Hands-on: what does SymPhase report about the toy Fe data?",
+         options={"a": "nothing", "b": "non-zero components that symmetry forbids (σ_yz, σ_zx) and a 0.27 % violation",
+                  "c": "that Fe is non-magnetic", "d": "a quantised Hall conductance"},
+         answer="b", explanation="Forbidden non-zero components flag k-mesh convergence or frame problems in the Kubo run."),
+    dict(type="mc", question="Why compute a 'check component' in a symmetry-driven Kubo run?",
+         options={"a": "for speed", "b": "an independent Kubo evaluation of a component predicted by symmetry verifies frame, spin order and convergence",
+                  "c": "postw90 requires it", "d": "it replaces the pivots"},
+         answer="b", explanation="SymPhase picks the non-pivot component with the largest predicted value and compares."),
+    dict(type="num", question="Hands-on: |σ_xy| of the Haldane model (t2 = 0.1, φ = π/2, M = 0) in the gap, in e²/h?",
+         answer=1, tol=1e-3, hint="haldane()", explanation="Chern number ±1: quantised anomalous Hall conductance."),
+    dict(type="mc", question="Hands-on: Haldane model with M = 1.0 eV (> 3√3 t2): σ_xy in the gap is …",
+         options={"a": "1 e²/h", "b": "0 (trivial insulator)", "c": "2 e²/h", "d": "undefined"},
+         answer="b", explanation="The gap closes at M = 3√3 t2 ≈ 0.52 eV; beyond it the Chern number is 0."),
+    dict(type="num", question="Hands-on: Kane–Mele spin Hall conductivity σ^z_xy at E_F = 0.5 eV (in the band) in (ħ/e) e²/h (3 decimals)?",
+         answer=0.591, tol=0.003, hint="kane_mele(efs=[0.5])",
+         explanation="0.591: outside the gap the spin Hall conductivity is no longer quantised."),
+    dict(type="num", question="Hands-on: 3D stack of Haldane layers, c = 5 Å: σ_xy in S/cm (integer)?",
+         answer=775, tol=1, explanation="(e²/h)/c = 3.874×10⁻⁵ S / 5×10⁻⁸ cm = 774.8 S/cm — the unit check of the solver."),
+    dict(type="mc", question="Which contributions does the built-in intrinsic Kubo solver NOT include?",
+         options={"a": "Berry curvature of occupied bands", "b": "Fermi-surface (∝ 1/Γ) terms such as T-odd spin conductivities, and r.dat position terms",
+                  "c": "spin Hall of Kane–Mele", "d": "the anomalous Hall effect"},
+         answer="b", explanation="It is the Fermi-sea (Berry-type) formula in the tight-binding convention."),
+    dict(type="mc", question="In TDEP, what must be added to the phonon free energy F_ph of outfile.free_energy?",
+         options={"a": "nothing", "b": "the renormalised baseline U0 (second value of outfile.U0)", "c": "the zero-point energy twice", "d": "k_B T"},
+         answer="b", explanation="F = F_ph[ω_eff] + U0; the further values of outfile.U0 are higher-order corrections."),
+    dict(type="mc", question="Why does SymPhase require e_static when the TDEP baseline (or an SSCHA total free energy) is used?",
+         options={"a": "for plotting", "b": "U0 and SSCHA totals contain the static lattice energy; only F − E_static may be added to the DFT energy of a hull entry",
+                  "c": "TDEP needs it", "d": "it does not"},
+         answer="b", explanation="Otherwise the static energy would be counted twice."),
+    dict(type="mc", question="The SCHA free energy compared with the exact one is …",
+         options={"a": "always lower", "b": "always higher or equal (Gibbs–Bogoliubov variational bound)", "c": "equal", "d": "random"},
+         answer="b", explanation="A variational (Gaussian) trial density matrix gives an upper bound to F."),
+    dict(type="num", question="Hands-on: quartic oscillator (k = 2000, λ = 1200, Fe mass) at 1000 K: harmonic error F_harm − F_exact in meV (1 decimal)?",
+         answer=-5.1, tol=0.15, hint="quartic_oscillator(2000, 1200, 55.845, [1000])",
+         explanation="−5.07 meV, versus +0.22 meV for SCHA."),
+    dict(type="mc", question="With a positive quartic term, how do SCHA phonon frequencies change on heating?",
+         options={"a": "they soften", "b": "they harden (k_eff = k + 12λ⟨x²⟩ grows)", "c": "unchanged", "d": "they become imaginary"},
+         answer="b", explanation="Larger fluctuations at high T probe the stiffer x⁴ part of the potential."),
+    dict(type="num", question="Hands-on: stabilisation temperature of Ni3Al-D019 in the SCHA hull (NiAl_scph.csv) in K?",
+         answer=790, tol=10, unit="K", hint="FiniteTHull(load_csv(scph_csv), vib='scph', mixing=False).stabilisation_temperature('Ni3Al-D019', Tmax=1600)",
+         explanation="≈ 790 K with anharmonic phonons."),
+    dict(type="num", question="Hands-on: the same transition with harmonic phonons only (same k), in K?",
+         answer=556, tol=10, unit="K", explanation="≈ 556 K: ignoring anharmonic hardening underestimates T* by ≈ 235 K."),
+    dict(type="mc", question="What does FreeEnergySurface do with total free energies at several volumes?",
+         options={"a": "averages them", "b": "minimises F(V, T) over V at each T -> V(T), G(T), β, B_T (anharmonic QHA)",
+                  "c": "fits a Debye temperature", "d": "nothing"},
+         answer="b", explanation="It is the QHA minimisation, with anharmonic (TDEP/SSCHA) free energies instead of harmonic ones."),
+]
+build_bank(os.path.join(DATA, "quiz_kubo_scph.json"),
+           "Quiz 7 — Kubo magnitudes with symmetry, self-consistent anharmonic phonons", KQ)
+quiz_nb("19_quiz_kubo_anharmonic_phonons.ipynb",
+        "Quiz 7 — Kubo magnitudes with symmetry, self-consistent anharmonic phonons (20 questions)",
+        KQ, "kubo_scph", "Work through tutorials **17** and **18** first. Questions 2, 4–6, 8–11, 16, 18 and 19 are hands-on.",
+        KS_HELPER + "\nst = SymTensor.from_analysis(analyze_tensors(f'{KB}/Pt_postw90', tensors='spin', ossg='no'), 'spin')\n"
+        "scan = read_postw90_shc(f'{KB}/Pt_postw90/Pt-shc-fermiscan.dat', win=f'{KB}/Pt_postw90/Pt.win')")

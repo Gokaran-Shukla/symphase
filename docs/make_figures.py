@@ -184,3 +184,28 @@ a2.legend(fontsize=8, frameon=False); a2.set_title("Ni$_3$Al-D0$_{19}$ (toy data
 fig.tight_layout()
 fig.savefig(os.path.join(F, "magphon_qha.pdf")); fig.savefig(os.path.join(F, "magphon_qha.png"), dpi=160); plt.close(fig)
 print("figure magphon_qha")
+
+# ---------------------------------------------------------------- outlook 3 & 4: Kubo magnitudes, self-consistent phonons
+import math
+from symphase.kubo import KuboTB, haldane_hr, kane_mele_hr, honeycomb_lattice
+from symphase.qha import quartic_oscillator
+hlat, hfr = honeycomb_lattice(); hc = hfr @ hlat
+efs = np.linspace(-1.2, 1.2, 97)
+R_, H_ = haldane_hr(); sh = KuboTB(hlat, R_, H_, centres=hc, dims=2).conductivity([("charge", 0, 0, 1)], efs, (48, 48), 1e-4)[:, 0]
+R_, H_ = kane_mele_hr()
+sk = KuboTB(hlat, R_, H_, centres=np.r_[hc, hc], dims=2, spin_order="blocks").conductivity([("spin", 2, 0, 1)], efs, (48, 48), 1e-4)[:, 0]
+Tg = np.arange(0, 1601, 5.0)
+Lq, Dq = quartic_oscillator(2050, 500, 50, Tg), quartic_oscillator(1450, 1000, 50, Tg)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.5))
+a1.plot(efs, np.abs(sh), color="#c0392b", lw=2, label="Haldane |σ$_{xy}$| (e²/h)")
+a1.plot(efs, np.abs(sk), color="#16325c", lw=2, label="Kane–Mele |σ$^z_{xy}$| ((ħ/e) e²/h)")
+a1.axvspan(-3 * math.sqrt(3) * 0.1, 3 * math.sqrt(3) * 0.1, color="0.9", zorder=0)
+a1.set_xlabel("E$_F$ (eV)"); a1.set_ylabel("conductivity"); a1.legend(fontsize=8, loc="lower center")
+a1.set_title("built-in Kubo on hr.dat (shaded: Haldane gap)", fontsize=10)
+a2.plot(Tg, 25 + 3 * (Dq["harmonic"] - Lq["harmonic"]), "--", color="0.5", lw=2, label="harmonic: T* = 556 K")
+a2.plot(Tg, 25 + 3 * (Dq["scha"] - Lq["scha"]), color="#c0392b", lw=2, label="SCHA / TDEP: T* = 790 K")
+a2.axhline(0, color="k", lw=0.6); a2.set_xlabel("T (K)"); a2.set_ylabel("G(D0$_{19}$) − G(L1$_2$) (meV/atom)")
+a2.legend(fontsize=8); a2.set_title("anharmonic hardening delays the transition", fontsize=10)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "kubo_scph.pdf")); fig.savefig(os.path.join(F, "kubo_scph.png"), dpi=160); plt.close(fig)
+print("figure kubo_scph")

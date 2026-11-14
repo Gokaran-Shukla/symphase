@@ -11,6 +11,7 @@ Structures in `structures/` are idealised prototypes (half-Heusler, full-Heusler
 | `TiZrNiSn_quaternary.csv` | Ti–Zr–Ni–Sn | 37 |
 | `TiZrHfNiSn_5component.csv` | Ti–Zr–Hf–Ni–Sn | 51 |
 | `NiAl_qha.csv` | Ni–Al with Debye–Grüneisen QHA and anharmonic columns (`--vib qha-debye`) | 14 |
+| `NiAl_scph.csv` + `scph/` | Ni–Al with toy self-consistent phonon free energies (TDEP folders, SSCHA-style tables; `--vib scph`) | 14 |
 | `vasp_runs_NiAl/` | Ni–Al as VASP folders (POSCAR + minimal OUTCAR) | 14 |
 
 For real data: `symphase run Ti Ni Sn` (OQMD / Materials Project) or your own VASP runs.

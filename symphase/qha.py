@@ -232,3 +232,161 @@ def plot_qha(qha, temps, save=None, title=None, figsize=(10.5, 3.4)):
     if save:
         fig.savefig(save)
     return fig
+
+
+# ----------------------------------------------------------------------------
+#  self-consistent / effective-harmonic anharmonic phonons (TDEP, SSCHA, ...)
+# ----------------------------------------------------------------------------
+UNIT_TO_EV = {"ev": 1.0, "mev": 1e-3, "ry": 13.605693122994, "mry": 13.605693122994e-3, "ha": 27.211386245988,
+              "kj/mol": 0.0103642688}
+
+
+def read_tdep_free_energy(path):
+    """TDEP outfile.free_energy: rows  T (K), F_ph (eV/atom), S (eV/K/atom), C_V (eV/K/atom)"""
+    rows = [r for r in (_numeric(line) for line in open(path)) if r and len(r) >= 2]
+    a = np.array([r[:4] + [np.nan] * (4 - len(r[:4])) for r in rows])
+    return a[:, 0], a[:, 1], a[:, 2], a[:, 3]
+
+
+def read_tdep_U0(path):
+    """TDEP outfile.U0: the SECOND value is the second-order baseline correction to add to F_ph (eV/atom)
+    (the further values are higher-order corrections, not to be used with a harmonic reference)"""
+    vals = []
+    for line in open(path):
+        vals += _numeric(line) or []
+    if len(vals) < 2:
+        raise ValueError(f"{path}: expected at least two numbers")
+    return vals[1]
+
+
+def _numeric(line):
+    line = line.split("#")[0].strip()
+    if not line:
+        return None
+    try:
+        return [float(x) for x in line.split()]
+    except ValueError:
+        return None
+
+
+class AnharmonicF:
+    """F(T) per atom (eV) at fixed volume from self-consistent / effective-harmonic methods.
+
+    points (T_i, F_i), F_i = F_ph[ω_eff(T_i)](T_i) + ΔF_i  (TDEP: ΔF = U0 baseline; SSCHA: total free energy).
+    A natural cubic spline in T gives F(T) and S(T) = −dF/dT inside [T_min, T_max] (warning outside).
+    includes_static: F contains the static lattice energy (TDEP with U0, SSCHA totals); then delta(T)
+    = F(T) − e_static is the vibrational + anharmonic part to add to a static DFT energy."""
+
+    def __init__(self, T, F, includes_static=False, e_static=None, label=""):
+        from scipy.interpolate import CubicSpline
+        o = np.argsort(T)
+        self.T, self.F = np.asarray(T, float)[o], np.asarray(F, float)[o]
+        if len(self.T) < 2:
+            raise ValueError("need F at ≥ 2 temperatures")
+        self.spl = CubicSpline(self.T, self.F, bc_type="natural")
+        self.includes_static, self.e_static, self.label = includes_static, e_static, label
+        self.warned = set()
+
+    def __call__(self, T):
+        T = float(T)
+        if (T < self.T[0] - 1e-9 or T > self.T[-1] + 1e-9) and round(T) not in self.warned:
+            self.warned.add(round(T))
+        return float(self.spl(T))
+
+    def entropy(self, T):
+        return -float(self.spl(T, 1))
+
+    def delta(self, T):
+        if self.includes_static:
+            if self.e_static is None:
+                raise ValueError(f"{self.label}: free energy includes the static energy -> give e_static (eV/atom)")
+            return self(T) - self.e_static
+        return self(T)
+
+    @classmethod
+    def from_tdep(cls, path, use_U0=True, e_static=None):
+        """folder with outfile.free_energy (+ outfile.U0) or sub-folders (one per temperature)"""
+        files = sorted(glob.glob(os.path.join(path, "**", "outfile.free_energy"), recursive=True))
+        if not files:
+            raise ValueError(f"{path}: no outfile.free_energy found")
+        Ts, Fs, has_u0 = [], [], []
+        for f in files:
+            T, F, _, _ = read_tdep_free_energy(f)
+            u0f = os.path.join(os.path.dirname(f), "outfile.U0")
+            u0 = read_tdep_U0(u0f) if (use_U0 and os.path.isfile(u0f)) else None
+            has_u0.append(u0 is not None)
+            for t, fv in zip(T, F):
+                Ts.append(t)
+                Fs.append(fv + (u0 or 0.0))
+        if any(has_u0) and not all(has_u0):
+            raise ValueError(f"{path}: outfile.U0 present for some temperatures only")
+        T, idx = np.unique(np.round(Ts, 6), return_index=True)
+        return cls(T, np.array(Fs)[idx], includes_static=all(has_u0), e_static=e_static, label=f"TDEP {path}")
+
+    @classmethod
+    def from_table(cls, path, unit="eV", per="atom", natom=1, includes_static=False, e_static=None):
+        """two columns T, F (e.g. SSCHA free energies); unit eV|meV|Ry|mRy|Ha|kJ/mol, per 'atom' or 'cell'"""
+        d = np.array([r for r in (_numeric(line) for line in open(path)) if r and len(r) >= 2])
+        f = UNIT_TO_EV[unit.lower()] / (natom if per == "cell" else 1)
+        return cls(d[:, 0], d[:, 1] * f, includes_static=includes_static, e_static=e_static, label=path)
+
+
+class FreeEnergySurface(QHA):
+    """anharmonic quasi-harmonic minimisation: total free energies F_i(T) (including the static energy,
+    e.g. TDEP U0 + F_ph or SSCHA) at several volumes -> V(T), G(T), β, B_T, C_P"""
+
+    def __init__(self, volumes, F_of_T, poly_degree=3):
+        self.Ftot = list(F_of_T)
+        V = np.asarray(volumes, float)
+        super().__init__(volumes=V, energies=None, fvib=self.Ftot, eos=(0.0, float(np.mean(V)), 1.0, 4.0),
+                         poly_degree=poly_degree)
+
+    def E_static(self, V):
+        return np.zeros_like(np.asarray(V, float))
+
+    def summary(self):
+        return f"free-energy surface from {len(self.Ftot)} volumes ({self.Vlo:.3f}–{self.Vhi:.3f} Å³/atom)"
+
+
+# ----------------------------------------------------------------------------
+#  1D anharmonic oscillator: exact, SCHA, harmonic (validation / tutorial)
+# ----------------------------------------------------------------------------
+def quartic_oscillator(k, lam, mass, temps, nbasis=120):
+    """V = ½ k x² + λ x⁴ (meV, Å), mass in amu.  Returns dict of exact, SCHA and harmonic F(T) (meV),
+    SCHA ω_eff and ⟨V − V_eff⟩ (the TDEP-like 'U0' correction)."""
+    kB = 0.08617333262          # meV/K
+    kap = HB2 / mass            # ħ²/(M Å²) meV
+    w0 = math.sqrt(kap * k)     # meV
+    # exact: harmonic-oscillator basis of frequency w0
+    n = np.arange(nbasis)
+    xs = np.sqrt(kap / (2 * w0))                       # √(ħ/2Mω) in Å
+    X = np.diag(np.sqrt(n[1:]), 1) + np.diag(np.sqrt(n[1:]), -1)
+    X = xs * X
+    H = np.diag(w0 * (n + 0.5)) + lam * np.linalg.matrix_power(X, 4)
+    E = np.linalg.eigvalsh(H)[: nbasis // 2]
+    out = dict(T=np.asarray(temps, float), exact=[], scha=[], harmonic=[], w_eff=[], dU=[], Fph=[])
+    for T in out["T"]:
+        b = 1.0 / (kB * max(T, 1e-6))
+        out["exact"].append(E[0] - np.log(np.sum(np.exp(-b * (E - E[0])))) / b)
+        fh = lambda w: 0.5 * w + (np.log(-np.expm1(-b * w)) / b if T > 0 else 0.0)   # noqa: E731
+        out["harmonic"].append(fh(w0))
+        w = w0
+        for _ in range(500):
+            x2 = kap / (2 * w) / math.tanh(b * w / 2) if T > 0 else kap / (2 * w)
+            wn = math.sqrt(kap * (k + 12 * lam * x2))
+            if abs(wn - w) < 1e-12:
+                break
+            w = 0.5 * (w + wn)
+        x2 = kap / (2 * w) / math.tanh(b * w / 2) if T > 0 else kap / (2 * w)
+        meff = w * w / kap                               # effective spring constant
+        dU = 0.5 * k * x2 + 3 * lam * x2 * x2 - 0.5 * meff * x2      # ⟨V − ½ k_eff x²⟩
+        out["Fph"].append(fh(w))
+        out["dU"].append(dU)
+        out["w_eff"].append(w)
+        out["scha"].append(fh(w) + dU)
+    for key in ("exact", "scha", "harmonic", "w_eff", "dU", "Fph"):
+        out[key] = np.array(out[key])
+    return out
+
+
+HB2 = 4.18016   # ħ²/(amu Å²) in meV

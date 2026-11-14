@@ -12,11 +12,12 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 |---|---|---|
 | `symphase tensors` | `POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR` of a VASP run (POSCAR + INCAR is enough) | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations; **spin group** (no SOC): **oriented spin-space-group number for any order** (collinear, coplanar, non-coplanar; Chen et al. 2024 via FindSpinGroup), altermagnet / AFM / FM class, spin Laue group, d/g/i-wave spin splitting, NR tensors, SOC-only components |
 | `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening, **finite-T hulls** (mixing entropy, harmonic, **quasi-harmonic** and **anharmonic** free energies); parallel (all cores or MPI) |
-| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames) **incommensurate single-Q spirals without supercells** (rotating frame, optimal q) a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) and **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
+| `symphase kubo` | POSCAR + INCAR/OUTCAR; postw90 `*-ahc/shc-fermiscan.dat`, any component table, or Wannier90 `seedname_hr.dat` | **magnitudes** of charge / spin / orbital conductivities constrained by symmetry: minimal component set + postw90 input, import and symmetry fit (full tensor, violation check), built-in Kubo solver (AHC, SHC) |
+| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames), **incommensurate single-Q spirals without supercells** (rotating frame, optimal q), a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) and **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (44 slides, Beamer source included)
-📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 10 tutorials, 6 quizzes × 20 self-checking questions
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (46 slides, Beamer source included)
+📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 12 tutorials, 7 quizzes × 20 self-checking questions
 🧭 **Supercell guide:** [`docs/SUPERCELL_WORKFLOW.md`](docs/SUPERCELL_WORKFLOW.md) — every step from exchange constants to DFT checks for multi-Q / conical / distorted states
 
 ---
@@ -194,6 +195,34 @@ symphase hull --csv examples/hull/NiAl_qha.csv --temperatures 0 600 1200 --vib q
 ```
 Toy Ni₃Al-D0₁₉ reaches the hull at 1393 K (harmonic), 742 K (QHA) and 667 K (QHA + anharmonic).
 
+**Self-consistent anharmonic phonons (TDEP, SSCHA)** — F(T) = F<sub>ph</sub>[ω<sub>eff</sub>(T)] + ⟨V − V<sub>eff</sub>⟩:
+`AnharmonicF.from_tdep(folder)` reads `outfile.free_energy` (T, F<sub>ph</sub>, S, C<sub>V</sub>; eV/atom) and adds the second value of
+`outfile.U0`, one folder per temperature; `AnharmonicF.from_table(file, unit=..., per=...)` reads SSCHA (or any) T–F tables
+(eV, meV, Ry, mRy, Ha, kJ/mol; per atom or cell). Smooth F(T), S = −∂F/∂T, `FreeEnergySurface` for the anharmonic QHA over
+volumes, and finite-T hulls with `--vib scph` (CSV columns `scph`, `e_static` — required when F contains the static energy, as
+TDEP's U0 and SSCHA totals do). Validated against the exact quartic oscillator (SCHA ≥ exact, 0.22 meV at 1000 K vs
+−5.07 meV for harmonic). Toy Ni₃Al-D0₁₉: T* = 556 K (harmonic) → 790 K (anharmonic hardening).
+```bash
+symphase hull --csv examples/hull/NiAl_scph.csv --temperatures 0 600 1200 --vib scph --no-mixing
+```
+
+### Magnitudes from Wannier-based Kubo codes (`symphase kubo`)
+Symmetry fixes the shape of a tensor; Kubo fixes its size. `plan` lists the minimal (pivot) components and writes the
+postw90 blocks (`berry_task = ahc`, or `shc` with `shc_alpha/beta/gamma` = flow/field/spin); `import` reads postw90 Fermi
+scans or any `component value` table (WannierBerri, in-house OHC/SHC codes), fits the independent parameters, fills the full
+tensor by symmetry and flags symmetry violations / forbidden non-zero components; `compute` runs a built-in intrinsic Kubo solver
+(AHC, SHC; tight-binding convention with Wannier centres) on `seedname_hr.dat` for the pivots only and verifies a non-pivot
+component independently.
+```bash
+symphase kubo plan    -d examples/kubo/Pt_postw90 --kind spin
+symphase kubo import  -d examples/kubo/Pt_postw90 --kind spin --shc examples/kubo/Pt_postw90/Pt-shc-fermiscan.dat --win examples/kubo/Pt_postw90/Pt.win --ef 0
+symphase kubo compute -d examples/kubo/Graphene_KaneMele --kind spin --hr examples/kubo/Graphene_KaneMele/kane_mele_hr.dat \
+                      --centres examples/kubo/Graphene_KaneMele/centres.xyz --spin-order blocks --dims 2 --grid 60 60
+```
+Checks: Haldane |σ<sub>xy</sub>| = e²/h (0 in the trivial phase), Kane–Mele |σ<sup>z</sup><sub>xy</sub>| = (ħ/e) e²/h with σ<sub>xy</sub> = 0, 3D stack
+774.809 S/cm = (e²/h)/c, check component reproduced to 10⁻¹³. postw90 files are read as: energy column, then value(s) last
+(`*-ahc-fermiscan.dat`: E<sub>F</sub>, σ<sub>x</sub>, σ<sub>y</sub>, σ<sub>z</sub> = Hall vector; `*-shc-fermiscan.dat`: [index,] E<sub>F</sub>, σ<sup>γ</sup><sub>αβ</sub> with the component from `seedname.win`).
+
 ### Spin-space-group numbers for non-collinear orders
 With the optional `findspingroup` package (X. Chen *et al.*, PRX 14, 031038 (2024)) `symphase tensors` prints the
 **oriented SSG number** of every order and checks its SOC magnetic group against SymPhase's own (`--ossg auto|yes|no`):
@@ -260,6 +289,9 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 | `14_tutorial_ossg_magnon_phonon.ipynb` | OSSG numbers for collinear/coplanar/non-coplanar orders, magnon polarons, exchange striction, phonopy |
 | `15_tutorial_qha_anharmonic.ipynb` | quasi-harmonic thermal expansion, anharmonic free energy, phonopy-QHA workflow, T-dependent hulls |
 | `16_quiz_ossg_magnon_phonon_qha.ipynb` | **20 questions**: SSG numbers, magnon–phonon coupling, QHA & anharmonic hulls |
+| `17_tutorial_kubo_magnitudes.ipynb` | plan / import / fit / compute: Pt SHC from one postw90 number, Fe AHC check, Haldane, Kane–Mele |
+| `18_tutorial_selfconsistent_phonons.ipynb` | exact vs SCHA vs harmonic oscillator, TDEP folders, anharmonic QHA, hull with `--vib scph` |
+| `19_quiz_kubo_anharmonic_phonons.ipynb` | **20 questions**: Kubo magnitudes with symmetry, TDEP / SSCHA free energies |
 | `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on, incl. MoO₂) |
 | `05_quiz_convex_hull.ipynb` | **20 questions** (conceptual + hands-on) |
 

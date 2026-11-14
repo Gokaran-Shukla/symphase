@@ -1,0 +1,9 @@
+! excerpt of a postw90 input (TOY example for SymPhase)
+berry = true
+berry_task = shc
+shc_alpha = 1
+shc_beta  = 2
+shc_gamma = 3
+fermi_energy_min = -0.4
+fermi_energy_max =  0.4
+fermi_energy_step = 0.2

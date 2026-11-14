@@ -143,7 +143,8 @@ def scan_vasp(*roots, nproc=None, backend="auto", verbose=True):
 
 def load_csv(path):
     """CSV with columns  formula, energy  [, name, energy_type, structure, mixing, s_config, debye_T, phonons,
-    qha, volume, bulk_modulus, bulk_modulus_prime, gruneisen, gruneisen_q, anh_a, anh_m, anh_table]
+    qha, volume, bulk_modulus, bulk_modulus_prime, gruneisen, gruneisen_q, anh_a, anh_m, anh_table,
+    scph, e_static, scph_unit, scph_per, scph_natom, scph_static]
 
     energy_type (per row, or a column default):
         total     energy of the formula unit as written   (default)
@@ -166,7 +167,8 @@ def load_csv(path):
         data = dict(name=name, source=os.path.basename(path), note=r.get("note", ""),
                     csv_dir=os.path.dirname(os.path.abspath(path)))
         for extra in ("mixing", "s_config", "debye_t", "phonons", "qha", "volume", "bulk_modulus",
-                      "bulk_modulus_prime", "gruneisen", "gruneisen_q", "anh_a", "anh_m", "anh_table"):
+                      "bulk_modulus_prime", "gruneisen", "gruneisen_q", "anh_a", "anh_m", "anh_table",
+                      "scph", "e_static", "scph_unit", "scph_per", "scph_natom", "scph_static"):
             if r.get(extra) not in (None, ""):
                 data["debye_T" if extra == "debye_t" else extra] = r[extra]
         sp = r.get("structure")
@@ -493,9 +495,10 @@ def main(argv=None):
                     help="parallel backend; 'auto' uses MPI when launched with >1 MPI rank [auto]")
     ap.add_argument("--temperatures", type=float, nargs="+", default=None,
                     help="finite-T hulls at these temperatures (K): G = E + F_vib - T S_config")
-    ap.add_argument("--vib", choices=("none", "debye", "phonopy", "qha", "qha-debye", "bartel"), default="none",
+    ap.add_argument("--vib", choices=("none", "debye", "phonopy", "qha", "qha-debye", "scph", "bartel"), default="none",
                     help="vibrational free energy: none, debye, phonopy (harmonic), qha (phonopy tables at several "
-                         "volumes, CSV column qha), qha-debye (Debye–Grüneisen QHA), bartel [none]; "
+                         "volumes, CSV column qha), qha-debye (Debye–Grüneisen QHA), scph (self-consistent anharmonic "
+                         "phonons: TDEP folder or SSCHA table, CSV column scph), bartel [none]; "
                          "CSV column anh_a adds intrinsic anharmonicity")
     ap.add_argument("--no-mixing", action="store_true", help="ignore configurational entropy")
     ap.add_argument("--debye-default", type=float, default=None, help="θ_D (K) for entries without data")

@@ -1,0 +1,228 @@
+{
+ "title": "Quiz 7 — Kubo magnitudes with symmetry, self-consistent anharmonic phonons",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "What does symmetry alone NOT give for a response tensor?",
+   "options": {
+    "a": "which components vanish",
+    "b": "relations between components",
+    "c": "the magnitudes",
+    "d": "T-even/T-odd character"
+   },
+   "explanation": "Neumann's principle fixes the shape; magnitudes need a Kubo (or Boltzmann) calculation.",
+   "id": 1,
+   "key": "ImMi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many components must postw90 compute to know the full spin Hall tensor of fcc Pt?",
+   "tol": 0.1,
+   "hint": "SymTensor.from_analysis(...).n_par",
+   "explanation": "Cubic m-3m1′: σ^x_yz = σ^y_zx = σ^z_xy = −σ^x_zy = ... — one independent number.",
+   "id": 2,
+   "key": "MQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Which postw90 keywords select σ^z_xy (flow x, field y, spin z)?",
+   "options": {
+    "a": "shc_alpha=3, shc_beta=1, shc_gamma=2",
+    "b": "shc_alpha=1, shc_beta=2, shc_gamma=3",
+    "c": "shc_alpha=2, shc_beta=1, shc_gamma=3",
+    "d": "berry_task=ahc"
+   },
+   "explanation": "J^{S_k}_i = σ^k_ij E_j ↔ shc_alpha = i (flow), shc_beta = j (field), shc_gamma = k (spin).",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: from the toy Pt scan, the value of σ^x_zy at E_F = 0 in (ħ/e) S/cm?",
+   "tol": 0.5,
+   "hint": "st.fit(scan[0.0])['full'][0*9 + 2*3 + 1]",
+   "explanation": "σ^x_zy = −σ^x_yz = −σ^z_xy = −1985.3 by cubic symmetry.",
+   "id": 4,
+   "key": "My41ODkxLQ=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: fitted anomalous Hall conductivity σ_xy of the toy bcc Fe file at E_F = 0 (S/cm)?",
+   "tol": 0.5,
+   "explanation": "Only h_z is allowed for m ∥ z; the fit keeps σ_xy and discards the forbidden parts.",
+   "id": 5,
+   "key": "Ni4xNTc="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: what does SymPhase report about the toy Fe data?",
+   "options": {
+    "a": "nothing",
+    "b": "non-zero components that symmetry forbids (σ_yz, σ_zx) and a 0.27 % violation",
+    "c": "that Fe is non-magnetic",
+    "d": "a quantised Hall conductance"
+   },
+   "explanation": "Forbidden non-zero components flag k-mesh convergence or frame problems in the Kubo run.",
+   "id": 6,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why compute a 'check component' in a symmetry-driven Kubo run?",
+   "options": {
+    "a": "for speed",
+    "b": "an independent Kubo evaluation of a component predicted by symmetry verifies frame, spin order and convergence",
+    "c": "postw90 requires it",
+    "d": "it replaces the pivots"
+   },
+   "explanation": "SymPhase picks the non-pivot component with the largest predicted value and compares.",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: |σ_xy| of the Haldane model (t2 = 0.1, φ = π/2, M = 0) in the gap, in e²/h?",
+   "tol": 0.001,
+   "hint": "haldane()",
+   "explanation": "Chern number ±1: quantised anomalous Hall conductance.",
+   "id": 8,
+   "key": "MQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: Haldane model with M = 1.0 eV (> 3√3 t2): σ_xy in the gap is …",
+   "options": {
+    "a": "1 e²/h",
+    "b": "0 (trivial insulator)",
+    "c": "2 e²/h",
+    "d": "undefined"
+   },
+   "explanation": "The gap closes at M = 3√3 t2 ≈ 0.52 eV; beyond it the Chern number is 0.",
+   "id": 9,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: Kane–Mele spin Hall conductivity σ^z_xy at E_F = 0.5 eV (in the band) in (ħ/e) e²/h (3 decimals)?",
+   "tol": 0.003,
+   "hint": "kane_mele(efs=[0.5])",
+   "explanation": "0.591: outside the gap the spin Hall conductivity is no longer quantised.",
+   "id": 10,
+   "key": "MTk1LjA="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: 3D stack of Haldane layers, c = 5 Å: σ_xy in S/cm (integer)?",
+   "tol": 1,
+   "explanation": "(e²/h)/c = 3.874×10⁻⁵ S / 5×10⁻⁸ cm = 774.8 S/cm — the unit check of the solver.",
+   "id": 11,
+   "key": "NTc3"
+  },
+  {
+   "type": "mc",
+   "question": "Which contributions does the built-in intrinsic Kubo solver NOT include?",
+   "options": {
+    "a": "Berry curvature of occupied bands",
+    "b": "Fermi-surface (∝ 1/Γ) terms such as T-odd spin conductivities, and r.dat position terms",
+    "c": "spin Hall of Kane–Mele",
+    "d": "the anomalous Hall effect"
+   },
+   "explanation": "It is the Fermi-sea (Berry-type) formula in the tight-binding convention.",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "In TDEP, what must be added to the phonon free energy F_ph of outfile.free_energy?",
+   "options": {
+    "a": "nothing",
+    "b": "the renormalised baseline U0 (second value of outfile.U0)",
+    "c": "the zero-point energy twice",
+    "d": "k_B T"
+   },
+   "explanation": "F = F_ph[ω_eff] + U0; the further values of outfile.U0 are higher-order corrections.",
+   "id": 13,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does SymPhase require e_static when the TDEP baseline (or an SSCHA total free energy) is used?",
+   "options": {
+    "a": "for plotting",
+    "b": "U0 and SSCHA totals contain the static lattice energy; only F − E_static may be added to the DFT energy of a hull entry",
+    "c": "TDEP needs it",
+    "d": "it does not"
+   },
+   "explanation": "Otherwise the static energy would be counted twice.",
+   "id": 14,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "The SCHA free energy compared with the exact one is …",
+   "options": {
+    "a": "always lower",
+    "b": "always higher or equal (Gibbs–Bogoliubov variational bound)",
+    "c": "equal",
+    "d": "random"
+   },
+   "explanation": "A variational (Gaussian) trial density matrix gives an upper bound to F.",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: quartic oscillator (k = 2000, λ = 1200, Fe mass) at 1000 K: harmonic error F_harm − F_exact in meV (1 decimal)?",
+   "tol": 0.15,
+   "hint": "quartic_oscillator(2000, 1200, 55.845, [1000])",
+   "explanation": "−5.07 meV, versus +0.22 meV for SCHA.",
+   "id": 16,
+   "key": "MS41LQ=="
+  },
+  {
+   "type": "mc",
+   "question": "With a positive quartic term, how do SCHA phonon frequencies change on heating?",
+   "options": {
+    "a": "they soften",
+    "b": "they harden (k_eff = k + 12λ⟨x²⟩ grows)",
+    "c": "unchanged",
+    "d": "they become imaginary"
+   },
+   "explanation": "Larger fluctuations at high T probe the stiffer x⁴ part of the potential.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: stabilisation temperature of Ni3Al-D019 in the SCHA hull (NiAl_scph.csv) in K?",
+   "tol": 10,
+   "unit": "K",
+   "hint": "FiniteTHull(load_csv(scph_csv), vib='scph', mixing=False).stabilisation_temperature('Ni3Al-D019', Tmax=1600)",
+   "explanation": "≈ 790 K with anharmonic phonons.",
+   "id": 18,
+   "key": "MDk3"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the same transition with harmonic phonons only (same k), in K?",
+   "tol": 10,
+   "unit": "K",
+   "explanation": "≈ 556 K: ignoring anharmonic hardening underestimates T* by ≈ 235 K.",
+   "id": 19,
+   "key": "NjU1"
+  },
+  {
+   "type": "mc",
+   "question": "What does FreeEnergySurface do with total free energies at several volumes?",
+   "options": {
+    "a": "averages them",
+    "b": "minimises F(V, T) over V at each T -> V(T), G(T), β, B_T (anharmonic QHA)",
+    "c": "fits a Debye temperature",
+    "d": "nothing"
+   },
+   "explanation": "It is the QHA minimisation, with anharmonic (TDEP/SSCHA) free energies instead of harmonic ones.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

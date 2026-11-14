@@ -1,0 +1,17 @@
+# TOY DATA for SymPhase tutorials - not DFT results
+# Ni-Al with self-consistent anharmonic phonon free energies (scph/: TDEP folders and SSCHA-style tables)
+formula,energy,energy_type,name,scph,e_static,scph_unit,scph_static
+Ni,-5.570000,per_atom,Ni-fcc,scph/Ni-fcc.dat,-5.57,meV,true
+Al,-3.750000,per_atom,Al-fcc,scph/Al-fcc.dat,-3.75,meV,true
+Ni,-5.545000,per_atom,Ni-hcp,scph/Ni-hcp.dat,-5.545,meV,true
+Al,-3.720000,per_atom,Al-hcp,scph/Al-hcp.dat,-3.72,meV,true
+Ni3Al,-5.545000,per_atom,Ni3Al-L12,scph/Ni3Al-L12,-5.545,,
+Ni3Al,-5.520000,per_atom,Ni3Al-D019,scph/Ni3Al-D019,-5.52,,
+Ni5Al3,-5.392500,per_atom,Ni5Al3-Pt5Ga3,scph/Ni5Al3-Pt5Ga3.dat,-5.3925,meV,true
+Ni2Al,-5.433333,per_atom,Ni2Al-hyp,scph/Ni2Al-hyp.dat,-5.433333,meV,true
+NiAl,-5.325000,per_atom,NiAl-B2,scph/NiAl-B2.dat,-5.325,meV,true
+NiAl,-5.200000,per_atom,NiAl-L10,scph/NiAl-L10.dat,-5.2,meV,true
+Ni2Al3,-5.063000,per_atom,Ni2Al3-D513,scph/Ni2Al3-D513.dat,-5.063,meV,true
+NiAl2,-4.826667,per_atom,NiAl2-hyp,scph/NiAl2-hyp.dat,-4.826667,meV,true
+NiAl3,-4.625000,per_atom,NiAl3-D011,scph/NiAl3-D011.dat,-4.625,meV,true
+NiAl4,-4.414000,per_atom,NiAl4-hyp,scph/NiAl4-hyp.dat,-4.414,meV,true

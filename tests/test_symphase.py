@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -581,3 +581,94 @@ def test_qha_hull_shifts_stabilisation_temperature():
     Tq = FiniteTHull(noanh, vib="qha-debye", mixing=False).stabilisation_temperature("Ni3Al-D019", Tmax=3000)
     Ta = FiniteTHull(ents, vib="qha-debye", mixing=False).stabilisation_temperature("Ni3Al-D019", Tmax=3000)
     assert Ta < Tq < Th and abs(Th - 1393) < 5 and abs(Tq - 742) < 5 and abs(Ta - 667) < 5
+
+
+# ---------------------------------------------------------------- Kubo magnitudes, symmetry-constrained
+def test_kubo_haldane_and_kane_mele_quantised():
+    from symphase.kubo import KuboTB, haldane_hr, kane_mele_hr, honeycomb_lattice
+    lat, frac = honeycomb_lattice()
+    c = frac @ lat
+    R, H = haldane_hr()
+    assert abs(abs(KuboTB(lat, R, H, centres=c, dims=2).conductivity([("charge", 0, 0, 1)], [0.0], (48, 48), 1e-6)[0, 0]) - 1) < 1e-6
+    R, H = haldane_hr(M=1.0)
+    assert abs(KuboTB(lat, R, H, centres=c, dims=2).conductivity([("charge", 0, 0, 1)], [0.0], (48, 48), 1e-6)[0, 0]) < 1e-6
+    R, H = kane_mele_hr()
+    v = KuboTB(lat, R, H, centres=np.r_[c, c], dims=2, spin_order="blocks").conductivity(
+        [("spin", 2, 0, 1), ("charge", 0, 0, 1)], [0.0], (48, 48), 1e-6)[0]
+    assert abs(abs(v[0]) - 1) < 1e-6 and abs(v[1]) < 1e-9
+
+
+def test_kubo_3d_units_s_per_cm():
+    from symphase.kubo import KuboTB, haldane_hr, honeycomb_lattice
+    lat, frac = honeycomb_lattice(c=5.0)
+    R, H = haldane_hr()
+    s = KuboTB(lat, R, H, centres=frac @ lat, dims=3).conductivity([("charge", 0, 0, 1)], [0.0], (48, 48, 1), 1e-6)[0, 0]
+    assert abs(abs(s) - 3.874045865e-5 / 5e-8) < 1e-3                  # (e²/h)/c in S/cm
+
+
+def test_kubo_symmetry_fill_and_violation(tmp_path):
+    from symphase.kubo import SymTensor, read_postw90_shc, read_postw90_ahc
+    st = SymTensor.from_analysis(analyze_tensors(f"{EX}/vasp/fcc_Pt", tensors="spin", ossg="no"), "spin")
+    assert st.n_par == 1
+    sc = read_postw90_shc(f"{EX}/kubo/Pt_postw90/Pt-shc-fermiscan.dat", win=f"{EX}/kubo/Pt_postw90/Pt.win")
+    fit = st.fit(sc[0.0])
+    T = fit["full"].reshape(3, 3, 3)
+    assert np.isclose(T[0, 1, 2], 1985.3) and np.isclose(T[1, 2, 0], 1985.3) and np.isclose(T[0, 2, 1], -1985.3)
+    stc = SymTensor.from_analysis(analyze_tensors(f"{EX}/vasp/bcc_Fe_m001", tensors="charge", ossg="no"), "charge",
+                                  parts=("odd",))
+    f2 = stc.fit(read_postw90_ahc(f"{EX}/kubo/Fe_postw90/Fe-ahc-fermiscan.dat")[0.0])
+    assert np.isclose(f2["full"][1], 751.6) and f2["forbidden_nonzero"] and 0 < f2["violation"] < 0.01
+
+
+def test_kubo_compute_symmetric_check_component():
+    from symphase.kubo import SymTensor, KuboTB, read_hr, read_centres, compute_symmetric
+    d = f"{EX}/kubo/Graphene_KaneMele"
+    st = SymTensor.from_analysis(analyze_tensors(d, tensors="spin", ossg="no"), "spin", parts=("even",))
+    R, H = read_hr(f"{d}/kane_mele_hr.dat")
+    from symphase.tensors import read_poscar
+    m = KuboTB(read_poscar(f"{d}/POSCAR")["lattice"], R, H, centres=read_centres(f"{d}/centres.xyz"), dims=2,
+               spin_order="blocks")
+    fit = compute_symmetric(m, st, [0.0, 0.5], n=(40, 40), eta=1e-6)
+    assert abs(abs(fit[0]["full"][2 * 9 + 0 * 3 + 1]) - 1) < 1e-4                  # 40×40 k grid
+    assert fit[1]["check"]["rel_error"] < 1e-8 and abs(fit[1]["check"]["computed"]) > 0.1
+
+
+# ---------------------------------------------------------------- self-consistent anharmonic phonons
+def test_scha_quartic_oscillator_bound_and_accuracy():
+    from symphase.qha import quartic_oscillator
+    r = quartic_oscillator(2000.0, 1200.0, 55.845, [0, 300, 1000])
+    assert np.all(r["scha"] >= r["exact"] - 1e-9)                      # Gibbs–Bogoliubov upper bound
+    assert np.all(np.abs(r["scha"] - r["exact"]) < 0.25) and abs(r["harmonic"][2] - r["exact"][2]) > 4.0
+
+
+def test_tdep_folder_reader_and_entropy(tmp_path):
+    from symphase.qha import quartic_oscillator, AnharmonicF
+    T = list(range(0, 1301, 100))
+    q = quartic_oscillator(1450.0, 1000.0, 50.0, T)
+    for t, f, du in zip(T, q["Fph"], q["dU"]):
+        d = tmp_path / f"T{t:04d}"
+        d.mkdir()
+        (d / "outfile.free_energy").write_text(f"{t} {f / 1000:.12f} 0 0\n")
+        (d / "outfile.U0").write_text(f"-1.0 {-5.0 + du / 1000:.12f} 0.0\n")
+    F = AnharmonicF.from_tdep(str(tmp_path), e_static=-5.0)
+    assert F.includes_static
+    q2 = quartic_oscillator(1450.0, 1000.0, 50.0, [500.0, 501.0])
+    assert abs(F.delta(500.0) * 1000 - q2["scha"][0]) < 0.05
+    S_ref = -(q2["scha"][1] - q2["scha"][0]) / 1.0 / 1000
+    assert abs(F.entropy(500.0) - S_ref) < 0.03 * abs(S_ref)
+
+
+def test_free_energy_surface_matches_qha():
+    from symphase.qha import QHA, FreeEnergySurface
+    q = QHA.debye_gruneisen(-5.0, 11.0, 180.0, 4.5, 450.0, 2.0)
+    Vs = 11.0 * np.linspace(0.95, 1.07, 9)
+    surf = FreeEnergySurface(Vs, [(lambda T, V=V: float(q.F(V, T))) for V in Vs])
+    for T in (300.0, 900.0):
+        assert abs(surf.equilibrium(T)[0] - q.equilibrium(T)[0]) < 2e-3
+        assert abs(surf.G(T) - q.G(T)) < 5e-5
+
+
+def test_scph_hull_tdep_folders():
+    from symphase.thermo import FiniteTHull
+    ft = FiniteTHull(load_csv(f"{EX}/hull/NiAl_scph.csv"), vib="scph", mixing=False)
+    assert abs(ft.stabilisation_temperature("Ni3Al-D019", Tmax=1600) - 790) < 10

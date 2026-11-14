@@ -1,0 +1,7 @@
+# TOY numbers in the postw90 layout (not a real calculation)
+#  No.  Fermi energy(eV)   SHC((hbar/e)*S/cm)
+    1   -0.4000          2210.4
+    2   -0.2000          2105.7
+    3    0.0000          1985.3
+    4    0.2000          1810.9
+    5    0.4000          1620.2

@@ -1,0 +1,10 @@
+ vasp.6.4.2 18Apr23 (build) complex
+   TITEL  = PAW_PBE Pt 06Sep2000
+   ions per type =  1
+   NIONS =      1
+   ISPIN  =      1    spin polarized calculation?
+   LNONCOLLINEAR =      F
+   LSORBIT =      T
+   SAXIS  =  0.000000 0.000000 1.000000
+ E-fermi :   5.1234     XC(G=0): -10.0
+  free  energy   TOTEN  =       -12.345678 eV

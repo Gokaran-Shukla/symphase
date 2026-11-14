@@ -846,7 +846,9 @@ def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which,
               + ("   |  SOC-only Hall components: " + ", ".join(soc) if soc else ""))
         out["tensors"]["charge"] = dict(even={nm[c]: expr(Ee, pe, c, nm) for c in range(9)},
                                         odd={nm[c]: expr(Eo, po, c, nm) for c in range(9)},
-                                        n_even=len(pe), n_odd=len(po), ahe_allowed=bool(po))
+                                        n_even=len(pe), n_odd=len(po), ahe_allowed=bool(po),
+                                        basis=dict(even=dict(E=Ee.tolist(), piv=list(pe)),
+                                                   odd=dict(E=Eo.tolist(), piv=list(po))))
     for kind_t in ("spin", "orbital"):
         if kind_t not in which:
             continue
@@ -863,6 +865,7 @@ def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which,
         res = {}
         for part in ("even", "odd"):
             E, pv = solve_general(DT, 27, part)
+            res.setdefault("basis", {})[part] = dict(E=np.asarray(E).tolist(), piv=list(pv))
             lab = ("T-even" if part == "even" else "T-odd") + \
                   (" (spin-splitter / NR spin current)" if (part == "odd" and kind_t == "spin") else "")
             nz = _nonzero(E, pv, nm)
@@ -1244,7 +1247,8 @@ def main(argv=None, quiet=False):
         results["charge"] = dict(
             even={nm[c]: expr(Ee, pe, c, nm) for c in range(9)},
             odd={nm[c]: expr(Eo, po, c, nm) for c in range(9)},
-            n_even=len(pe), n_odd=len(po), ahe_allowed=bool(po), hall_vector=hall)
+            n_even=len(pe), n_odd=len(po), ahe_allowed=bool(po), hall_vector=hall,
+            basis=dict(even=dict(E=Ee.tolist(), piv=list(pe)), odd=dict(E=Eo.tolist(), piv=list(po))))
 
     for kind in ("spin", "orbital"):
         if kind not in which:
@@ -1312,6 +1316,7 @@ def main(argv=None, quiet=False):
                     P(f"      flow {AX[i]}, E ∥ {AX[j]} : {lab_op}_{{{','.join(ks) if ks else '-'}}}")
             res["even" if E is Ee else "odd"] = {nm[c]: expr(E, pv, c, nm) for c in range(27)}
         res["n_even"], res["n_odd"] = len(pe), len(po)
+        res["basis"] = dict(even=dict(E=Ee.tolist(), piv=list(pe)), odd=dict(E=Eo.tolist(), piv=list(po)))
         results[kind] = res
 
     P.mute = False

@@ -9,7 +9,8 @@ commands
   run       elements in, everything out:  symphase run Ti Ni Sn
   hull      convex hull from VASP runs / CSV / Materials Project
   tensors   magnetic + spin-group symmetry, conductivity tensors (POSCAR/INCAR/OUTCAR/OSZICAR)
-  magnons   magnon chirality splitting (LSWT, symmetry-resolved exchange)
+  magnons   magnons: chirality, spirals, supercells, magnon–phonon coupling
+  kubo      magnitudes from Wannier Kubo codes: plan / import (postw90) / compute (hr.dat), symmetry-fitted
   quiz      list the built-in quizzes (use them in the notebooks)
 
   symphase <command> -h   for the options of each command
@@ -34,6 +35,8 @@ def main(argv=None):
         from .auto import main as m
     elif cmd == "magnons":
         from .magnons import main as m
+    elif cmd == "kubo":
+        from .kubo import main as m
     elif cmd == "quiz":
         from .quiz import list_quizzes
         list_quizzes()

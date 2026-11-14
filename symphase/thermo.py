@@ -18,6 +18,10 @@ Vibrational free energy (choose with vib=)
                 thermal_properties*.yaml at several volumes -> G(T) = min_V F(V, T)
     "qha-debye": quasi-harmonic Debye–Grüneisen model from CSV columns volume (Å³/atom),
                 bulk_modulus (GPa), bulk_modulus_prime, debye_T, gruneisen [, gruneisen_q]
+    "scph"    : self-consistent / effective-harmonic anharmonic phonons (CSV column scph): a TDEP folder
+                (outfile.free_energy [+ outfile.U0] per temperature) or a table T F (SSCHA, ...;
+                scph_unit eV|meV|Ry|..., scph_per atom|cell, scph_natom, scph_static true if F contains
+                the static energy -> then e_static, eV/atom, is required)
     "bartel"  : SISSO descriptor of Bartel et al., Nat. Commun. 9, 4168 (2018) via pymatgen's
                 GibbsComputedStructureEntry (needs structures; 300–2000 K)
     "none"    : only configurational entropy
@@ -205,6 +209,30 @@ class FiniteTHull:
                         0.0, float(e.data["volume"]), float(e.data["bulk_modulus"]),
                         float(e.data["bulk_modulus_prime"]), float(e.data["debye_T"]), float(e.data["gruneisen"]),
                         q=float(e.data.get("gruneisen_q") or 1.0), **kw))
+        elif vib == "scph":
+            from .qha import AnharmonicF
+            self.scph, n0 = [], 0
+            for e in self.entries:
+                p = e.data.get("scph")
+                if not p:
+                    self.scph.append(None)
+                    n0 += 1
+                    continue
+                p = p if os.path.isabs(p) else os.path.join(e.data.get("csv_dir", "."), p)
+                es = e.data.get("e_static")
+                es = float(es) if es not in (None, "") else None
+                if os.path.isdir(p):
+                    f = AnharmonicF.from_tdep(p, e_static=es)
+                else:
+                    f = AnharmonicF.from_table(p, unit=e.data.get("scph_unit") or "eV", per=e.data.get("scph_per") or "atom",
+                                               natom=int(float(e.data.get("scph_natom") or 1)),
+                                               includes_static=str(e.data.get("scph_static", "")).lower() in ("1", "true", "yes"),
+                                               e_static=es)
+                if f.includes_static and f.e_static is None:
+                    raise ValueError(f"{entry_name(e)}: {p} contains the static energy (U0 / total F) -> give e_static")
+                self.scph.append(f)
+            if n0:
+                self.notes.append(f"{n0} entries without 'scph' data are treated as static (ΔF = 0)")
         elif vib == "bartel":
             if not all(isinstance(e, ComputedStructureEntry) for e in self.entries):
                 raise ValueError("vib='bartel' needs structures for every entry (CSV 'structure' column or VASP runs)")
@@ -212,7 +240,7 @@ class FiniteTHull:
             raise ValueError(f"unknown vib model {vib}")
         # anharmonic corrections on top of harmonic / no-vib models (QHA handles them inside)
         self.anh = None
-        if vib not in ("qha", "qha-debye") and any(e.data.get("anh_a") not in (None, "") or e.data.get("anh_table")
+        if vib not in ("qha", "qha-debye", "scph") and any(e.data.get("anh_a") not in (None, "") or e.data.get("anh_table")
                                                     for e in self.entries):
             from .qha import QHA
             self.anh = [QHA(eos=(0.0, 1.0, 1.0, 4.0), **self._anh_kw(e)) for e in self.entries]
@@ -249,6 +277,8 @@ class FiniteTHull:
                 Ga = Ga + np.array([p(T) for p in self.ph])
             elif self.vib in ("qha", "qha-debye"):
                 Ga = Ga + np.array([q.delta_G(T) for q in self.qha])
+            elif self.vib == "scph":
+                Ga = Ga + np.array([0.0 if f is None else f.delta(T) for f in self.scph])
             if self.anh is not None:
                 Ga = Ga + np.array([float(a.F_anh(1.0, T)) for a in self.anh])
         Ga = Ga - T * KB * self.S

@@ -685,6 +685,42 @@ phonopy tables or Debye–Grüneisen $\theta(V)$; $F_\text{anh}=-\tfrac32k_BaT^2
 {\tiny Checks: two-oscillator formula ($3\times10^{-14}$ meV), phonopy $\Phi(\mathbf k)$ = springs ($10^{-12}$), \texttt{PhonopyQHA}: $V$ to $2\times10^{-4}$ Å$^3$, $G$ to $10^{-6}$ eV.}
 \end{frame}
 
+\begin{frame}{Magnitudes: Wannier-based Kubo codes, constrained by symmetry}
+\begin{columns}[T]
+\column{0.52\textwidth}
+\footnotesize
+Symmetry gives the shape of $\sig$; Kubo gives the size. \cmd{symphase kubo}:
+\begin{itemize}\setlength\itemsep{0.15em}
+  \item \textbf{plan}: pivot components + postw90 blocks (\texttt{shc\_alpha/beta/gamma}) + a check component
+  \item \textbf{import}: postw90 AHC/SHC Fermi scans, any \texttt{component value} table (OHC codes)
+  \item \textbf{fit}: independent parameters $\to$ full tensor; violation and forbidden non-zero components flagged
+  \item \textbf{compute}: built-in Kubo on \texttt{hr.dat} (AHC, SHC) for the pivots only
+\end{itemize}
+$\sig_{ij}=-\tfrac{e^2}{\hbar}\!\int\!\sum_nf_n\Omega_{n,ij}$, \ spin: $\partial_iH\to\tfrac12\{\sigma_k,\partial_iH\}$.
+\column{0.44\textwidth}
+\begin{tcolorbox}[sp,title=Checks]
+\scriptsize
+Haldane $|\sig_{xy}|=1\,e^2/h$; trivial phase 0\\
+Kane–Mele $|\sig^z_{xy}|=1\,(\hbar/e)e^2/h$, $\sig_{xy}=0$\\
+3D stack: 774.809 S/cm $=(e^2/h)/c$\\
+check component: $10^{-13}$ relative\\
+Pt: one postw90 number $\to$ 6 components\\
+Fe: forbidden $\sig_{yz},\sig_{zx}$ flagged (0.27\,\%)
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Self-consistent anharmonic phonons: TDEP and SSCHA input}
+\noindent{\footnotesize $F(T)=F_\text{ph}[\omega_\text{eff}(T)]+\langle V-V_\text{eff}\rangle$. Readers: TDEP folders (\texttt{outfile.free\_energy} +
+2nd value of \texttt{outfile.U0}), SSCHA / any $T$–$F$ table (eV, meV, Ry, Ha, kJ/mol; per atom or cell). Smooth $F(T)$, $S=-\partial F/\partial T$;
+anharmonic QHA over volumes; hull \cmd{--vib scph} (\texttt{e\_static} when $F$ contains the static energy).}
+\vspace{0.3em}
+
+\centering\includegraphics[width=0.78\textwidth]{figures/kubo_scph.pdf}
+
+{\tiny Quartic oscillator at 1000 K: SCHA $-$ exact $=+0.22$ meV ($\ge0$, Gibbs–Bogoliubov), harmonic $-5.07$ meV. Toy Ni$_3$Al-D0$_{19}$: $T^*$ 556 K (harmonic) $\to$ 790 K (SCHA).}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -906,7 +942,9 @@ notebook & content\\ \midrule
 12 & supercells: multi-Q, conical, distorted\\
 14 & OSSG numbers, magnon–phonon coupling\\
 15 & quasi-harmonic \& anharmonic hulls\\
-04, 05, 09, 11, 13, 16 & \textbf{6 quizzes $\times$ 20 questions}\\ \bottomrule
+17 & Kubo magnitudes with symmetry\\
+18 & TDEP / SSCHA anharmonic phonons\\
+04, 05, 09, 11, 13, 16, 19 & \textbf{7 quizzes $\times$ 20 questions}\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -920,8 +958,8 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{0.82}
-\centering\scriptsize
+\renewcommand{\arraystretch}{0.95}
+\centering\tiny
 \begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
 test & expected & ok \\ \midrule
@@ -944,11 +982,13 @@ supercells & cone angle (analytic), SkX $N_{sk}=-3$, exact mapping & \textcolor{
 OSSG numbers (6 orders) & MSG of FindSpinGroup = SymPhase & \textcolor{spinc}{\checkmark} \\
 magnon–phonon & two-oscillator formula, phonopy $\Phi$ = springs & \textcolor{spinc}{\checkmark} \\
 QHA & \texttt{PhonopyQHA}; $\gamma=0$, Grüneisen relation & \textcolor{spinc}{\checkmark} \\
-quiz keys & 120 / 120 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+Kubo & Haldane, Kane–Mele quantised; 3D units & \textcolor{spinc}{\checkmark} \\
+TDEP / SSCHA & exact oscillator, Gibbs–Bogoliubov bound & \textcolor{spinc}{\checkmark} \\
+quiz keys & 140 / 140 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (66); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (75); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -966,8 +1006,8 @@ quiz keys & 120 / 120 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \begin{itemize}\setlength\itemsep{0.35em}
   \item magnon–phonon: second-order (two-magnon) striction terms, damping
   \item Edelstein, nonlinear Hall, torkance tensors
-  \item self-consistent anharmonic phonons (TDEP / SSCHA input)
-  \item link to Wannier-based Kubo codes for magnitudes
+  \item Fermi-surface (1/$\Gamma$) Kubo terms and orbital Hall from \texttt{hr.dat} + $L$ matrices
+  \item direct TDEP force-constant input (phonon dispersions at $T$)
 \end{itemize}
 \end{columns}
 \end{frame}
