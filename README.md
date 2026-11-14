@@ -10,11 +10,11 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 
 | command | input | output |
 |---|---|---|
-| `symphase tensors` | `POSCAR`, `OUTCAR`, `OSZICAR` of a VASP run | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations |
+| `symphase tensors` | `POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR` of a VASP run (POSCAR + INCAR is enough) | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations; **spin group** (no SOC): altermagnet / AFM / FM class, spin Laue group, d/g/i-wave spin splitting, NR tensors, SOC-only components |
 | `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening; parallel (all cores or MPI) |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (32 slides, Beamer source included)
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (34 slides, Beamer source included)
 📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 3 tutorials, 2 quizzes × 20 self-checking questions
 
 ---
@@ -68,6 +68,31 @@ r = analyze_tensors("examples/vasp/RuO2_Neel100_SOC")
 r["magnetic"]["bns_symbol"], r["tensors"]["charge"]["hall_vector"]   # ("Pnn'm'", ['0', '-σ_xz', '0'])
 ```
 
+Moments: `--magmom` > OUTCAR site moments > **INCAR `MAGMOM`** > OUTCAR echo; ISPIN / LSORBIT / LNONCOLLINEAR / SAXIS
+from OUTCAR, else INCAR (non-collinear MAGMOM is rotated from the SAXIS frame). A POSCAR + INCAR pair is enough to
+analyse a magnetic configuration *before* running VASP.
+
+### Spin groups — non-relativistic altermagnetism (`--analysis spin`, default `both`)
+Without SOC spin and lattice rotate independently: elements [U‖g]. SymPhase finds U for every crystal operation
+(m<sub>g(i)</sub> = U m<sub>i</sub>, Procrustes/SVD), adds the spin-only group (O(3), <sup>∞</sup>m1, <sup>m</sup>1) and reports
+
+* magnet class — ferromagnet, conventional AFM ([C₂‖τ]), PT-AFM ([C₂‖P]), **altermagnet**
+* spin Laue group (e.g. ²4/¹m²m¹m), spin-splitting form **s(k)** (s-, p-, d-, g-, i-wave) and nodal planes
+* non-relativistic charge / spin / orbital tensors and the components that exist **only with SOC**
+
+| example | class | spin Laue group | NR splitting |
+|---|---|---|---|
+| RuO₂, Néel ∥ z | altermagnet | ²4/¹m²m¹m | d-wave, s<sub>z</sub> ∝ k<sub>x</sub>k<sub>y</sub> |
+| MnTe (INCAR only) | altermagnet | ²6/²m¹m²m | g-wave, s<sub>z</sub> ∝ k<sub>z</sub>k<sub>y</sub>(k<sub>y</sub>²−3k<sub>x</sub>²) |
+| bcc Cr (INCAR only) | AFM [C₂‖τ] | — | none |
+| Mn₂Au (INCAR only) | PT-AFM | — | none |
+| bcc Fe | ferromagnet | ¹4/¹m¹-3¹m | s-wave |
+
+```bash
+symphase tensors --analysis spin              # spin group only
+python -c "from symphase import analyze_tensors as a; print(a('.')['spin_group']['spin_splitting'])"
+```
+
 Conventions: J<sub>i</sub> = σ<sub>ij</sub>E<sub>j</sub>, J<sup>S<sub>k</sub></sup><sub>i</sub> = σ<sup>k</sup><sub>ij</sub>E<sub>j</sub> (i flow, j field, k polarisation).
 For g′ = gT the T-odd part picks a factor −1 (Seemann *et al.*, PRB 92, 155138 (2015)); Onsager is imposed on σ<sub>ij</sub>.
 Moments are treated as axial vectors coupled to the lattice (relativistic analysis; without SOC the true symmetry is a larger spin group).
@@ -108,7 +133,7 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 
 | notebook | content |
 |---|---|
-| `01_tutorial_symmetry_tensors.ipynb` | Pt, Fe, altermagnetic RuO₂, Néel-vector rotation, reading operations |
+| `01_tutorial_symmetry_tensors.ipynb` | Pt, Fe, altermagnetic RuO₂, Néel-vector rotation, operations, **spin groups** (RuO₂, MnTe, Cr, Mn₂Au) |
 | `02_tutorial_convex_hull.ipynb` | 2-, 3-, 4-, 5-element hulls, slices, screening, parallel benchmark |
 | `03_tutorial_automatic_workflow.ipynb` | `symphase run`, OQMD/MP, VASP + Ibex round trip |
 | `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on) |
@@ -121,7 +146,7 @@ q = Quiz("hull"); q.answer(10, 42.5); q.hint(11); q.score(); q.widget(3)
 
 ## Repository layout
 ```
-symphase/        package: tensors.py, hull.py, hull_plots.py, auto.py, parallel.py, quiz.py, cli.py, data/
+symphase/        package: tensors.py, spingroup.py, hull.py, hull_plots.py, auto.py, parallel.py, quiz.py, cli.py, data/
 examples/vasp/   VASP test cases (Pt, Fe, RuO2 ×2, Mn3Sn)      examples/hull/  TOY energy data sets
 notebooks/       tutorials + quizzes (+ build_notebooks.py)    docs/           presentation (PDF + .tex)
 jobs/            Ibex SLURM scripts, example input              tests/          pytest suite (+ OQMD mock)

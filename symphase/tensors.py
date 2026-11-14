@@ -4,8 +4,9 @@
 symphase.tensors
 ================
 
-Read a VASP calculation (POSCAR/CONTCAR, OSZICAR, OUTCAR), perform a full
-crystal + magnetic symmetry analysis and print the symmetry-allowed shape of
+Read a VASP calculation (POSCAR/CONTCAR, INCAR, OSZICAR, OUTCAR), perform a full
+crystal + magnetic symmetry analysis (relativistic magnetic groups AND
+non-relativistic spin groups) and print the symmetry-allowed shape of
 
     * charge  conductivity  sigma_ij            (rank-2 polar tensor)
     * spin    conductivity  sigma^k_ij  (J^{S_k}_i = sigma^k_ij E_j)
@@ -52,7 +53,13 @@ Tensor conventions
 Magnetic moments
 ----------------
   priority:  --magmom (user)  >  OUTCAR site moments ('magnetization (x/y/z)')
-             >  MAGMOM echoed in OUTCAR  >  zero (non-magnetic, grey group)
+             >  INCAR MAGMOM  >  MAGMOM echoed in OUTCAR  >  zero (non-magnetic)
+  ISPIN, LSORBIT, LNONCOLLINEAR, SAXIS are taken from OUTCAR, else from INCAR,
+  so a POSCAR + INCAR pair is enough for a symmetry analysis before running VASP.
+
+Spin groups (--analysis spin|both): see symphase.spingroup — magnet class
+(FM / AFM / PT-AFM / altermagnet), spin Laue group, d/g/i-wave spin splitting
+s(k), nodal planes, non-relativistic tensors and the components that need SOC.
   collinear runs (ISPIN=2, no SOC):  m_i = M_i * direction,
              direction = --mdir (default: SAXIS from OUTCAR, else z)
   non-collinear runs: OUTCAR moments are in the SAXIS spinor frame and are
@@ -295,6 +302,58 @@ def _parse_moment_block(lines, start):
     return np.array(vals) if vals else None
 
 
+def read_incar(path):
+    """INCAR -> dict of upper-case tags (strings), plus parsed spin-related fields"""
+    tags = {}
+    with open(path, errors="replace") as fh:
+        for raw in fh:
+            line = re.split(r"[#!]", raw)[0]
+            for part in line.split(";"):
+                if "=" not in part:
+                    continue
+                k, v = part.split("=", 1)
+                k, v = k.strip().upper(), v.strip()
+                if k:
+                    tags[k] = v
+    info = dict(path=path, tags=tags)
+
+    def lbool(k):
+        v = tags.get(k)
+        return None if v is None else v.strip(".").upper().startswith("T")
+    info["ispin"] = int(float(tags["ISPIN"])) if "ISPIN" in tags else None
+    info["lsorbit"] = lbool("LSORBIT")
+    info["lnoncollinear"] = lbool("LNONCOLLINEAR")
+    if info["lsorbit"]:
+        info["lnoncollinear"] = True
+    if "SAXIS" in tags:
+        try:
+            info["saxis"] = np.array([float(x) for x in tags["SAXIS"].split()[:3]])
+        except ValueError:
+            info["saxis"] = None
+    else:
+        info["saxis"] = None
+    try:
+        info["magmom"] = expand_vasp_list(tags["MAGMOM"].split()) if "MAGMOM" in tags else None
+    except ValueError:
+        info["magmom"] = None
+    return info
+
+
+def merge_calc(outcar, incar):
+    """effective calculation flags: OUTCAR first, INCAR fills the gaps"""
+    calc = dict(outcar or {})
+    if incar:
+        for k_out, k_in in (("ispin", "ispin"), ("lsorbit", "lsorbit"),
+                            ("lnoncollinear", "lnoncollinear"), ("saxis", "saxis")):
+            if calc.get(k_out) is None and incar.get(k_in) is not None:
+                calc[k_out] = incar[k_in]
+        if outcar is None:
+            calc["lsorbit"] = bool(incar.get("lsorbit"))
+            calc["lnoncollinear"] = bool(incar.get("lnoncollinear"))
+        calc["magmom_incarfile"] = incar.get("magmom")
+    return calc
+
+
 def read_oszicar(path):
     info = dict(path=path, nionic=0)
     with open(path, errors="replace") as fh:
@@ -362,6 +421,8 @@ def build_moments(nat, outcar, args, log):
             m, src = from_list(vals, "OUTCAR site moments", True)
         else:
             m, src = from_list(sm["x"][:nat], "OUTCAR site moments", False)
+    elif outcar and outcar.get("magmom_incarfile") and (outcar.get("ispin") == 2 or noncol):
+        m, src = from_list(outcar["magmom_incarfile"], "INCAR MAGMOM (initial guess!)", True)
     elif outcar and outcar.get("magmom_incar") and (outcar.get("ispin") == 2 or noncol):
         m, src = from_list(outcar["magmom_incar"], "OUTCAR MAGMOM (initial guess!)", True)
     else:
@@ -531,7 +592,9 @@ def transpose_perm2():
 def nullspace(M, tol=1e-8):
     if M.shape[0] == 0:
         return np.eye(M.shape[1])
-    _, s, vh = np.linalg.svd(M)
+    _, s, vh = np.linalg.svd(M, full_matrices=(M.shape[0] < M.shape[1]))
+    if len(s) < vh.shape[0]:
+        s = np.concatenate([s, np.zeros(vh.shape[0] - len(s))])
     rank = int(np.sum(s > tol * max(1.0, s[0])))
     return vh[rank:].T.copy()
 
@@ -629,14 +692,186 @@ def print_matrix(P, rows, title, indent="    "):
 
 
 # ============================================================================
+#  non-relativistic spin-group report
+# ============================================================================
+def solve_general(DT, ncomp, parity, extra=None):
+    """DT: list of (D matrix, theta).  T-even: chi = D chi ; T-odd: chi = theta D chi"""
+    I = np.eye(ncomp)
+    rows = [((1.0 if parity == "even" else th) * D) - I for D, th in DT]
+    if extra is not None:
+        rows.append(extra)
+    B = nullspace(np.vstack(rows))
+    if B.shape[1] == 0:
+        return np.zeros((0, ncomp)), []
+    return rref(B.T)
+
+
+def _nonzero(E, piv, names):
+    return {names[c] for c in range(len(names)) if expr(E, piv, c, names) != "0"}
+
+
+def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which, rel_results, SIG):
+    from . import spingroup as sgm
+    sg = sgm.spin_group(lat, frac, types, mags, _g(ds, "rotations"), _g(ds, "translations"),
+                        symprec=args.symprec, mtol=max(args.mag_symprec, 0.02))
+    if Qstd is not None:                      # rotate lattice and spin parts to the std frame
+        for o in sg["ops"] + sg["spin_only"]:
+            o.Rc = Qstd @ o.Rc @ Qstd.T
+            o.U = Qstd @ o.U @ Qstd.T
+            o.Q = o.theta * o.U
+        if sg["axis"] is not None:
+            sg["axis"] = Qstd @ sg["axis"]
+    kind, axis = sg["kind"], sg["axis"]
+    cls, why = sgm.classify_magnet(sg)
+    nH = sum(o.coset == "H" for o in sg["ops"])
+    nA = sum(o.coset == "A" for o in sg["ops"])
+    so_txt = {"none": "O(3)  (all spin rotations and T: spin fully decoupled)",
+              "collinear": "∞m1  =  C∞(n) ⋊ {E, C2⊥·T}",
+              "coplanar": "m1  =  {E, C2(normal)·T}",
+              "noncoplanar": "1  (trivial)"}[kind]
+
+    P.h1("SPIN GROUP  (non-relativistic: no spin-orbit coupling)")
+    P(f"  magnetic order        : {kind}" + (f",  axis n = {fmt_vec(axis, 3)}" if kind == "collinear" else
+                                            (f",  plane normal = {fmt_vec(axis, 3)}" if kind == "coplanar" else "")))
+    P(f"  spin-only group       : {so_txt}")
+    P(f"  lattice group G       : {_g(ds, 'international')} (No. {_g(ds, 'number')}), {sg['n_lattice_G']} operations")
+    P(f"  spin-group lattice ops: {len(sg['ops'])} of {sg['n_lattice_G']}   "
+      f"(H: spin unchanged = {nH},  A: with spin operation = {nA},  incompatible = {sg['n_rejected']})")
+    if kind == "collinear" and nH:
+        try:
+            hs = spglib.get_spacegroup_type_from_symmetry(
+                np.array([o.R for o in sg["ops"] if o.coset == "H"]),
+                np.array([o.t for o in sg["ops"] if o.coset == "H"]), lat, symprec=args.symprec)
+            P(f"  spin-preserving subgroup H : {_g(hs, 'international_short') or _g(hs, 'international')} "
+              f"(No. {_g(hs, 'number')}),  index [G:H] = {round(sg['n_lattice_G'] / max(nH, 1))}")
+        except Exception:  # noqa: BLE001
+            pass
+    P(f"  magnet class          : {cls}")
+    P(f"                          {why}")
+    laue = None
+    if kind == "collinear" and "antiferromagnet" not in cls:
+        try:
+            laue = sgm.spin_laue_symbol(sg, _g(ds, "pointgroup"), _g(ds, "std_lattice"),
+                                        _g(ds, "std_rotation_matrix"))
+        except Exception:  # noqa: BLE001
+            laue = None
+        if laue:
+            P(f"  spin Laue group       : {laue[0]}   (Laue class {laue[1]};  ¹ = [E||g],  ² = [C2⊥||g])")
+    elif kind == "collinear":
+        P("  spin Laue group       : contains [C2⊥||E] (via t or P)  ->  every band spin degenerate")
+    deg, forms = sgm.spin_polarisation_form(sg)
+    wave = sgm.wave_label(deg, kind)
+    P(f"  NR spin splitting     : {wave}")
+    for f in forms[:4]:
+        P(f"      {f}")
+    planes = []
+    if kind == "collinear" and "ALTERMAGNET" in cls:
+        planes = sgm.nodal_planes(sg)
+        P(f"  spin-degenerate nodal planes (k·n = 0): {len(planes)}")
+        for n in planes:
+            P(f"      n = {fmt_vec(n, 3)}")
+
+    if not args.no_ops:
+        P.h2("Spin-group operations [U || g]  (lattice part g, spin part U; ·T = contains time reversal)")
+        P("    #  coset  lattice operation g                                                 spin operation U")
+        A = lat.T
+        for i, o in enumerate(sg["ops"]):
+            d = describe_op(Op(o.R, o.t, 1, o.Rc, A @ o.t), lat, [np.zeros(3)])
+            ax = (" ∥ " + fmt_vec(d["axis"], 2)) if d["axis"] is not None else ""
+            tt = " ".join(frac_str(x) for x in (o.t - np.floor(o.t + 1e-8)))
+            P(f"  {i+1:3d}   {o.coset:<4s} {(d['kind'] + d['sense'] + ax):<46s} t=({tt:<11s})  {sgm.describe_spin_op(o.U)}")
+        for o in sg["spin_only"]:
+            P(f"    -   spin-only  identity                                                     {sgm.describe_spin_op(o.U)}"
+              + ("   (generic angle: generates the continuous group)" if "R(" in sgm.describe_spin_op(o.U) else ""))
+
+    # ---------------------------------------------------------------- NR tensors
+    allops = sg["ops"] + sg["spin_only"]
+    seen, uniq = set(), []
+    for o in allops:
+        key = (tuple(np.round(o.Rc, 6).ravel()), tuple(np.round(o.U, 6).ravel()))
+        if key not in seen:
+            seen.add(key)
+            uniq.append(o)
+    out = dict(kind=kind, axis=None if axis is None else list(map(float, axis)), magnet_class=cls,
+               reason=why, spin_laue_group=laue[0] if laue else None, spin_splitting=wave,
+               splitting_degree=deg, s_k=forms, nodal_planes=[list(map(float, n)) for n in planes],
+               n_ops=len(sg["ops"]), n_H=nH, n_A=nA, tensors={})
+    P.h1("NON-RELATIVISTIC RESPONSE TENSORS  (spin group, no SOC)")
+    P("  spin index rotates with the spin part Q of [U||g] (U = θQ, θ = det U);  T-odd parts pick θ.")
+    P("  'SOC-only' = allowed with SOC (magnetic group) but forbidden in the spin group.")
+    if "charge" in which:
+        Pm = transpose_perm2()
+        DT = [(D_rank2(o.Rc), o.theta) for o in uniq]
+        Ee, pe = solve_general(DT, 9, "even", extra=np.eye(9) - Pm)
+        Eo, po = solve_general(DT, 9, "odd", extra=np.eye(9) + Pm)
+        nm = names_rank2(SIG)
+        P.h2("CHARGE CONDUCTIVITY (NR)")
+        for lab, E, pv in (("T-even", Ee, pe), ("T-odd (anomalous Hall)", Eo, po)):
+            if not pv:
+                P(f"    {lab}: all components vanish")
+            else:
+                print_matrix(P, [[expr(E, pv, i * 3 + j, nm) for j in range(3)] for i in range(3)],
+                             f"{lab}: {len(pv)} independent")
+        nr_odd = _nonzero(Eo, po, nm)
+        rel = rel_results.get("charge")
+        if rel:
+            soc = sorted({k for k, v in rel["odd"].items() if v != "0"} - nr_odd)
+            P("    anomalous Hall without SOC: " + ("ALLOWED (non-relativistic AHE)" if po else "forbidden")
+              + ("   |  SOC-only Hall components: " + ", ".join(soc) if soc else ""))
+        out["tensors"]["charge"] = dict(even={nm[c]: expr(Ee, pe, c, nm) for c in range(9)},
+                                        odd={nm[c]: expr(Eo, po, c, nm) for c in range(9)},
+                                        n_even=len(pe), n_odd=len(po), ahe_allowed=bool(po))
+    for kind_t in ("spin", "orbital"):
+        if kind_t not in which:
+            continue
+        sym = SIG + ("" if kind_t == "spin" else "L")
+        nm = names_rank3(sym)
+        if kind_t == "spin":
+            DT = [(np.kron(np.kron(o.Q, o.Rc), o.Rc), o.theta) for o in uniq]
+        else:
+            DT = [(np.linalg.det(o.Rc) * np.kron(np.kron(o.Rc, o.Rc), o.Rc), o.theta) for o in uniq]
+        lab_op = "S" if kind_t == "spin" else "L"
+        P.h2(f"{kind_t.upper()} CONDUCTIVITY (NR)  J^{{{lab_op}_k}}_i = {sym}^k_ij E_j")
+        if kind_t == "orbital":
+            P("    (L is an orbital/lattice quantity: it does not rotate with the spin part of [U||g])")
+        res = {}
+        for part in ("even", "odd"):
+            E, pv = solve_general(DT, 27, part)
+            lab = ("T-even" if part == "even" else "T-odd") + \
+                  (" (spin-splitter / NR spin current)" if (part == "odd" and kind_t == "spin") else "")
+            nz = _nonzero(E, pv, nm)
+            if not pv:
+                P(f"    {lab}: all components vanish")
+            else:
+                P(f"    {lab}: {len(pv)} independent:  " + ", ".join(nm[p] for p in pv))
+                for k in range(3):
+                    rows = [[expr(E, pv, (k * 3 + i) * 3 + j, nm) for j in range(3)] for i in range(3)]
+                    if any(x != "0" for r in rows for x in r):
+                        print_matrix(P, rows, f"k = {AX[k]}:", indent="      ")
+            rel = rel_results.get(kind_t, {}).get(part)
+            soc = sorted({k for k, v in (rel or {}).items() if v != "0"} - nz)
+            if rel is not None:
+                P(f"      SOC-only ({len(soc)}): " + (", ".join(soc[:18]) + (" ..." if len(soc) > 18 else "")
+                                                    if soc else "none"))
+            res[part] = {nm[c]: expr(E, pv, c, nm) for c in range(27)}
+            res[f"n_{part}"] = len(pv)
+            res[f"soc_only_{part}"] = soc
+        out["tensors"][kind_t] = res
+    return out
+
+
+# ============================================================================
 #  report
 # ============================================================================
 class Printer:
     def __init__(self, quiet=False):
         self.buf = []
         self.quiet = quiet
+        self.mute = False
 
     def __call__(self, s=""):
+        if self.mute:
+            return
         self.buf.append(s)
         if not self.quiet:
             print(s)
@@ -666,6 +901,10 @@ def main(argv=None, quiet=False):
     ap.add_argument("-p", "--poscar", default="POSCAR")
     ap.add_argument("-o", "--outcar", default="OUTCAR")
     ap.add_argument("-z", "--oszicar", default="OSZICAR")
+    ap.add_argument("-i", "--incar", default="INCAR")
+    ap.add_argument("--analysis", choices=("both", "msg", "spin"), default="both",
+                    help="msg: relativistic magnetic groups (SOC); spin: non-relativistic spin "
+                         "groups (altermagnetism, no SOC); both [default]")
     ap.add_argument("--symprec", type=float, default=1e-3, help="position tolerance (Å) [1e-3]")
     ap.add_argument("--angle-tol", type=float, default=-1.0, help="angle tolerance (deg) [-1 = spglib default]")
     ap.add_argument("--mag-symprec", type=float, default=0.05,
@@ -696,6 +935,8 @@ def main(argv=None, quiet=False):
         sys.exit(f"cannot find {args.poscar}")
     pos = read_poscar(args.poscar)
     outcar = read_outcar(args.outcar) if os.path.isfile(args.outcar) else None
+    incar = read_incar(args.incar) if os.path.isfile(args.incar) else None
+    calc = merge_calc(outcar, incar)
     osz = read_oszicar(args.oszicar) if os.path.isfile(args.oszicar) else None
 
     species = pos["species"] or (outcar and outcar.get("species"))
@@ -711,23 +952,31 @@ def main(argv=None, quiet=False):
     if outcar and outcar.get("nions") and outcar["nions"] != nat:
         log.append(f"WARNING: OUTCAR NIONS={outcar['nions']} differs from POSCAR ({nat})")
 
-    mags, magsrc = build_moments(nat, outcar, args, log)
+    mags, magsrc = build_moments(nat, calc, args, log)
     magnetic = bool(np.any(np.linalg.norm(mags, axis=1) > 0))
 
     P.h1(f"SymPhase {__version__}  —  symmetry & linear-response tensor analysis")
     P(f"  POSCAR  : {os.path.abspath(args.poscar)}   ({pos['comment']})")
     P(f"  OUTCAR  : {os.path.abspath(args.outcar) if outcar else 'not found'}")
     P(f"  OSZICAR : {os.path.abspath(args.oszicar) if osz else 'not found'}")
+    P(f"  INCAR   : {os.path.abspath(args.incar) if incar else 'not found'}")
 
     # ---------------------------------------------------------------- calculation summary
     P.h2("Calculation")
-    if outcar:
-        if outcar.get("version"):
+    if outcar or incar:
+        if outcar and outcar.get("version"):
             P(f"  VASP version         : {outcar['version']}")
-        P(f"  ISPIN                : {outcar.get('ispin')}")
-        P(f"  LNONCOLLINEAR/LSORBIT: {outcar.get('lnoncollinear')} / {outcar.get('lsorbit')}")
-        if outcar.get("saxis") is not None:
-            P(f"  SAXIS                : {fmt_vec(outcar['saxis'])}")
+        P(f"  ISPIN                : {calc.get('ispin')}")
+        P(f"  LNONCOLLINEAR/LSORBIT: {calc.get('lnoncollinear')} / {calc.get('lsorbit')}")
+        if calc.get("saxis") is not None:
+            P(f"  SAXIS                : {fmt_vec(calc['saxis'])}")
+    if incar:
+        t = incar["tags"]
+        keys = [k for k in ("SYSTEM", "GGA", "METAGGA", "ENCUT", "ISMEAR", "SIGMA", "EDIFF", "IBRION",
+                            "ISIF", "NSW", "LDAU", "LDAUTYPE", "LDAUL", "LDAUU", "LDAUJ", "IVDW",
+                            "MAGMOM", "ISYM", "LORBIT", "NBANDS", "LWANNIER90") if k in t]
+        P("  INCAR tags           : " + ("; ".join(f"{k} = {t[k]}" for k in keys) if keys else "-"))
+    if outcar:
         if outcar.get("efermi") is not None:
             P(f"  E-fermi              : {outcar['efermi']:.4f} eV")
         if outcar.get("toten") is not None:
@@ -906,9 +1155,9 @@ def main(argv=None, quiet=False):
         if np.linalg.norm(mags.sum(0)) < 0.05 * np.max(np.linalg.norm(mags, axis=1)):
             if not invT:
                 P("  -> compensated magnet without PT and without T·τ: altermagnet-/non-collinear-AFM-like")
-    if outcar and magnetic and not (outcar.get("lsorbit")):
+    if (outcar or incar) and magnetic and not calc.get("lsorbit"):
         P("  NOTE: run without SOC. The magnetic group above couples spin and lattice (relativistic).")
-        P("        Without SOC the true symmetry is a spin group (larger); use --mdir to test orientations.")
+        P("        Without SOC the true symmetry is the SPIN GROUP analysed below (--analysis spin).")
 
     if not args.no_ops:
         P.h2("All magnetic symmetry operations (Cartesian frame: " + ("standardized" if Q is not None else "POSCAR") + ")")
@@ -934,7 +1183,8 @@ def main(argv=None, quiet=False):
     results = {}
     frame_txt = "standardized (spglib std_rotation_matrix)" if Q is not None else "POSCAR Cartesian"
 
-    P.h1("SYMMETRY-ALLOWED LINEAR-RESPONSE TENSORS")
+    P.mute = args.analysis == "spin"
+    P.h1("SYMMETRY-ALLOWED LINEAR-RESPONSE TENSORS  (relativistic: magnetic point group, SOC)")
     P(f"  frame: {frame_txt};  magnetic point group {mpg}  ({len(point_ops)} point operations)")
     P("  T-even: invariant under all g and g' with D(R);  T-odd: picks sign -1 under primed g'")
 
@@ -1036,6 +1286,11 @@ def main(argv=None, quiet=False):
         res["n_even"], res["n_odd"] = len(pe), len(po)
         results[kind] = res
 
+    P.mute = False
+    spin_res = None
+    if args.analysis in ("both", "spin"):
+        spin_res = report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Q, which, results, SIG)
+
     if log:
         P.h2("Notes")
         for l in log:
@@ -1062,7 +1317,8 @@ def main(argv=None, quiet=False):
                       operations=[dict(R=o.R.tolist(), t=o.t.tolist(), time_reversal=o.theta == -1,
                                        R_cart=o.Rc.tolist(), kind=d["kind"])
                                   for o, d in zip(ops, descs)]),
-        frame=frame_txt, tensors=results, notes=log)
+        frame=frame_txt, tensors=results, spin_group=spin_res, notes=log,
+        incar=(incar or {}).get("tags"))
     js["report"] = "\n".join(P.buf)
     if args.json:
         with open(args.json, "w") as fh:
@@ -1070,19 +1326,19 @@ def main(argv=None, quiet=False):
     return js
 
 
-def analyze_tensors(directory=".", poscar=None, outcar="OUTCAR", oszicar="OSZICAR",
+def analyze_tensors(directory=".", poscar=None, outcar="OUTCAR", oszicar="OSZICAR", incar="INCAR",
                     quiet=True, **options):
     """Python API.  Run the symmetry/tensor analysis on a VASP directory.
 
     options map to command-line flags, e.g. mdir=(1, 1, 0), magmom="2*2.2",
-    frame="std", tensors="charge,spin", mmin=0.1, symprec=1e-3.
-    Returns a dict (structure, crystal, magnetic, tensors, report).
+    frame="std", tensors="charge,spin", mmin=0.1, symprec=1e-3, analysis="both|msg|spin".
+    Returns a dict (structure, crystal, magnetic, tensors, spin_group, report).
     """
     if poscar is None:
         poscar = "CONTCAR" if os.path.isfile(os.path.join(directory, "CONTCAR")) and \
             os.path.getsize(os.path.join(directory, "CONTCAR")) > 0 else "POSCAR"
     argv = ["-p", os.path.join(directory, poscar), "-o", os.path.join(directory, outcar),
-            "-z", os.path.join(directory, oszicar)]
+            "-z", os.path.join(directory, oszicar), "-i", os.path.join(directory, incar)]
     for k, v in options.items():
         flag = "--" + k.replace("_", "-")
         if v is True:

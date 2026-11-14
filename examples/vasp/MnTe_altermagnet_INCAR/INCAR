@@ -1,0 +1,5 @@
+SYSTEM = MnTe altermagnet (spin-group test, no SOC)
+ISPIN  = 2
+MAGMOM = 4.5 -4.5 2*0      ! Mn up / Mn down along z
+ENCUT  = 500 ; ISMEAR = 0 ; SIGMA = 0.05
+LDAU = .TRUE. ; LDAUTYPE = 2 ; LDAUL = 2 -1 ; LDAUU = 4.0 0 ; LDAUJ = 0 0

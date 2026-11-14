@@ -42,7 +42,8 @@ save([
 * which symmetry elements are present: inversion **P**, time reversal **T**, **PT**, **T·τ**, mirrors, **M·T**, **C<sub>n</sub>·T** …,
 * the symmetry-allowed shape of the **charge** σ<sub>ij</sub>, **spin** σ<sup>k</sup><sub>ij</sub> and **orbital** σ<sup>k</sup><sub>ij</sub> conductivity tensors, split into T-even and T-odd parts.
 
-Command line equivalent: `symphase tensors` inside a VASP folder."""),
+Command line equivalent: `symphase tensors` inside a VASP folder (`POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR`;
+`--analysis msg|spin|both` selects relativistic magnetic groups, non-relativistic spin groups or both)."""),
     md(r"""## 1. Theory in five lines
 
 **Neumann's principle:** a response tensor must be invariant under every operation of the (magnetic) point group.
@@ -119,7 +120,32 @@ symphase tensors --json res.json --out report.txt
 * The magnetic group couples spin and lattice (relativistic). Without SOC the true symmetry is a larger *spin group*.
 * Small induced moments can lower the symmetry: tune `mmin` / `mag_symprec`.
 * Tensors are given in the POSCAR Cartesian frame unless `frame="std"`."""),
-    md("""## 7. Exercise
+    md(r"""## 7. Spin groups — non-relativistic altermagnetism (no SOC)
+
+Without spin–orbit coupling spin and lattice transform independently: elements are pairs $[U\,||\,g]$
+($U\in O(3)$ acting on spins, improper $U$ = rotation × $\mathcal T$). SymPhase finds, for every crystal operation $g$,
+the spin operation $U$ with $\mathbf m_{g(i)} = U\mathbf m_i$, adds the spin-only group, and reports
+
+* the **magnet class**: ferromagnet, conventional AFM ($[C_2\,||\,\tau]$), PT-AFM ($[C_2\,||\,P]$) or **altermagnet**,
+* the **spin Laue group** (e.g. $^2 4/^1 m\,^2 m\,^1 m$) and the **spin-splitting form** $\mathbf s(\mathbf k)$: d-, g-, i-wave,
+* non-relativistic charge/spin/orbital tensors and the **SOC-only** components (allowed only with spin–orbit coupling).
+
+Moments may come from the **INCAR** alone (`MAGMOM`, `SAXIS`, `LSORBIT`) — useful *before* running VASP."""),
+    code("""cases = ["RuO2_Neel001_noSOC", "MnTe_altermagnet_INCAR", "Cr_bcc_AFM_INCAR", "Mn2Au_PT_AFM_INCAR",
+         "bcc_Fe_m001", "fcc_Pt"]
+print(f"{'example':<24s} {'magnet class':<32s} {'spin Laue':<12s} NR spin splitting")
+for c in cases:
+    sg = analyze_tensors(f"{EX}/vasp/{c}", tensors="charge,spin")["spin_group"]
+    print(f"{c:<24s} {sg['magnet_class']:<32s} {sg['spin_laue_group'] or '-':<12s} {sg['spin_splitting']}"
+          + (f"   {sg['s_k'][0]}" if sg['s_k'] else ""))"""),
+    md("""The full spin-group report (operations $[U||g]$, nodal planes, NR tensors) for MnTe, read from POSCAR + INCAR only:"""),
+    code("""r = analyze_tensors(f"{EX}/vasp/MnTe_altermagnet_INCAR", analysis="spin", tensors="spin", no_ops=True)
+rep = r["report"]; print(rep[rep.index("SPIN GROUP"):])"""),
+    md("""**Which spin-current components need SOC?** Compare relativistic (magnetic group) and non-relativistic (spin group) results for RuO₂:"""),
+    code("""t = analyze_tensors(f"{EX}/vasp/RuO2_Neel001_noSOC", tensors="spin")["spin_group"]["tensors"]["spin"]
+print("NR T-odd (spin splitter):", {k: v for k, v in t["odd"].items() if v != "0"})
+print("SOC-only T-even (spin Hall):", t["soc_only_even"])"""),
+    md("""## 8. Exercise
 
 Rotate the bcc-Fe moment to [111] with `magmom="0.577 0.577 0.577  0.577 0.577 0.577"` (scaled by 2.2 if you like) and determine
 (i) the magnetic point group, (ii) the direction of the Hall vector, (iii) the number of independent T-odd spin-conductivity components.

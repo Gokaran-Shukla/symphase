@@ -109,3 +109,36 @@ def test_quiz_banks(name):
     for i, qq in q.questions.items():
         k = _dec(qq["key"])
         assert q._correct(i, k[0] if isinstance(k, list) else k)
+
+
+# ---------------------------------------------------------------- spin groups (non-relativistic)
+@pytest.mark.parametrize("d,cls,wave,laue", [
+    ("RuO2_Neel001_noSOC", "ALTERMAGNET", "d-wave", "²4/¹m²m¹m"),
+    ("MnTe_altermagnet_INCAR", "ALTERMAGNET", "g-wave", "²6/²m¹m²m"),
+    ("Cr_bcc_AFM_INCAR", "antiferromagnet (conventional)", "no non-relativistic", None),
+    ("Mn2Au_PT_AFM_INCAR", "antiferromagnet (PT-symmetric)", "no non-relativistic", None),
+    ("bcc_Fe_m001", "ferromagnet / ferrimagnet", "s-wave", None),
+    ("fcc_Pt", "non-magnetic", "no non-relativistic", None)])
+def test_spin_group_classes(d, cls, wave, laue):
+    sg = analyze_tensors(f"{EX}/vasp/{d}", tensors="charge,spin")["spin_group"]
+    assert sg["magnet_class"] == cls
+    assert sg["spin_splitting"].startswith(wave)
+    if laue:
+        assert sg["spin_laue_group"] == laue
+
+
+def test_ruo2_nr_spin_splitter_and_soc_only_she():
+    t = analyze_tensors(f"{EX}/vasp/RuO2_Neel001_noSOC", tensors="spin")["spin_group"]["tensors"]["spin"]
+    assert t["n_even"] == 0                                   # no SHE without SOC
+    assert t["odd"]["σ^z_xy"] == t["odd"]["σ^z_yx"] != "0"    # NR spin splitter
+    assert "σ^z_xy" in t["soc_only_even"]
+
+
+def test_incar_saxis_rotation():
+    import shutil, tempfile
+    tmp = tempfile.mkdtemp()
+    shutil.copy(f"{EX}/vasp/RuO2_Neel001_noSOC/POSCAR", tmp)
+    with open(os.path.join(tmp, "INCAR"), "w") as fh:
+        fh.write("LSORBIT = .TRUE.\nSAXIS = 1 0 0\nMAGMOM = 0 0 1.2  0 0 -1.2  12*0\n")
+    r = analyze_tensors(tmp)
+    assert r["magnetic"]["bns_number"] == "58.398"            # Néel vector rotated to x

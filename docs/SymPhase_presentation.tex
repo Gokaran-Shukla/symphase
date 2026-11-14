@@ -129,7 +129,7 @@
 \column{0.48\textwidth}
 \begin{enumerate}\setlength\itemsep{0.7em}
   \item \textbf{SymPhase at a glance} — three commands
-  \item \textbf{Magnetic symmetry} — MSG, $\Pop$, $\Top$, $\Pop\Top$, $\Top\tau$, mirrors
+  \item \textbf{Magnetic symmetry} — MSG, $\Pop$, $\Top$, $\Pop\Top$, $\Top\tau$; \textbf{spin groups}
   \item \textbf{Response tensors} — charge, spin, orbital conductivity
   \item \textbf{Examples} — Pt, Fe, altermagnetic RuO$_2$
 \end{enumerate}
@@ -187,10 +187,10 @@ and builds the hull for \emph{any} number of elements — in parallel.
   \node[cmd] (t) at (0,2.2) {symphase tensors};
   \node[cmd] (h) at (5.2,2.2) {symphase hull};
   \node[cmd] (r) at (10.4,2.2) {symphase run};
-  \node[box] (ti) at (0,0.8) {POSCAR · OUTCAR\\OSZICAR};
+  \node[box] (ti) at (0,0.8) {POSCAR · INCAR\\OUTCAR · OSZICAR};
   \node[box] (hi) at (5.2,0.8) {VASP runs · CSV\\Materials Project};
   \node[box] (ri) at (10.4,0.8) {\textbf{elements only}\\\texttt{Ti Ni Sn}};
-  \node[outb] (to) at (0,-1.1) {space group, MSG\\$\Pop,\Top,\Pop\Top,\Mop,\dots$\\$\sig_{ij},\ \sig^{k}_{ij}$ (spin, orbital)};
+  \node[outb] (to) at (0,-1.1) {MSG \& spin group\\$\Pop,\Top,\Pop\Top,\Mop,\dots$\\$\sig_{ij},\ \sig^{k}_{ij}$ (spin, orbital)};
   \node[outb] (ho) at (5.2,-1.1) {$\Eform$, $\Ehull$, decomposition\\stability margin\\figures, screening};
   \node[outb] (ro) at (10.4,-1.1) {OQMD/MP phases, hull,\\figures, POSCARs,\\VASP + Ibex array, report};
   \foreach \a/\b in {t/ti,h/hi,r/ri} \draw[arr] (\a)--(\b);
@@ -272,19 +272,21 @@ $\Top$ or $\Top\tau$ $\Rightarrow$ all $\Top$-odd responses vanish.
 \begin{frame}{Reading the VASP calculation}
 \begin{columns}[T]
 \column{0.5\textwidth}
-\begin{itemize}\setlength\itemsep{0.45em}
-  \item \textbf{POSCAR/CONTCAR}: lattice, species, positions (VASP 4/5, Cartesian/direct, negative scale = volume)
+{\small\begin{itemize}\setlength\itemsep{0.2em}
+  \item \textbf{POSCAR/CONTCAR}: lattice, species, positions (VASP 4/5)
   \item \textbf{OUTCAR}: ISPIN, LSORBIT, \texttt{SAXIS}, last \texttt{magnetization (x/y/z)} blocks, orbital moments, $E_F$
   \item \textbf{OSZICAR}: ionic steps, $F$, $E_0$, total moment
-  \item non-collinear moments are rotated from the \texttt{SAXIS} spinor frame:
+  \item \textbf{INCAR}: \texttt{MAGMOM}, \texttt{SAXIS}, \texttt{LSORBIT}, \texttt{ISPIN}, \texttt{LDAU}… — POSCAR + INCAR suffice \emph{before} running VASP
+  \item non-collinear moments rotated from the \texttt{SAXIS} frame:
   $\mathbf m_{\rm cart} = R_z(\alpha)R_y(\beta)\,\mathbf m_{\rm SAXIS}$
-\end{itemize}
+\end{itemize}}
 \column{0.46\textwidth}
 \textbf{Moment priority}
 \begin{enumerate}\setlength\itemsep{0.25em}
   \item \cmd{--magmom} (user, $N$ or $3N$ values)
   \item OUTCAR site moments (last ionic step)
-  \item MAGMOM echoed in OUTCAR (initial guess)
+  \item INCAR \texttt{MAGMOM}
+  \item MAGMOM echoed in OUTCAR
   \item none $\to$ grey group
 \end{enumerate}
 \vspace{0.4em}
@@ -407,6 +409,52 @@ rotates collinear moments: one VASP run, all orientations.
 SymPhase flags \emph{compensated, no $\Pop\Top$, no $\Top\tau$} $\Rightarrow$ altermagnet-like.
 \end{tcolorbox}
 \end{columns}
+\end{frame}
+
+\begin{frame}{Spin groups: symmetry without spin–orbit coupling}
+\begin{columns}[T]
+\column{0.53\textwidth}
+Without SOC spin and lattice rotate \textbf{independently}: elements $[\textcolor{spinc}{U}\,\|\,g]$,
+$\textcolor{spinc}{U}\in O(3)$, $g=\{\Rop|\tau\}$ (improper $\textcolor{spinc}{U}$ = rotation $\times\,\Top$):
+\[
+ g\in\text{spin group}\iff \exists\,\textcolor{spinc}{U}:\ \mathbf m_{g(i)}=\textcolor{spinc}{U}\,\mathbf m_i\ \ \forall i
+\]
+\textcolor{spinc}{U} by orthogonal Procrustes (SVD), plus the \textbf{spin-only group}: $O(3)$, $^{\infty}m1$ (collinear), $^{m}1$ (coplanar).\\[0.4em]
+Tensors with $\textcolor{spinc}{U}=\theta\,\textcolor{spinc}{Q}$, $\theta=\det \textcolor{spinc}{U}$:
+\[
+\sig^{k}_{ij}:\ \Dop=\textcolor{spinc}{Q}\otimes\Rop\otimes\Rop,\quad
+\sig^{k}_{ij}(\Lv):\ \Dop=\det\Rop\,\Rop\otimes\Rop\otimes\Rop
+\]
+\column{0.44\textwidth}
+\begin{tcolorbox}[sp,title=Reported (\texttt{--analysis spin})]
+\begin{itemize}\setlength\itemsep{0.15em}
+ \item operations $[\textcolor{spinc}{U}\|g]$, cosets $H$ / $A$
+ \item magnet class: FM, AFM ($[C_2\|\tau]$), PT-AFM ($[C_2\|\Pop]$), \textbf{altermagnet}
+ \item spin Laue group, e.g.\ $^{2}4/^{1}m\,^{2}m\,^{1}m$
+ \item spin splitting $\textcolor{spinc}{\mathbf s}(\mathbf k)$ from $\textcolor{spinc}{\mathbf s}(\theta\Rop\mathbf k)=\theta \textcolor{spinc}{Q}\,\textcolor{spinc}{\mathbf s}(\mathbf k)$: d/g/i-wave, nodal planes
+ \item NR tensors and \textbf{SOC-only} components
+\end{itemize}
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Spin-group classification of the examples}
+\renewcommand{\arraystretch}{1.25}\centering\small
+\begin{tabular}{@{}llllp{3.9cm}@{}}
+\toprule
+system & magnet class & spin Laue group & NR splitting & $\textcolor{spinc}{\mathbf s}(\mathbf k)$ / remark \\ \midrule
+RuO$_2$ (Néel $\parallel z$) & \textbf{altermagnet} & $^{2}4/^{1}m\,^{2}m\,^{1}m$ & d-wave & $s_z\propto k_xk_y$, 2 nodal planes \\
+MnTe (NiAs) & \textbf{altermagnet} & $^{2}6/^{2}m\,^{1}m\,^{2}m$ & g-wave & $s_z\propto k_z k_y(k_y^2-3k_x^2)$ \\
+bcc Cr & AFM, $[C_2\|\tau]$ & — & none & Kramers degenerate \\
+Mn$_2$Au & PT-AFM, $[C_2\|\Pop]$ & — & none & Kramers degenerate \\
+bcc Fe & ferromagnet & $^{1}4/^{1}m\,^{1}\bar3\,^{1}m$ & s-wave & Zeeman-like \\
+fcc Pt & non-magnetic & — & none & spin decoupled \\ \bottomrule
+\end{tabular}
+\vspace{0.6em}
+\begin{tcolorbox}[hl]
+RuO$_2$ without SOC: spin splitter $\sig^{z}_{xy}=+\sig^{z}_{yx}$ ($\Top$-odd) survives; the spin Hall effect is \textbf{SOC-only};
+the orbital Hall effect needs no SOC. Moments for MnTe, Cr, Mn$_2$Au come from the INCAR alone.
+\end{tcolorbox}
 \end{frame}
 
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
@@ -618,9 +666,9 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{1.18}
+\renewcommand{\arraystretch}{1.1}
 \centering\small
-\begin{tabular}{@{}p{4.3cm}p{7.2cm}c@{}}
+\begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
 test & expected & ok \\ \midrule
 fcc Pt & $Fm\bar3m1'$, 1 SHE component, no AHE & \textcolor{spinc}{\checkmark} \\
@@ -630,11 +678,13 @@ RuO$_2$, Néel $\parallel[100]$ & $Pnn'm'$, AHE allowed & \textcolor{spinc}{\che
 non-collinear, \texttt{SAXIS}$\parallel x$ & moments rotated to $x$ & \textcolor{spinc}{\checkmark} \\
 hull: process / MPI & identical to serial & \textcolor{spinc}{\checkmark} \\
 Ibex script & file orders consistent, array dry run & \textcolor{spinc}{\checkmark} \\
+spin groups: RuO$_2$, MnTe, Cr, Mn$_2$Au & d-wave, g-wave, AFM, PT-AFM & \textcolor{spinc}{\checkmark} \\
+INCAR \texttt{SAXIS} rotation & Néel $\to x$: $Pnn'm'$ & \textcolor{spinc}{\checkmark} \\
 quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
-\vspace{0.5em}
+\vspace{0.2em}
 
-{\small Automated tests: \texttt{pytest tests/}. Database download (OQMD/MP) verified against the documented API with a mock server.}
+{\footnotesize Automated tests: \texttt{pytest tests/} (22 tests). OQMD/MP download checked against the documented API with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -642,7 +692,7 @@ quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomru
 \column{0.5\textwidth}
 \textbf{Limitations}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item relativistic MSG analysis; \textbf{spin groups} (no SOC) not yet
+  \item spin-space-group \emph{numbers} not assigned (operations, Laue group and class are)
   \item symmetry gives the \emph{shape}, not the magnitude, of tensors
   \item hull at $T=0$; no vibrational/configurational free energy
   \item mixing energy sources requires identical DFT settings
@@ -650,7 +700,7 @@ quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomru
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item spin-group analysis (non-relativistic altermagnetism)
+  \item spin-space-group numbering, magnon chirality splitting
   \item Edelstein, nonlinear Hall, torkance tensors
   \item finite-$T$ hulls (mixing entropy, phonons)
   \item link to Wannier-based Kubo codes for magnitudes

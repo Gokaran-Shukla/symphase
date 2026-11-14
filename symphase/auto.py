@@ -281,7 +281,10 @@ def _w_symmetry(job):
                 if v != "0" and mm and len({mm.group(1), mm.group(2), mm.group(3)}) < 3:
                     n += 1
             return n
+        sgr = res.get("spin_group") or {}
         return dict(dir=d, space_group=f"{res['crystal']['space_group']} ({res['crystal']['number']})",
+                    magnet_class=sgr.get("magnet_class"), spin_splitting=sgr.get("spin_splitting"),
+                    spin_laue=sgr.get("spin_laue_group"),
                     msg=f"{m['bns_symbol']} ({m['bns_number']})", mpg=m["magnetic_point_group"],
                     msg_type=m["type"], inversion=m["inversion"], PT=m["PT"],
                     T=m["time_reversal"] or m["antitranslation"],
@@ -467,8 +470,8 @@ def write_summary(cfg, h, figs, sym_rows, t_total):
             md.append(f"| {r['formula']} | {r['name']} | {r['e_form']:.4f} | {1000*r['e_hull']:.1f} | {r['decomposition']} |")
     if sym_rows:
         md.append("\n## Symmetry and allowed responses (phases near the hull)\n")
-        md.append("| phase | space group | magnetic space group (BNS) | MPG | P | PT | T | AHE | SHE T-even / T-odd | unconv. spin even / odd |")
-        md.append("|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|")
+        md.append("| phase | space group | magnetic space group (BNS) | MPG | P | PT | T | AHE | SHE T-even / T-odd | unconv. spin even / odd | spin group: class / NR splitting |")
+        md.append("|---|---|---|---|:-:|:-:|:-:|:-:|:-:|:-:|---|")
         yn = lambda b: "✓" if b else "–"
         for s in sym_rows:
             if s.get("error"):
@@ -476,7 +479,8 @@ def write_summary(cfg, h, figs, sym_rows, t_total):
                 continue
             md.append(f"| {os.path.basename(s['dir'])} | {s['space_group']} | {s['msg']} | {s['mpg']} | "
                       f"{yn(s['inversion'])} | {yn(s['PT'])} | {yn(s['T'])} | {yn(s['ahe'])} | "
-                      f"{s['n_she_even']} / {s['n_she_odd']} | {s['n_unconv_even']} / {s['n_unconv_odd']} |")
+                      f"{s['n_she_even']} / {s['n_she_odd']} | {s['n_unconv_even']} / {s['n_unconv_odd']} | "
+                      f"{s.get('magnet_class') or ''} / {s.get('spin_splitting') or ''} |")
         md.append("\nFull reports: `structures/<phase>/symmetry_report.txt`. "
                   "Moments: from the database when available, otherwise non-magnetic.")
     md.append("\n## Figures\n")
@@ -663,7 +667,8 @@ def run(cfg_or_tokens, **overrides):
                 print(f"  {os.path.basename(s['dir'])}: {s['error']}")
             else:
                 print(f"  {os.path.basename(s['dir']):<34s} {s['space_group']:<18s} {s['msg']:<22s} "
-                      f"AHE {'yes' if s['ahe'] else 'no '}  SHE {s['n_she_even']}/{s['n_she_odd']}")
+                      f"AHE {'yes' if s['ahe'] else 'no '}  SHE {s['n_she_even']}/{s['n_she_odd']}  "
+                      f"{s.get('magnet_class') or ''}")
     if cfg["write_vasp"] and phase_dirs:
         print("[6/6] VASP inputs + Ibex job script")
         runs, sp = write_vasp_inputs(cfg, phase_dirs, entries_by_dir)
