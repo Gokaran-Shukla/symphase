@@ -1,6 +1,7 @@
 """pytest suite for SymPhase  (run:  pytest tests/)"""
 import os
 import sys
+import math
 import numpy as np
 import pytest
 
@@ -156,3 +157,88 @@ def test_moo2_monoclinic_odd_y_rule():
             assert (v != "0") == (idx.count("y") % 2 == 1), name
     sg = r["spin_group"]["tensors"]
     assert sg["spin"]["n_even"] == 0 and sg["orbital"]["n_even"] == 13
+
+
+# ---------------------------------------------------------------- spin-space-group numbering
+@pytest.mark.parametrize("d,bns", [("RuO2_Neel001_noSOC", "136.498"), ("MnTe_altermagnet_INCAR", "194.269"),
+                                   ("Cr_bcc_AFM_INCAR", "221.97"), ("Mn2Au_PT_AFM_INCAR", "139.533"),
+                                   ("bcc_Fe_m001", "229.140")])
+def test_collinear_ssg_numbers(d, bns):
+    ssg = analyze_tensors(f"{EX}/vasp/{d}", tensors="charge")["spin_group"]["ssg"]
+    assert ssg["number"] == bns
+
+
+def test_spin_group_ops_match_spinspg():
+    spinspg = pytest.importorskip("spinspg")
+    import spglib
+    from symphase.tensors import read_poscar
+    from symphase import spingroup as sgm
+    r = analyze_tensors(f"{EX}/vasp/MnTe_altermagnet_INCAR", tensors="charge")
+    p = read_poscar(f"{EX}/vasp/MnTe_altermagnet_INCAR/POSCAR")
+    types = [0, 0, 1, 1]
+    mags = np.array([[0, 0, 4.5], [0, 0, -4.5], [0, 0, 0], [0, 0, 0]])
+    _, rots, _, _ = spinspg.get_spin_symmetry(p["lattice"], p["frac"], np.array(types), mags, symprec=1e-3)
+    assert len(rots) >= r["spin_group"]["n_ops"]   # spinspg may list each lattice op with several spin parts
+
+
+# ---------------------------------------------------------------- magnons
+def _magnon_setup(lat, frac, types, mags):
+    import spglib
+    from symphase.magnons import analyse
+    ds = spglib.get_symmetry_dataset((lat, frac, types))
+    return lambda **kw: analyse(lat, frac, types, ["X"] * len(frac), mags, ds.rotations, ds.translations,
+                                n_per=8, nmap=5, **kw)
+
+
+def test_magnon_fm_analytic():
+    a = 3.0
+    run = _magnon_setup(np.eye(3) * a, np.zeros((1, 3)), [0], np.array([[0, 0, 2.0]]))
+    r = run(J=[-1.0], rmax=3.1)
+    ex = 2 * np.sum(1 - np.cos(r["q"] * a), axis=1)
+    assert np.allclose(r["omega"][:, 0], ex, atol=1e-6) and np.allclose(r["dSz"], -1)
+
+
+def test_magnon_afm_chain_degenerate():
+    b = 3.0
+    run = _magnon_setup(np.diag([2 * b, 20, 20]), np.array([[0, 0, 0], [0.5, 0, 0]]), [0, 0],
+                        np.array([[0, 0, 2.], [0, 0, -2.]]))
+    r = run(J=[1.0], rmax=3.1)
+    assert np.allclose(r["omega"][:, 0], 2 * np.abs(np.sin(r["q"][:, 0] * b)), atol=1e-3)
+    assert np.nanmax(np.abs(r["split"])) < 1e-8
+
+
+def test_magnon_ruo2_dwave_split():
+    from symphase.tensors import read_poscar
+    import spglib
+    from symphase.magnons import analyse
+    p = read_poscar(f"{EX}/vasp/RuO2_Neel001_noSOC/POSCAR")
+    types = [0, 0, 1, 1, 1, 1]
+    mags = np.array([[0, 0, 1.2], [0, 0, -1.2]] + [[0, 0, 0]] * 4)
+    ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], types))
+    r = analyse(p["lattice"], p["frac"], types, ["Ru"] * 2 + ["O"] * 4, mags, ds.rotations, ds.translations,
+                J=[-0.5, 3.0, -0.2, 0, 0.2, 0, -0.6, -0.2], K=0.05, rmax=6.5, n_per=8, nmap=9)
+    assert len(r["classes"]) == 8 and abs(r["classes"][6]["L"] - r["classes"][7]["L"]) < 1e-6
+    Z, Q = r["map_split"], r["map_q"]
+    # d-wave: Δω odd under qx -> -qx and under qy -> -qy, zero on the axes
+    assert np.allclose(Z, -Z[::-1, :], atol=1e-6) and np.allclose(Z, -Z[:, ::-1], atol=1e-6)
+    assert np.nanmax(np.abs(Z)) > 0.1
+
+
+# ---------------------------------------------------------------- finite-T hull
+def test_mixing_entropy_stabilisation_temperature():
+    from symphase.thermo import FiniteTHull, parse_mixing
+    import math
+    S, _ = parse_mixing("Ti0.5Zr0.5|Ni|Sn")
+    assert abs(S - math.log(2) / 3) < 1e-12
+    ft = FiniteTHull(load_csv(f"{EX}/hull/TiZrNiSn_quaternary.csv"), vib="none")
+    ft.scan([0, 200, 300])
+    T = ft.stabilisation_temperature("(Ti0.5Zr0.5)NiSn-SQS")
+    assert abs(T - 0.005 * 3 / (8.617333262e-5 * math.log(2))) < 1.0     # 251 K
+
+
+def test_debye_free_energy_limits():
+    from symphase.thermo import debye_free_energy, KB
+    th = 300.0
+    assert abs(debye_free_energy(0, th) - 9 / 8 * KB * th) < 1e-12        # zero-point energy
+    T = 5000.0                                                               # classical limit
+    assert abs(debye_free_energy(T, th) - 3 * KB * T * math.log(th / T) - (-KB * T)) < 2e-3

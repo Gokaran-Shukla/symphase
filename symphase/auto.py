@@ -36,6 +36,8 @@ All optional keys (defaults shown):
     outdir        = symphase_<chemsys>
     ehull_window  = 0.10              # eV/atom: phases analysed in detail
     max_phases    = 40                # cap on detailed analyses
+    temperatures  =                   # e.g. 300 600 900 1200: finite-T hulls (mixing entropy + vib)
+    vib           = none              # none | debye | phonopy | bartel  (finite-T vibrations)
     tensors       =                   # e.g. charge,spin,orbital: also symmetry-analyse
                                       # database structures (default off: use `symphase tensors`
                                       # on your own VASP POSCAR/OUTCAR/OSZICAR instead)
@@ -76,7 +78,7 @@ from .parallel import pmap, resolve_nproc
 DEFAULTS = dict(
     elements="", source="auto", mp_api_key="", mp_thermo="GGA_GGA+U", csv="",
     vasp_dir="vasp", outdir="", ehull_window=0.10, max_phases=40,
-    tensors="", nproc=-1, plots=True, plot_format="png",
+    tensors="", nproc=-1, temperatures="", vib="none", plots=True, plot_format="png",
     write_vasp=False, vasp_mode="relax",
     potcar_dir="/home/shuklagn/potpaw_PBE",
     vasp_bin="/home/shuklagn/v_wan3.1/bin/vasp_std",
@@ -673,6 +675,22 @@ def run(cfg_or_tokens, **overrides):
         print("[6/6] VASP inputs + Ibex job script")
         runs, sp = write_vasp_inputs(cfg, phase_dirs, entries_by_dir)
         print(f"  {len(runs)} run directories, submit with:  {sp}")
+    if str(cfg.get("temperatures", "")).strip():
+        from .thermo import FiniteTHull
+        temps = sorted({0.0} | {float(x) for x in re.split(r"[\s,]+", str(cfg["temperatures"]).strip()) if x})
+        print(f"[+] finite-temperature hulls at {temps} K (vib: {cfg['vib']})")
+        try:
+            ft = FiniteTHull(entries, vib=cfg["vib"], mixing=True, nproc=cfg["nproc"])
+            ft.scan(temps)
+            with open(os.path.join(out, "finite_T.txt"), "w") as fh:
+                ft.report(file=fh)
+            ft.report()
+            if cfg["plots"]:
+                path = os.path.join(out, "figures", f"ehull_vs_T.{cfg['plot_format']}")
+                plt.close(ft.plot_ehull_vs_T(save=path))
+                figs.append(("E_hull versus temperature", path))
+        except Exception as err:  # noqa: BLE001
+            print(f"  finite-T hull skipped: {err}")
     write_summary(cfg, h, figs, sym_rows, time.time() - t0)
     print(f"\nDone in {time.time()-t0:.1f} s.  Open {os.path.join(out, 'SUMMARY.html')}")
     return h, dict(cfg=cfg, figures=figs, symmetry=sym_rows)

@@ -409,3 +409,51 @@ def wave_label(degree, kind):
     if degree is None:
         return "no non-relativistic spin splitting (spin-degenerate bands)"
     return _WAVE.get(degree, f"degree-{degree}")
+
+
+# ----------------------------------------------------------------------------
+#  spin-space-group identification
+# ----------------------------------------------------------------------------
+def identify_ssg(lat, frac, types, sg, symprec=1e-3, mag_symprec=0.05):
+    """Identify the spin space group.
+
+    collinear: the non-trivial part of a collinear SSG, {[E||h]} + {[C2perp||a]}, is isomorphic
+      to a black-and-white (type I, III or IV) magnetic space group with C2perp -> T.  There are
+      230 + 674 + 517 = 1421 of them.  We label the SSG by the BNS number of that group, found
+      with spglib from the scalar moments m_i . n, and write it as  <BNS label> x inf-m1.
+    non-magnetic: SSG = G x O(3) (G = crystal space group).
+    coplanar / non-coplanar: the lattice group G, the spin-preserving subgroup and the image of
+      the spin parts (spin point group) are reported; no standard number is assigned.
+    """
+    import spglib
+    from .tensors import msg_labels, _g
+    kind, axis = sg["kind"], sg["axis"]
+    out = dict(kind=kind)
+    if kind == "none":
+        out.update(label="G × O(3)  (spin fully decoupled)", number=None, family="non-magnetic")
+        return out
+    if kind == "collinear":
+        s = sg["mags"] @ axis
+        ds = spglib.get_magnetic_symmetry_dataset((lat, frac, types, s), symprec=symprec,
+                                                  mag_symprec=mag_symprec)
+        t = spglib.get_magnetic_spacegroup_type(_g(ds, "uni_number"))
+        bns = _g(t, "bns_number")
+        lab = msg_labels(bns)[0] or bns
+        typ = int(_g(t, "type"))
+        out.update(number=bns, bw_symbol=lab, bw_type=typ, uni=int(_g(ds, "uni_number")),
+                   label=f"{lab} (BNS {bns}, type {['', 'I', 'II', 'III', 'IV'][typ]}) ⊗ ∞m1",
+                   family="collinear (1 of 1421 collinear SSGs; C2⊥ ↔ T correspondence)",
+                   n_nontrivial_ops=int(_g(ds, "n_operations")))
+        return out
+    # non-collinear: spin point group = image of the proper spin parts (+ T)
+    Qs = []
+    for o in sg["ops"]:
+        M = o.U
+        if not any(np.allclose(M, q, atol=1e-5) for q in Qs):
+            Qs.append(M)
+    nH = sum(o.coset == "H" for o in sg["ops"])
+    out.update(number=None, family=f"{kind} (no standard number assigned)",
+               spin_point_group_order=len(Qs),
+               label=f"G = {len(sg['ops'])} lattice ops, spin-preserving subgroup {nH} ops, "
+                     f"spin point group of order {len(Qs)} ⊗ {'m1' if kind == 'coplanar' else '1'}")
+    return out

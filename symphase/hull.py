@@ -142,7 +142,7 @@ def scan_vasp(*roots, nproc=None, backend="auto", verbose=True):
 
 
 def load_csv(path):
-    """CSV with columns  formula, energy  [, name, energy_type, structure]
+    """CSV with columns  formula, energy  [, name, energy_type, structure, mixing, s_config, debye_T, phonons]
 
     energy_type (per row, or a column default):
         total     energy of the formula unit as written   (default)
@@ -162,7 +162,11 @@ def load_csv(path):
         if et in ("per_atom", "atom", "eV/atom"):
             e = e * comp.num_atoms
         name = r.get("name") or f"{comp.reduced_formula}-{i+1}"
-        data = dict(name=name, source=os.path.basename(path), note=r.get("note", ""))
+        data = dict(name=name, source=os.path.basename(path), note=r.get("note", ""),
+                    csv_dir=os.path.dirname(os.path.abspath(path)))
+        for extra in ("mixing", "s_config", "debye_t", "phonons"):
+            if r.get(extra) not in (None, ""):
+                data["debye_T" if extra == "debye_t" else extra] = r[extra]
         sp = r.get("structure")
         if sp:
             sp = sp if os.path.isabs(sp) else os.path.join(os.path.dirname(os.path.abspath(path)), sp)
@@ -485,6 +489,12 @@ def main(argv=None):
                     help="number of cores (-1 = all available, honours SLURM_CPUS_PER_TASK) [-1]")
     ap.add_argument("--backend", choices=("auto", "process", "mpi", "serial"), default="auto",
                     help="parallel backend; 'auto' uses MPI when launched with >1 MPI rank [auto]")
+    ap.add_argument("--temperatures", type=float, nargs="+", default=None,
+                    help="finite-T hulls at these temperatures (K): G = E + F_vib - T S_config")
+    ap.add_argument("--vib", choices=("none", "debye", "phonopy", "bartel"), default="none",
+                    help="vibrational free energy model [none]")
+    ap.add_argument("--no-mixing", action="store_true", help="ignore configurational entropy")
+    ap.add_argument("--debye-default", type=float, default=None, help="θ_D (K) for entries without data")
     ap.add_argument("--csv-out", default=None)
     ap.add_argument("--json", default=None)
     args = ap.parse_args(argv)
@@ -585,6 +595,19 @@ def main(argv=None):
                 fig = PDPlotter(h.pd, backend="plotly").get_plot()
                 fig.write_html(args.interactive)
                 print(f"  interactive plot written: {args.interactive}")
+    if args.temperatures:
+        from .thermo import FiniteTHull
+        ft = FiniteTHull(entries if els is None else h.entries, vib=args.vib, mixing=not args.no_mixing,
+                         nproc=args.nproc, debye_default=args.debye_default)
+        temps = sorted(set([0.0] + list(args.temperatures)))
+        ft.scan(temps)
+        ft.report(Tmax=max(3000.0, max(temps)))
+        stem, ext = os.path.splitext(args.plot if args.plot.lower() != "none" else "hull.png")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ft.plot_ehull_vs_T(save=f"{stem}_ehull_vs_T{ext}")
+            ft.plot_hull_at(max(temps), save=f"{stem}_T{int(max(temps))}{ext}")
+        print(f"  plots written: {stem}_ehull_vs_T{ext}, {stem}_T{int(max(temps))}{ext}")
     if args.csv_out:
         h.to_csv(args.csv_out)
     if args.json:

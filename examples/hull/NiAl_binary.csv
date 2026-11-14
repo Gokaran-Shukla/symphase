@@ -1,17 +1,17 @@
 # TOY DATA for SymPhase tutorials - not DFT results
 # Ni-Al: 14 toy entries
-formula,energy,energy_type,name,structure
-Ni,-5.570000,per_atom,Ni-fcc,structures/Ni_fcc.vasp
-Al,-3.750000,per_atom,Al-fcc,structures/Al_fcc.vasp
-Ni,-5.545000,per_atom,Ni-hcp,
-Al,-3.720000,per_atom,Al-hcp,
-Ni3Al,-5.545000,per_atom,Ni3Al-L12,structures/Ni3Al_L12.vasp
-Ni3Al,-5.520000,per_atom,Ni3Al-D019,
-Ni5Al3,-5.392500,per_atom,Ni5Al3-Pt5Ga3,
-Ni2Al,-5.433333,per_atom,Ni2Al-hyp,
-NiAl,-5.325000,per_atom,NiAl-B2,structures/NiAl_B2.vasp
-NiAl,-5.200000,per_atom,NiAl-L10,
-Ni2Al3,-5.063000,per_atom,Ni2Al3-D513,
-NiAl2,-4.826667,per_atom,NiAl2-hyp,
-NiAl3,-4.625000,per_atom,NiAl3-D011,
-NiAl4,-4.414000,per_atom,NiAl4-hyp,
+formula,energy,energy_type,name,structure,mixing,debye_T
+Ni,-5.570000,per_atom,Ni-fcc,structures/Ni_fcc.vasp,,450
+Al,-3.750000,per_atom,Al-fcc,structures/Al_fcc.vasp,,428
+Ni,-5.545000,per_atom,Ni-hcp,,,450
+Al,-3.720000,per_atom,Al-hcp,,,428
+Ni3Al,-5.545000,per_atom,Ni3Al-L12,structures/Ni3Al_L12.vasp,,
+Ni3Al,-5.520000,per_atom,Ni3Al-D019,,,
+Ni5Al3,-5.392500,per_atom,Ni5Al3-Pt5Ga3,,,
+Ni2Al,-5.433333,per_atom,Ni2Al-hyp,,,
+NiAl,-5.325000,per_atom,NiAl-B2,structures/NiAl_B2.vasp,,470
+NiAl,-5.200000,per_atom,NiAl-L10,,,
+Ni2Al3,-5.063000,per_atom,Ni2Al3-D513,,,
+NiAl2,-4.826667,per_atom,NiAl2-hyp,,,
+NiAl3,-4.625000,per_atom,NiAl3-D011,,,
+NiAl4,-4.414000,per_atom,NiAl4-hyp,,,

@@ -746,6 +746,12 @@ def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which,
               f"(No. {_g(hs, 'number')}),  index [G:H] = {round(sg['n_lattice_G'] / max(nH, 1))}")
         except Exception:  # noqa: BLE001
             pass
+    try:
+        ssg = sgm.identify_ssg(lat, frac, types, sg, symprec=args.symprec, mag_symprec=args.mag_symprec)
+    except Exception as err:  # noqa: BLE001
+        ssg = dict(label=f"(identification failed: {err})", number=None, family="")
+    P(f"  spin space group      : {ssg['label']}")
+    P(f"                          {ssg.get('family', '')}")
     P(f"  magnet class          : {cls}")
     P(f"                          {why}")
     laue = None
@@ -793,6 +799,7 @@ def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which,
             seen.add(key)
             uniq.append(o)
     out = dict(kind=kind, axis=None if axis is None else list(map(float, axis)), magnet_class=cls,
+               ssg=ssg,
                reason=why, spin_laue_group=laue[0] if laue else None, spin_splitting=wave,
                splitting_degree=deg, s_k=forms, nodal_planes=[list(map(float, n)) for n in planes],
                n_ops=len(sg["ops"]), n_H=nH, n_A=nA, tensors={})

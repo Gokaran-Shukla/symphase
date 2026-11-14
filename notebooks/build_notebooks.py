@@ -335,6 +335,106 @@ For the magnetic space group and conductivity tensors of any finished run: `cd v
 ], "03_tutorial_automatic_workflow.ipynb")
 
 # =============================================================================
+# 06  spin space groups + magnons
+# =============================================================================
+save([
+    md("""# SymPhase tutorial 4 — spin-space-group numbers and magnon chirality splitting
+
+* **Spin space groups (SSG).** Collinear SSGs are in one-to-one correspondence with the black-and-white magnetic
+  groups of type I, III and IV (replace every $[C_{2\\perp}\\|g]$ by $g\\mathcal T$): 230 + 674 + 517 = **1421** groups.
+  SymPhase labels a collinear SSG by the BNS number of that group, $\\otimes\\,^{\\infty}m1$ (spin-only group).
+* **Magnon chirality.** In a collinear magnet every magnon carries $\\Delta S_z=\\pm1$ (α / β). Without SOC the
+  splitting $\\Delta\\omega(\\mathbf q)=\\omega_\\beta-\\omega_\\alpha$ has the **same symmetry as the electronic spin splitting**:
+  zero in PT- or $\\tau$-connected antiferromagnets, d/g/i-wave in altermagnets."""),
+    SETUP,
+    md("## 1. Spin-space-group labels of the examples"),
+    code("""from symphase import analyze_tensors
+for c in ["RuO2_Neel001_noSOC", "MnTe_altermagnet_INCAR", "Cr_bcc_AFM_INCAR", "Mn2Au_PT_AFM_INCAR",
+          "bcc_Fe_m001", "fcc_Pt", "Mn3Sn_allin"]:
+    sg = analyze_tensors(f"{EX}/vasp/{c}", tensors="charge")["spin_group"]
+    print(f"{c:<24s} {sg['ssg']['label']}")"""),
+    md("""The black-and-white symbol and the spin Laue group are consistent: RuO₂ $P4_2'/mn'm$ ↔ $^24/^1m^2m^1m$ (primed = $^2$),
+MnTe $P6_3'/m'mc'$ ↔ $^26/^2m^1m^2m$.
+
+## 2. Symmetry classes of exchange bonds in RuO₂
+
+Bonds related by any operation of the non-magnetic crystal share one $J$. In the altermagnet the two 6.35 Å bonds
+along [110] and [1$\\bar1$0] fall into **different** classes — the microscopic origin of chirality splitting."""),
+    code("""import spglib, numpy as np
+from symphase.tensors import read_poscar
+from symphase.magnons import analyse, plot_bands, plot_split_map
+p = read_poscar(f"{EX}/vasp/RuO2_Neel001_noSOC/POSCAR")
+types = [0, 0, 1, 1, 1, 1]; symbols = ["Ru", "Ru", "O", "O", "O", "O"]
+mags = np.array([[0, 0, 1.2], [0, 0, -1.2]] + [[0, 0, 0]] * 4)
+ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], types))
+res = analyse(p["lattice"], p["frac"], types, symbols, mags, ds.rotations, ds.translations, rmax=6.5)
+for c in res["classes"]:
+    print(f"J{c['cls']+1}: |d| = {c['L']:.3f} Å, {c['n_bonds']} bonds/cell, {c['spins']:<9s} e.g. {c['members'][:2]}")"""),
+    md("""## 3. Linear spin-wave theory
+
+Illustrative exchange constants (meV, $J>0$ antiferromagnetic) with $J_7\\neq J_8$ and a small easy-axis anisotropy:"""),
+    code("""J = [-0.5, 3.0, -0.2, 0.0, 0.2, 0.0, -0.6, -0.2]
+res = analyse(p["lattice"], p["frac"], types, symbols, mags, ds.rotations, ds.translations,
+              J=J, K=0.05, rmax=6.5, n_per=50, nmap=41)
+fig = plot_bands(res, title="RuO$_2$ (toy J): magnon chirality")"""),
+    code("fig = plot_split_map(res)"),
+    md("""Δω is odd under $q_x\\to-q_x$ and $q_y\\to-q_y$ and vanishes on both axes: **d-wave, $\\Delta\\omega\\propto q_xq_y$**,
+exactly the spin-group form $s_z\\propto k_xk_y$. Setting $J_7=J_8$ removes the splitting:"""),
+    code("""res0 = analyse(p["lattice"], p["frac"], types, symbols, mags, ds.rotations, ds.translations,
+               J=[-0.5, 3.0, -0.2, 0.0, 0.2, 0.0, -0.4, -0.4], K=0.05, rmax=6.5, n_per=20, nmap=11)
+print("max |Δω| with J7 = J8:", np.nanmax(np.abs(res0["map_split"])), "meV")"""),
+    md("""## 4. Command line
+
+```bash
+cd my_vasp_run/
+symphase magnons --list-bonds --rmax 6.5          # bond classes
+symphase magnons --J -0.5 3.0 -0.2 0 0.2 0 -0.6 -0.2 --K 0.05 --plot magnons.png
+symphase magnons --exchange J.dat                 # i j n1 n2 n3 J(meV), e.g. from magex / TB2J
+```
+Moments come from OUTCAR or INCAR (`MAGMOM`); $S=|m|/2$ unless `--spin`. Validated against the analytic ferromagnet
+and antiferromagnetic-chain dispersions (tests)."""),
+], "06_tutorial_spin_space_groups_magnons.ipynb")
+
+# =============================================================================
+# 07  finite-temperature hulls
+# =============================================================================
+save([
+    md(r"""# SymPhase tutorial 5 — finite-temperature convex hulls
+
+$$G_i(T)=E_i+F^{\rm vib}_i(T)-T\,S^{\rm conf}_i ,\qquad
+S^{\rm conf}=-k_B\frac{\sum_s m_s\sum_a x_{s,a}\ln x_{s,a}}{\sum_s m_s}$$
+
+* **mixing entropy** from a sublattice spec per entry (CSV column `mixing`, e.g. `Ti0.5Zr0.5|Ni|Sn`) or `s_config` (k$_B$/atom),
+* **vibrations**: `debye` (column `debye_T`), `phonopy` (`total_dos.dat` or `thermal_properties.yaml`, column `phonons`),
+  `bartel` (SISSO descriptor via pymatgen, 300–2000 K), or `none`.
+
+> Toy energies and Debye temperatures (see `examples/hull/make_toy_data.py`)."""),
+    SETUP,
+    code("""from symphase.hull import load_csv
+from symphase.thermo import FiniteTHull, parse_mixing
+import math
+print("S_conf of (Ti0.5Zr0.5)NiSn:", parse_mixing("Ti0.5Zr0.5|Ni|Sn")[0], "k_B/atom  = ln2/3 =", math.log(2) / 3)
+ents = load_csv(f"{EX}/hull/TiZrNiSn_quaternary.csv")
+ft = FiniteTHull(ents, vib="none")              # mixing entropy only
+ft.scan([0, 200, 300, 400, 600, 900, 1200])
+ft.report()"""),
+    md(r"""The 5 meV/atom mixing enthalpy of (Ti$_{0.5}$Zr$_{0.5}$)NiSn is overcome when $k_BT\ln2/3=5$ meV, i.e.
+$T^*=251$ K — SymPhase finds it by bisection. Adding Debye phonons:"""),
+    code("""ftd = FiniteTHull(ents, vib="debye")
+ftd.scan([0, 200, 300, 400, 600, 900, 1200]); ftd.report()
+fig = ftd.plot_ehull_vs_T()"""),
+    code("fig = ftd.plot_hull_at(900)"),
+    md("""## Command line
+
+```bash
+symphase hull --csv data.csv --temperatures 300 600 900 1200 --vib debye
+symphase hull --csv data.csv --temperatures 300 900 --vib phonopy      # 'phonons' column -> phonopy files
+symphase hull --scan calcs/ --temperatures 600 1200 --vib bartel        # needs structures
+symphase run Ti Zr Ni Sn temperatures="300 600 900 1200" vib=bartel     # automatic pipeline
+```"""),
+], "07_tutorial_finite_temperature_hull.ipynb")
+
+# =============================================================================
 # quizzes
 # =============================================================================
 S = [

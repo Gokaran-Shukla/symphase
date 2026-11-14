@@ -129,13 +129,13 @@
 \column{0.48\textwidth}
 \begin{enumerate}\setlength\itemsep{0.7em}
   \item \textbf{SymPhase at a glance} — three commands
-  \item \textbf{Magnetic symmetry} — MSG, $\Pop$, $\Top$, $\Pop\Top$, $\Top\tau$; \textbf{spin groups}
+  \item \textbf{Magnetic symmetry} — MSG, spin groups, SSG numbers, magnons
   \item \textbf{Response tensors} — charge, spin, orbital conductivity
   \item \textbf{Examples} — Pt, Fe, RuO$_2$, monoclinic MoO$_2$
 \end{enumerate}
 \column{0.48\textwidth}
 \begin{enumerate}\setcounter{enumi}{4}\setlength\itemsep{0.7em}
-  \item \textbf{Convex hull} — any number of elements
+  \item \textbf{Convex hull} — any number of elements, finite $T$
   \item \textbf{Elements in, everything out} — OQMD / MP $\to$ VASP $\to$ Ibex
   \item \textbf{Parallel engine} — all cores, MPI
   \item \textbf{Tutorials \& quizzes}, validation, outlook
@@ -507,6 +507,51 @@ the orbital Hall effect needs no SOC. Moments for MnTe, Cr, Mn$_2$Au come from t
 \end{tcolorbox}
 \end{frame}
 
+\begin{frame}{Spin-space-group numbers}
+\begin{columns}[T]
+\column{0.44\textwidth}
+Collinear SSG $=\{[E\|h]\}\cup\{[\textcolor{spinc}{C_{2\perp}}\|a]\}\;\otimes\;^{\infty}m1$.\\[0.3em]
+Replacing $\textcolor{spinc}{C_{2\perp}}\to\Top$ maps it one-to-one onto a black-and-white group of type I, III or IV:
+\[
+230+674+517=\mathbf{1421}\ \text{collinear SSGs}
+\]
+\begin{tcolorbox}[sp]
+SymPhase: spglib on the scalar moments $\mathbf m_i\!\cdot\hat{\mathbf n}$ $\to$ BNS number;
+cross-checked with \texttt{spinspg}. Non-collinear: lattice group, spin-preserving subgroup, spin point group.
+\end{tcolorbox}
+\column{0.53\textwidth}
+\renewcommand{\arraystretch}{1.2}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+system & collinear SSG (BNS) & spin Laue \\ \midrule
+RuO$_2$ & $P4_2'/mn'm$ \;136.498 & $^{2}4/^{1}m\,^{2}m\,^{1}m$ \\
+MnTe & $P6_3'/m'mc'$ \;194.269 & $^{2}6/^{2}m\,^{1}m\,^{2}m$ \\
+bcc Cr & $P_Im\bar3m$ \;221.97 (IV) & — \\
+Mn$_2$Au & $I4/m'mm$ \;139.533 & — \\
+bcc Fe & $Im\bar3m$ \;229.140 (I) & $^{1}4/^{1}m\,^{1}\bar3\,^{1}m$ \\ \bottomrule
+\end{tabular}
+\vspace{0.5em}
+
+{\small Primes in the SSG symbol = $^{2}$ in the spin Laue group: two independent routes agree.}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Magnon chirality splitting (linear spin-wave theory)}
+\noindent{\footnotesize $H=\sum J_{ij}\,\Sv_i\!\cdot\!\Sv_j-K\sum(\Sv_i\!\cdot\!\hat{\mathbf n})^2$; bonds grouped by \textbf{crystal symmetry}
+(RuO$_2$: 6.35 Å bonds along [110] and [1$\bar1$0] inequivalent); Colpa diagonalisation, each mode $\Delta\Sv_z=\pm1$ ($\alpha$/$\beta$).}
+\vspace{0.3em}
+
+\centering
+\includegraphics[height=0.47\textheight]{figures/magnon_bands.pdf}\hspace{0.6em}
+\includegraphics[height=0.47\textheight]{figures/magnon_map.pdf}
+
+\vspace{0.2em}
+\begin{tcolorbox}[hl,width=0.94\textwidth]
+$\Delta\omega=\omega_\beta-\omega_\alpha\propto q_xq_y$: \textbf{d-wave}, the same form as the spin-group $\textcolor{spinc}{s_z}(\mathbf k)\propto k_xk_y$.
+Tests: FM and AFM chain exact; $J_7=J_8\Rightarrow\Delta\omega=0$. {\scriptsize (toy $J$; \texttt{symphase magnons --J ...} or \texttt{--exchange J.dat})}
+\end{tcolorbox}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -588,6 +633,26 @@ thousands of hypothetical compounds against a fixed hull, in parallel.
 \end{frame}
 
 % =============================================================================
+\begin{frame}{Finite-temperature hulls}
+\begin{columns}[c]
+\column{0.36\textwidth}
+\[
+\textcolor{enc}{G_i(T)}=\textcolor{enc}{E_i}+\textcolor{enc}{F^{\rm vib}_i(T)}-T\,S^{\rm conf}_i
+\]
+{\footnotesize
+\begin{itemize}\setlength\itemsep{0.15em}
+ \item $S^{\rm conf}$ from sublattices: \texttt{Ti0.5Zr0.5|Ni|Sn} $\to k_B\ln2/3$
+ \item $F^{\rm vib}$: Debye, phonopy (DOS or \texttt{thermal\_properties.yaml}), Bartel SISSO
+ \item hull rebuilt at every $T$; $T_{\rm stab}$ by bisection
+\end{itemize}}
+\begin{tcolorbox}[hl]
+(Ti$_{0.5}$Zr$_{0.5}$)NiSn: $\Ehull=5$ meV/atom $\Rightarrow T^*=251$ K (analytic: 251.1 K)
+\end{tcolorbox}
+\column{0.62\textwidth}
+\includegraphics[width=\linewidth]{figures/ehull_vs_T.pdf}
+\end{columns}
+\end{frame}
+
 \sectionslide{6 \; Elements in, everything out}{\texttt{symphase run Ti Ni Sn}}
 
 \begin{frame}[fragile]{The automatic pipeline}
@@ -716,8 +781,8 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{1.0}
-\centering\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\centering\scriptsize
 \begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
 test & expected & ok \\ \midrule
@@ -731,11 +796,14 @@ Ibex script & file orders consistent, array dry run & \textcolor{spinc}{\checkma
 spin groups (RuO$_2$, MnTe, Cr, Mn$_2$Au) & d-wave, g-wave, AFM, PT-AFM & \textcolor{spinc}{\checkmark} \\
 INCAR \texttt{SAXIS} rotation & Néel $\to x$: $Pnn'm'$ & \textcolor{spinc}{\checkmark} \\
 MoO$_2$ ($P2_1/c$) & $2/m1'$, 13 SHE/OHE comps (odd-$y$ rule) & \textcolor{spinc}{\checkmark} \\
+SSG numbers (5 examples) & BNS of C$_{2\perp}\!\to\!\Top$ group, \texttt{spinspg} & \textcolor{spinc}{\checkmark} \\
+magnons: FM, AFM chain, RuO$_2$ & analytic $\omega(\mathbf q)$; d-wave $\Delta\omega$ & \textcolor{spinc}{\checkmark} \\
+finite-$T$ hull & $T^*=251$ K (analytic), Debye limits & \textcolor{spinc}{\checkmark} \\
 quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\footnotesize Automated tests: \texttt{pytest tests/} (23 tests). OQMD/MP download checked against the documented API with a mock server.}
+{\footnotesize Automated tests: \texttt{pytest tests/} (34 tests). OQMD/MP download checked against the documented API with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -743,17 +811,17 @@ quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomru
 \column{0.5\textwidth}
 \textbf{Limitations}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item spin-space-group \emph{numbers} not assigned (operations, Laue group and class are)
+  \item SSG numbers only for collinear order (non-collinear: structured description)
   \item symmetry gives the \emph{shape}, not the magnitude, of tensors
-  \item hull at $T=0$; no vibrational/configurational free energy
+  \item LSWT is harmonic; exchange constants must be supplied
   \item mixing energy sources requires identical DFT settings
 \end{itemize}
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item spin-space-group numbering, magnon chirality splitting
+  \item non-collinear SSG numbering (Chen \emph{et al.} tables), magnon–phonon coupling
   \item Edelstein, nonlinear Hall, torkance tensors
-  \item finite-$T$ hulls (mixing entropy, phonons)
+  \item anharmonic / quasi-harmonic free energies
   \item link to Wannier-based Kubo codes for magnitudes
 \end{itemize}
 \end{columns}

@@ -24,15 +24,31 @@ def total_per_atom(formula, ef):
     return ef + sum(c.get_atomic_fraction(el) * MU[str(el)] for el in c.elements)
 
 
+# toy Debye temperatures (K) and sublattice mixing specs for the finite-T examples
+THETA = {"Ni": 450, "Al": 428, "Ti": 420, "Zr": 291, "Hf": 252, "Sn": 200,
+         "TiNiSn-HH": 405, "ZrNiSn-HH": 365, "HfNiSn-HH": 330, "TiNi2Sn-FH": 380, "ZrNi2Sn-FH": 350,
+         "HfNi2Sn-FH": 330, "NiAl-B2": 470, "TiNiSn-other": 395,
+         # alloys: θ_D interpolated between their end members
+         "(Ti0.5Zr0.5)NiSn-SQS": 385, "(Ti0.75Zr0.25)NiSn-SQS": 395, "(Ti0.25Zr0.75)NiSn-SQS": 375,
+         "(TiZr)Ni2Sn-SQS": 365, "(Zr0.5Hf0.5)NiSn-SQS": 348, "(Ti0.5Hf0.5)NiSn-SQS": 368,
+         "(TiZrHf)NiSn-HE-SQS": 367, "(TiZrHf)Ni2Sn-HE": 353}
+MIX = {"(Ti0.5Zr0.5)NiSn-SQS": "Ti0.5Zr0.5|Ni|Sn", "(Ti0.75Zr0.25)NiSn-SQS": "Ti0.75Zr0.25|Ni|Sn",
+       "(Ti0.25Zr0.75)NiSn-SQS": "Ti0.25Zr0.75|Ni|Sn", "(TiZr)Ni2Sn-SQS": "Ti0.5Zr0.5|2*Ni|Sn",
+       "(Zr0.5Hf0.5)NiSn-SQS": "Zr0.5Hf0.5|Ni|Sn", "(Ti0.5Hf0.5)NiSn-SQS": "Ti0.5Hf0.5|Ni|Sn",
+       "(TiZrHf)NiSn-HE-SQS": "TiZrHf|Ni|Sn", "(TiZrHf)Ni2Sn-HE": "TiZrHf|2*Ni|Sn",
+       "TiZr-bcc": "Ti0.5Zr0.5", "TiHf-bcc": "Ti0.5Hf0.5", "ZrHf-bcc": "Zr0.5Hf0.5"}
+
+
 def write_csv(fn, rows, header):
     with open(os.path.join(HERE, fn), "w") as fh:
         fh.write("# TOY DATA for SymPhase tutorials - not DFT results\n")
         fh.write(header + "\n")
-        fh.write("formula,energy,energy_type,name,structure\n")
+        fh.write("formula,energy,energy_type,name,structure,mixing,debye_T\n")
         for r in rows:
             f, ef, name = r[:3]
             st = r[3] if len(r) > 3 else ""
-            fh.write(f"{f},{total_per_atom(f, ef):.6f},per_atom,{name},{st}\n")
+            th = THETA.get(name, THETA.get(f) if Composition(f).is_element else "")
+            fh.write(f"{f},{total_per_atom(f, ef):.6f},per_atom,{name},{st},{MIX.get(name, '')},{th}\n")
 
 
 # ------------------------------------------------------------------ structures
