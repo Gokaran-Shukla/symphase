@@ -333,3 +333,34 @@ a2.set_title("square AFM in a field: onset of decay", fontsize=9.5)
 fig.tight_layout()
 fig.savefig(os.path.join(F, "nonlinear.pdf")); fig.savefig(os.path.join(F, "nonlinear.png"), dpi=160); plt.close(fig)
 print("figure nonlinear")
+
+# ---------------------------------------------------------------- outlook: self-consistent magnon decay
+from symphase.magint import SelfConsistentDecay as _SCD
+def _csq(S, hr):
+    a_ = 3.0; lat_ = np.array([[a_, a_, 0], [a_, -a_, 0], [0, 0, 12.]])
+    pr_ = [(0, 1, np.array(d_, float), np.eye(3)) for d_ in ([a_, 0, 0], [-a_, 0, 0], [0, a_, 0], [0, -a_, 0])]
+    s_ = np.sqrt(1 - hr ** 2)
+    h_ = _F4(lat_, np.array([[0, 0, 0], [a_, 0, 0.]]), [0, 1], np.array([[s_, 0, hr], [-s_, 0, hr]]), np.array([S, S]), pr_, None,
+             np.array([[0, 0, -8 * hr * S]] * 2))
+    return _SCD(_MSE(h_), grid=(10, 10, 1), eta=0.05 * S)
+def _bs(sc_):
+    sc_.solve("onshell"); g0_ = sc_.G.copy(); sc_.solve("sc", mix=0.3, maxiter=300, tol=1e-6 * max(1, sc_.e0.max() / 6.8))
+    m_ = ~sc_.gold
+    return g0_[m_], sc_.G[m_].copy(), sc_.E1S[m_]
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.5))
+_hrs = [0.72, 0.75, 0.78, 0.8, 0.85, 0.9]; _mb, _ms = [], []
+for hr in _hrs:
+    gb_, gs_, _ = _bs(_csq(1.0, hr)); _mb.append(gb_.max()); _ms.append(gs_.max())
+a1.plot(_hrs, _mb, "o-", color="0.55", mfc="w", label="Born (on-shell)")
+a1.plot(_hrs, _ms, "s-", color="#16325c", label="self-consistent iΓ")
+a1.axvline(0.76, ls=":", color="k"); a1.set_xlabel("h / h$_s$"); a1.set_ylabel("max Γ (meV)"); a1.legend(fontsize=8)
+a1.set_title("square AFM in a field, S = 1: threshold singularities removed", fontsize=9)
+_Ss = [1, 3, 10, 30, 100]; _r = []
+for S in _Ss:
+    gb_, gs_, _ = _bs(_csq(float(S), 0.85)); _r.append(gs_.mean() / gb_.mean())
+a2.semilogx(_Ss, _r, "o-", color="#c0392b"); a2.axhline(1, ls=":", color="k")
+a2.set_xlabel("S"); a2.set_ylabel("⟨Γ$_{sc}$⟩ / ⟨Γ$_{Born}$⟩"); a2.set_ylim(0.4, 1.2)
+a2.set_title("Born limit recovered for S → ∞", fontsize=9)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "scdecay.pdf")); fig.savefig(os.path.join(F, "scdecay.png"), dpi=160); plt.close(fig)
+print("figure scdecay")

@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions", "nonlinear"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions", "nonlinear", "scdecay"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -978,3 +978,39 @@ def test_field_induced_magnon_decay_threshold_square_afm():
         se = MagnonSelfEnergy(hf)
         gmax[hr] = max(se.onshell(q, 0.0, (32, 32, 1), sigma=0.04, tadpole=False)["gamma3"].max() for q in qs[1:])
     assert gmax[0.6] < 0.05 and gmax[0.85] > 1.0                          # decays only above h* ≈ 0.76 h_s
+
+
+def _canted_square_sc(S, hr=0.85, G=10, eta=0.05):
+    from symphase.magint import FourMagnonHF, MagnonSelfEnergy, SelfConsistentDecay
+    a = 3.0
+    lat = np.array([[a, a, 0], [a, -a, 0], [0, 0, 12.]])
+    pairs = [(0, 1, np.array(d, float), np.eye(3)) for d in ([a, 0, 0], [-a, 0, 0], [0, a, 0], [0, -a, 0])]
+    s = math.sqrt(1 - hr ** 2)
+    hf = FourMagnonHF(lat, np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], np.array([[s, 0, hr], [-s, 0, hr]]),
+                      np.array([S, S]), pairs, None, np.array([[0, 0, -8 * hr * S]] * 2))
+    se = MagnonSelfEnergy(hf)
+    return se, SelfConsistentDecay(se, grid=(G, G, 1), eta=eta * S)
+
+
+def test_self_consistent_decay_onshell_limit_and_regularisation():
+    se, sc = _canted_square_sc(1.0)
+    i = 7
+    k = sc.ks[i]
+    slots = [sc.ks, -k[None] - sc.ks]
+    w, e = se._assemble(se._coeffs(se.terms3, k, 0, slots, len(sc.ks)), slots, 0.0, emin=sc.emin)
+    re, gm = se._sum(w, e, sc.e0[i, 0], sc.eta)
+    sc.solve("onshell")
+    assert abs(sc.E[i, 0] - sc.e0[i, 0] - sc.delta[i, 0] - re) < 1e-10 and abs(sc.G[i, 0] - gm) < 1e-10
+    G_on = sc.G.copy()
+    sc.solve("sc", mix=0.3, maxiter=200, tol=1e-6)
+    m = ~sc.gold
+    assert sc.residual() < 2e-3 and sc.overdamped[m].mean() < 0.05
+    assert sc.G[m].max() < 0.6 * G_on[m].max()                              # threshold singularities regularised
+    dev = {}
+    for S in (3.0, 100.0):                                                  # Born limit for S → ∞
+        _, sc = _canted_square_sc(S)
+        sc.solve("onshell")
+        g0 = sc.G[~sc.gold].mean()
+        sc.solve("sc", mix=0.3, maxiter=200, tol=1e-6 * S)
+        dev[S] = abs(sc.G[~sc.gold].mean() / g0 - 1)
+    assert dev[100.0] < 0.05 and dev[100.0] < 0.5 * dev[3.0]

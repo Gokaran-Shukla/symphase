@@ -757,6 +757,18 @@ $\Sigma(\omega)=r!\sum|c|^2[\prod_{\rm cr}(1{+}n)\prod_{\rm an}n-\prod_{\rm cr}n
 triangular: $c_\parallel(1-0.118/2S)$ vs $-0.115$ (Chubukov et al.), HF gap at $\pm K$ cancelled by $\Sigma^{(3)}$ (Goldstone); decay onset $h^*\approx0.76h_s$; FM: $\Gamma^{(4)}(T{=}0)=0$.}
 \end{frame}
 
+\begin{frame}{Self-consistent magnon decay}
+\noindent{\footnotesize Born $\Gamma_k=-2\,\mathrm{Im}\,\Sigma^{(3)}(\varepsilon_k)$ is singular at decay thresholds. i$\Gamma$ approximation on a closed grid: resonant
+channels $\omega-\varepsilon_q-\varepsilon_{k-q}+\tfrac{i}{2}(\textcolor{red!70!black}{\Gamma_q}+\textcolor{red!70!black}{\Gamma_{k-q}})$, $\textcolor{red!70!black}{\Gamma_k}=-2\,\mathrm{Im}\,\Sigma_k(E_k)$ iterated;
+$E_k$ = the \textcolor{spinc}{$1/S$} on-shell energy (keeps the HF/cubic Goldstone cancellation). \cmd{--cubic --sc-decay}.}
+\vspace{0.2em}
+
+\centering\includegraphics[width=0.86\textwidth]{figures/scdecay.pdf}
+
+{\tiny On-shell mode $=$ Born to $10^{-10}$; fixed-point residual $\sim10^{-6}$ meV; $\langle\Gamma_{sc}\rangle/\langle\Gamma_{\rm Born}\rangle\to1$ for $S\to\infty$; triangular AFM: Goldstone branches stay
+underdamped ($\Gamma/E<0.01$) with short-tailed widths (Lorentzian tails: $\Gamma/E\approx2$); off-shell Dyson breaks Goldstone.}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -965,7 +977,7 @@ sbatch jobs/ibex_symphase_mpi.slurm
 \begin{columns}[T]
 \column{0.5\textwidth}
 \renewcommand{\arraystretch}{1.25}
-{\scriptsize\renewcommand{\arraystretch}{0.88}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
+{\scriptsize\renewcommand{\arraystretch}{0.8}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
 \toprule
 notebook & content\\ \midrule
 01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
@@ -983,7 +995,8 @@ notebook & content\\ \midrule
 20 & two-magnon striction, damping\\
 22 & four-magnon HF, self-energies\\
 24 & cubic terms, four-magnon damping\\
-quizzes & \textbf{10 $\times$ 20 questions}: 04, 05, 09, 11, 13, 16, 19, 21, 23, 25\\ \bottomrule
+26 & self-consistent magnon decay\\
+quizzes & \textbf{11 $\times$ 20 questions}: 04, 05, 09, 11, 13, 16, 19, 21, 23, 25, 27\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -997,7 +1010,7 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{0.95}
+\renewcommand{\arraystretch}{0.86}
 \centering\tiny
 \begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
@@ -1027,11 +1040,12 @@ two-magnon / damping & frozen-phonon supercell, 1D roots, FM/AFM LLG & \textcolo
 four-magnon HF & Dyson FM, Oguchi chain/square, 1D breakdown & \textcolor{spinc}{\checkmark} \\
 self-energies & $-2\,\mathrm{Im}\,\Sigma=\gamma$ golden rule, $\int A=1$ & \textcolor{spinc}{\checkmark} \\
 cubic + sunset & = classical expansion, = exact diagonalisation, $c_\parallel$ & \textcolor{spinc}{\checkmark} \\
-quiz keys & 200 / 200 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+self-consistent decay & Born limit (on-shell, $S\to\infty$), residual $10^{-6}$ & \textcolor{spinc}{\checkmark} \\
+quiz keys & 220 / 220 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (92); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (94); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -1047,7 +1061,7 @@ quiz keys & 200 / 200 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item self-consistent (non-perturbative) magnon decay near thresholds; single-ion anisotropy at $O(1/S)$
+  \item single-ion anisotropy at $O(1/S)$; self-consistent energies beyond $1/S$ (Goldstone-preserving)
   \item Edelstein, nonlinear Hall, torkance tensors
   \item Fermi-surface (1/$\Gamma$) Kubo terms and orbital Hall from \texttt{hr.dat} + $L$ matrices
   \item direct TDEP force-constant input (phonon dispersions at $T$)

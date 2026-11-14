@@ -1,0 +1,240 @@
+{
+ "title": "Quiz 11 — self-consistent magnon decay",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "Why does the Born (on-shell) decay rate fail near decay thresholds?",
+   "options": {
+    "a": "it is too small",
+    "b": "the two-magnon continuum has van Hove edges: Γ_Born is singular there and can exceed ε",
+    "c": "it ignores temperature",
+    "d": "it is exact"
+   },
+   "explanation": "Self-consistency (internal widths) regularises these singularities.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What is the iΓ approximation?",
+   "options": {
+    "a": "Γ = 0",
+    "b": "internal magnons carry their own damping: ω − ε_q − ε_{k−q} + i(Γ_q + Γ_{k−q})/2, iterated to self-consistency",
+    "c": "a Lorentzian fit",
+    "d": "a phonon bath"
+   },
+   "explanation": "Chernyshev & Zhitomirsky, Rev. Mod. Phys. 85, 219 (2013).",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why must the grid be closed (unshifted)?",
+   "options": {
+    "a": "speed",
+    "b": "k, q and k−q must all be grid points, so the internal widths Γ_q are known",
+    "c": "to include temperature",
+    "d": "symmetry"
+   },
+   "explanation": "Off-grid momenta (e.g. a band path) use periodic interpolation of the converged grid widths.",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why is the energy kept at the 1/S on-shell value instead of solving the Dyson equation off-shell?",
+   "options": {
+    "a": "it is cheaper",
+    "b": "off-shell Re Σ mixes orders in 1/S and breaks the Hartree–Fock/cubic Goldstone cancellation of non-collinear magnets",
+    "c": "Dyson has no solution",
+    "d": "for finite T"
+   },
+   "explanation": "mode='dyson' is kept only as a diagnostic.",
+   "id": 4,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why are the source (all-annihilation) poles not broadened?",
+   "options": {
+    "a": "they are zero",
+    "b": "they are anti-resonant (negative energy): broadening them would leak an unphysical Im Σ at ω > 0",
+    "c": "for speed",
+    "d": "they are broadened"
+   },
+   "explanation": "Only decay and absorption channels can be resonant.",
+   "id": 5,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: sc_square(1.0) — Born maximum Γ on the grid (meV, 2 decimals)?",
+   "tol": 0.03,
+   "explanation": "2.62 meV (h = 0.85 h_s, S = 1, 10×10 grid).",
+   "id": 6,
+   "key": "MjYuMg=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the same — self-consistent maximum Γ (meV, 2 decimals)?",
+   "tol": 0.03,
+   "explanation": "1.30 meV: the self-consistent internal widths halve the extreme Born values.",
+   "id": 7,
+   "key": "My4x"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the same — mean self-consistent Γ over the grid magnons (meV, 2 decimals)?",
+   "tol": 0.02,
+   "explanation": "0.56 meV vs the Born mean 0.96 meV.",
+   "id": 8,
+   "key": "NjUuMA=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: ⟨Γ_sc⟩/⟨Γ_Born⟩ for S = 3 (2 decimals)?",
+   "tol": 0.03,
+   "explanation": "0.73: still a strong self-consistency correction.",
+   "id": 9,
+   "key": "MzcuMA=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: ⟨Γ_sc⟩/⟨Γ_Born⟩ for S = 100 (2 decimals)?",
+   "tol": 0.04,
+   "explanation": "≈ 1: the Born limit is recovered for large S.",
+   "id": 10,
+   "key": "NDAuMQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: at h = 0.75 h_s (just below the decay threshold) …",
+   "options": {
+    "a": "Born and self-consistent agree",
+    "b": "Born gives max Γ ≈ 1.0 meV (grid/threshold artefact), self-consistent ≈ 0.13 meV",
+    "c": "both vanish exactly",
+    "d": "self-consistent is larger"
+   },
+   "explanation": "The threshold singularity of the Born result is removed.",
+   "id": 11,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: triangular AFM — near-Goldstone modes with the Lorentzian line shape …",
+   "options": {
+    "a": "stay undamped",
+    "b": "become overdamped (Γ/E ≈ 2) — unphysical tails of the large off-resonant weights; the Gaussian keeps Γ/E < 0.01",
+    "c": "vanish",
+    "d": "are unchanged"
+   },
+   "explanation": "Hence profile='gauss' is the default.",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which quantity measures self-consistency?",
+   "options": {
+    "a": "the number of iterations",
+    "b": "residual(): max |Γ − (−2 Im Σ(E))| with the converged internal widths",
+    "c": "the energy",
+    "d": "Z"
+   },
+   "explanation": "Typically 10⁻⁶ meV after convergence.",
+   "id": 13,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What is Z in the output?",
+   "options": {
+    "a": "the magnon number",
+    "b": "the quasiparticle residue 1/(1 − ∂Re Σ/∂ω)",
+    "c": "the coordination number",
+    "d": "the partition function"
+   },
+   "explanation": "Z < 1: weight transferred to the two-magnon continuum.",
+   "id": 14,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How are widths at off-grid momenta (band paths) obtained?",
+   "options": {
+    "a": "recomputed self-consistently",
+    "b": "periodic linear interpolation of the converged grid widths for the internal lines, then one evaluation",
+    "c": "set to zero",
+    "d": "nearest neighbour"
+   },
+   "explanation": "SelfConsistentDecay.at(qs).",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which CLI option switches on the self-consistent decay?",
+   "options": {
+    "a": "--relax",
+    "b": "--hf T --cubic --sc-decay [--sc-grid ...]",
+    "c": "--damping4",
+    "d": "--spectral"
+   },
+   "explanation": "Writes *_scdecay.dat.",
+   "id": 16,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does mode='dyson' do?",
+   "options": {
+    "a": "the recommended method",
+    "b": "a diagnostic: real off-shell root with bare lines (mixes orders; breaks Goldstone near Goldstone modes)",
+    "c": "four-magnon damping",
+    "d": "HF only"
+   },
+   "explanation": "Use 'sc' for results.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which convergence check matters most for self-consistent widths?",
+   "options": {
+    "a": "none",
+    "b": "the closed-grid size (and η): Γ is a BZ sum with discrete poles",
+    "c": "the number of bands",
+    "d": "the temperature"
+   },
+   "explanation": "Closed grids are coarse; compare two grid sizes.",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Is the four-magnon damping Γ⁴ part of the self-consistency?",
+   "options": {
+    "a": "yes",
+    "b": "no — it is added on top (on-shell); the self-consistency treats the cubic self-energy",
+    "c": "it replaces Γ³",
+    "d": "it is ignored"
+   },
+   "explanation": "Γ⁴ is O(1/S²) and smooth.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What happens to the self-consistent result when S → ∞?",
+   "options": {
+    "a": "it diverges",
+    "b": "it approaches the Born result (relative corrections ∝ 1/S)",
+    "c": "it vanishes",
+    "d": "it oscillates"
+   },
+   "explanation": "Checked in the tests (S = 100: within 5 %).",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

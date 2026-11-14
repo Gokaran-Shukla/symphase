@@ -2184,3 +2184,144 @@ build_bank(os.path.join(DATA, "quiz_nonlinear.json"), "Quiz 10 — cubic magnon 
 quiz_nb("25_quiz_nonlinear_spin_waves.ipynb", "Quiz 10 — cubic magnon terms and four-magnon damping (20 questions)",
         NQ, "nonlinear", "Work through **24_tutorial_cubic_four_magnon_damping.ipynb** first. Questions 4–6, 8, 9, 13 and 14 are hands-on.",
         NL_HELPER)
+
+
+# =============================================================================
+# 26  self-consistent magnon decay;  27 quiz
+# =============================================================================
+SC_HELPER = 'import math, numpy as np, spglib\nimport matplotlib.pyplot as plt\nfrom symphase.magint import FourMagnonHF, MagnonSelfEnergy\nfrom symphase.magcheck import BosonCluster, classical_expansion\nfrom symphase.magnons import relax_spins, make_path, analyse\nfrom symphase.tensors import read_poscar, read_incar\na = 3.0\n\ndef canted_chain(h=4.2):\n    """AFM chain, XYZ exchange (Jy = 1.3), field h along −z: canted, gapped — the ED test bed"""\n    J = np.diag([1.0, 1.3, 1.0]); S = np.array([1.0, 1.0])\n    pairs = [(0, 1, np.array([a, 0, 0.]), J), (1, 0, np.array([a, 0, 0.]), J)]\n    hfield = np.array([[0, 0, -h]] * 2)\n    dirs, _, _ = relax_spins(np.array([[0, 1, 0.5], [0, -1, 0.5]]), S, [0, 1], pairs, [None, None], hfield=hfield,\n                             steps=200000, tol=1e-15)\n    return FourMagnonHF(np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], dirs, S, pairs, None, hfield)\n\ndef triangular(S=0.5, G=36):\n    """120° triangular AFM (√3×√3 cell of examples/vasp/Triangular_120AFM_INCAR), J = 1 meV"""\n    d = "../examples/vasp/Triangular_120AFM_INCAR"\n    p = read_poscar(f"{d}/POSCAR"); mags = np.array(read_incar(f"{d}/INCAR")["magmom"]).reshape(-1, 3)\n    ds = spglib.get_symmetry_dataset((p["lattice"], p["frac"], [0, 0, 0]))\n    m = analyse(p["lattice"], p["frac"], [0, 0, 0], ["Cr"] * 3, mags, ds.rotations, ds.translations, J=[1.0], spin=S,\n                rmax=3.1, return_model=True)\n    hf = FourMagnonHF.from_model(np.asarray(p["lattice"], float), np.asarray(p["frac"], float), m).solve(grid=(G, G, 1))\n    return hf, MagnonSelfEnergy(hf)\n\ndef canted_square(hr, S=1.0):\n    """square-lattice Heisenberg AFM (J = 1 meV) in a field h = hr·h_s along z (h_s = 8JS), √2 cell"""\n    lat = np.array([[a, a, 0], [a, -a, 0], [0, 0, 12.]])\n    pairs = [(0, 1, np.array(d, float), np.eye(3)) for d in ([a, 0, 0], [-a, 0, 0], [0, a, 0], [0, -a, 0])]\n    s = math.sqrt(1 - hr ** 2)\n    hf = FourMagnonHF(lat, np.array([[0, 0, 0], [a, 0, 0.]]), [0, 1], np.array([[s, 0, hr], [-s, 0, hr]]),\n                      np.array([S, S]), pairs, None, np.array([[0, 0, -8 * hr * S]] * 2))\n    return hf, MagnonSelfEnergy(hf), lat\n\ndef square_fm(J=-2.0, K=0.5, S=1.0):\n    """square-lattice ferromagnet, easy axis z (gap 2KS)"""\n    pairs = [(0, 0, np.array([a, 0, 0.]), J * np.eye(3)), (0, 0, np.array([0, a, 0.]), J * np.eye(3))]\n    hf = FourMagnonHF(np.diag([a, a, 12.]), np.zeros((1, 3)), [0], np.array([[0, 0, 1.]]), np.array([S]), pairs,\n                      [np.diag([0, 0, -K])], None)\n    return hf, MagnonSelfEnergy(hf)\n\ndef ed_check(h=4.2, nmax=8):\n    """exact diagonalisation (3-cell cluster) vs bubble + tadpole and four-magnon sunset; returns rows per mode"""\n    hf = canted_chain(h); se = MagnonSelfEnergy(hf)\n    cl = BosonCluster(hf, 3, nmax); qs = cl.kpoints(); k = qs[1]; e = se._mset(k)[0]\n    H2 = cl.quadratic()\n    ed3 = cl.second_order(H2, cl.operator(se.terms3), e)\n    hf.update(qs, 0.0); ed4 = cl.second_order(H2, cl.operator(se.terms4) - cl.operator(cl.hf_terms()), e); hf.hf = None\n    rows = []\n    for n in range(2):\n        _, w, ee = se.cubic_poles(k, n, 0.0, qs=qs); bub = float(np.sum(w / (e[n] - ee)).real)\n        tad = se.tadpole(k, n, 0.0, ks=qs)\n        _, w, ee = se.quartic_poles(k, n, 0.0, qs=qs); sun = float(np.sum(w / (e[n] - ee)).real)\n        rows.append(dict(n=n, eps=e[n], ed3=ed3[n]["second"], bubble=bub, tadpole=tad, ed4=ed4[n]["second"], sunset=sun))\n    return rows\n\ndef tri_velocity(se, hf, kf=0.03):\n    """2S·δε/ε of the three Goldstone branches at small k (x direction): HF (first order), Re Σ³, total"""\n    k = np.array([kf * 2 * np.pi / a, 0, 0])\n    o = se.onshell(k, 0.0, (36, 36, 1), eta=0.01)\n    dhf = hf.first_order_shift([k])[0]\n    S2 = 2 * hf.S[0]\n    return dict(e0=o["e0"], hf=S2 * dhf / o["e0"], re3=S2 * o["re3"] / o["e0"],\n                total=S2 * (dhf + o["re3"] + o["tad"]) / o["e0"], gamma3=o["gamma3"])\n\nfrom symphase.magint import SelfConsistentDecay\n\ndef sc_square(S=1.0, hr=0.85, G=10, eta=0.05):\n    """canted square AFM in a field, self-consistent decay object on a closed G×G grid (η = eta·S)"""\n    hfq, seq, latq = canted_square(hr, S=S)\n    return seq, SelfConsistentDecay(seq, grid=(G, G, 1), eta=eta * S), latq\n\ndef born_vs_sc(sc):\n    """(Born Γ, self-consistent Γ) on the grid (Goldstone points removed)"""\n    sc.solve("onshell"); g0 = sc.G.copy()\n    sc.solve("sc", mix=0.3, maxiter=300, tol=1e-6 * max(1.0, sc.e0.max() / 6.8))\n    m = ~sc.gold\n    return g0[m], sc.G[m].copy()\n'
+
+save([
+    md(r"""# SymPhase tutorial 26 — self-consistent magnon decay
+
+The Born (on-shell) decay rate of tutorial 24, $\Gamma_k=-2\,\mathrm{Im}\,\Sigma^{(3)}_k(\varepsilon_k)$ with bare internal magnons, is singular at
+decay thresholds (the two-magnon continuum has van Hove edges) and becomes larger than the magnon energy when the coupling is strong.
+`SelfConsistentDecay` treats the decay non-perturbatively on a **closed** $k$ grid (all $k$, $q$, $k-q$ on the grid):
+
+* **iΓ approximation** (Chernyshev & Zhitomirsky, RMP 85, 219 (2013)): the internal magnons of the resonant channels carry their own
+  damping, $\omega-\varepsilon_q-\varepsilon_{k-q}+i(\Gamma_q+\Gamma_{k-q})/2$, and $\Gamma_k=-2\,\mathrm{Im}\,\Sigma_k(E_k)$ is iterated to self-consistency;
+* the energy stays the **$1/S$ on-shell value** $E_k=\varepsilon_k+\delta\varepsilon_{\rm HF}+\mathrm{Re}\,\Sigma^{(3)}(\varepsilon_k)+\Sigma_{\rm tad}$ — evaluating $\mathrm{Re}\,\Sigma$ off-shell would
+  mix orders and destroy the Hartree–Fock/cubic Goldstone cancellation (`mode="dyson"` shows this, as a diagnostic);
+* the anti-resonant (source) poles are not broadened, and the broadened resonant poles use a short-tailed (Gaussian) line shape of
+  FWHM $2\eta+\Gamma_q+\Gamma_{k-q}$ (`profile="lorentz"` for the canonical Lorentzian — see §4 why it fails near Goldstone modes)."""),
+    SETUP,
+    code(SC_HELPER),
+    md("## 1. Born versus self-consistent decay (square AFM at h = 0.85 h_s, S = 1)"),
+    code("""se1, sc1, lat1 = sc_square(1.0)
+g_born, g_sc = born_vs_sc(sc1)
+print(f"Born: max Γ = {g_born.max():.3f}, mean {g_born.mean():.3f} meV;  self-consistent: max {g_sc.max():.3f}, mean {g_sc.mean():.3f} meV")
+print(f"{sc1.iterations} iterations, residual {sc1.residual():.1e} meV")
+fig, ax = plt.subplots(figsize=(4.6, 3.4))
+ax.scatter(sc1.E1S[~sc1.gold], g_born, s=10, color="0.6", label="Born (on-shell)")
+ax.scatter(sc1.E1S[~sc1.gold], g_sc, s=10, color="#16325c", label="self-consistent iΓ")
+ax.set_xlabel("E (meV)"); ax.set_ylabel("Γ (meV)"); ax.legend(fontsize=8); ax.set_title("all grid magnons", fontsize=10)"""),
+    md(r"""## 2. The Born limit for large S
+
+Interaction effects scale as $1/S$: for $S\to\infty$ the internal widths are negligible on the scale of the continuum and the
+self-consistent result must approach the Born one (η scaled with S):"""),
+    code("""for S in (1.0, 3.0, 10.0, 100.0):
+    _, scS, _ = sc_square(S)
+    gb, gs = born_vs_sc(scS)
+    print(f"S = {S:5.0f}: ⟨Γ_sc⟩/⟨Γ_Born⟩ = {gs.mean() / gb.mean():.3f}   ({scS.iterations} iterations)")"""),
+    md("## 3. Threshold singularities are removed"),
+    code("""hrs = [0.72, 0.75, 0.78, 0.8, 0.85, 0.9]; mb, ms = [], []
+for hr in hrs:
+    _, scH, _ = sc_square(1.0, hr=hr); gb, gs = born_vs_sc(scH); mb.append(gb.max()); ms.append(gs.max())
+    print(f"h/h_s = {hr:.2f}: max Γ Born {mb[-1]:.3f}   self-consistent {ms[-1]:.3f} meV")
+fig, ax = plt.subplots(figsize=(4.8, 3.2)); ax.plot(hrs, mb, "o-", color="0.55", label="Born"); ax.plot(hrs, ms, "s-", color="#16325c", label="self-consistent")
+ax.axvline(0.76, ls=":", color="k"); ax.set_xlabel("h / h_s"); ax.set_ylabel("max Γ (meV)"); ax.legend(fontsize=8)"""),
+    md(r"""## 4. Non-collinear magnets: Goldstone modes stay undamped
+
+Triangular AFM, $S=\frac12$: the energies are the converged $1/S$ values (`energy_grid`); compare the line shapes of the internal widths.
+The Lorentzian tails act on the very large off-resonant decay weights (the same terms that cancel the ±37ε Hartree–Fock gap) and
+damp the Goldstone branches unphysically; the Gaussian keeps them underdamped:"""),
+    code("""hf_t, se_t = triangular(S=0.5, G=24)
+for prof in ("gauss", "lorentz"):
+    scT = SelfConsistentDecay(se_t, grid=(12, 12, 1), eta=0.02, energy_grid=(24, 24, 1), profile=prof)
+    scT.solve("onshell"); gB = scT.G.copy()
+    scT.solve("sc", mix=0.3, maxiter=300, tol=1e-6)
+    sm = (~scT.gold) & (scT.E1S < 0.35)
+    print(f"{prof:8s}: near-Goldstone max Γ/E = {(scT.G[sm] / scT.E1S[sm]).max():.3f} (Born {(gB[sm] / scT.E1S[sm]).max():.3f}), "
+          f"⟨Γ⟩ = {scT.G[~scT.gold].mean():.3f} meV, residual {scT.residual():.1e}")"""),
+    md("## 5. Spectral function with self-consistent internal lines"),
+    code("""k5 = np.array([0.35 * 2 * np.pi / 6.0, 0.35 * 2 * np.pi / 6.0, 0])
+ws = np.linspace(0.5, 9, 900)
+n5 = 1
+A_sc = sc1.spectral(k5, n5, ws, mode="sc"); A_b = sc1.spectral(k5, n5, ws, mode="onshell")
+fig, ax = plt.subplots(figsize=(5.4, 3.2)); ax.plot(ws, A_b, color="0.55", label="Born lines"); ax.plot(ws, A_sc, color="#16325c", label="self-consistent lines")
+ax.set_xlabel("ω (meV)"); ax.set_ylabel("A(k, ω)"); ax.legend(fontsize=8)
+print("∫A dω (self-consistent):", round(np.trapezoid(A_sc, ws), 3))"""),
+    md("""## Command line
+```bash
+cd examples/vasp/Triangular_120AFM_INCAR
+symphase magnons --J 1 --spin 0.5 --rmax 3.1 --hf 0 --hf-grid 30 30 --cubic --sc-decay --sc-grid 12 12 --se-sigma 0.03 --nq 16 --se-every 2
+```
+Writes `*_scdecay.dat` (ε, E, Γ_sc, Z) and adds the self-consistent band and widths to `*_hf.png`.
+Limits: the energies are the 1/S on-shell values; cubic self-energy only (Γ⁴ is added on top); grid convergence of Γ should be checked
+(closed grids are coarse). Continue with **27_quiz_self_consistent_decay.ipynb**."""),
+], "26_tutorial_self_consistent_decay.ipynb")
+
+SQ = [
+    dict(type="mc", question="Why does the Born (on-shell) decay rate fail near decay thresholds?",
+         options={"a": "it is too small", "b": "the two-magnon continuum has van Hove edges: Γ_Born is singular there and can exceed ε",
+                  "c": "it ignores temperature", "d": "it is exact"},
+         answer="b", explanation="Self-consistency (internal widths) regularises these singularities."),
+    dict(type="mc", question="What is the iΓ approximation?",
+         options={"a": "Γ = 0", "b": "internal magnons carry their own damping: ω − ε_q − ε_{k−q} + i(Γ_q + Γ_{k−q})/2, iterated to self-consistency",
+                  "c": "a Lorentzian fit", "d": "a phonon bath"},
+         answer="b", explanation="Chernyshev & Zhitomirsky, Rev. Mod. Phys. 85, 219 (2013)."),
+    dict(type="mc", question="Why must the grid be closed (unshifted)?",
+         options={"a": "speed", "b": "k, q and k−q must all be grid points, so the internal widths Γ_q are known", "c": "to include temperature", "d": "symmetry"},
+         answer="b", explanation="Off-grid momenta (e.g. a band path) use periodic interpolation of the converged grid widths."),
+    dict(type="mc", question="Why is the energy kept at the 1/S on-shell value instead of solving the Dyson equation off-shell?",
+         options={"a": "it is cheaper", "b": "off-shell Re Σ mixes orders in 1/S and breaks the Hartree–Fock/cubic Goldstone cancellation of non-collinear magnets",
+                  "c": "Dyson has no solution", "d": "for finite T"},
+         answer="b", explanation="mode='dyson' is kept only as a diagnostic."),
+    dict(type="mc", question="Why are the source (all-annihilation) poles not broadened?",
+         options={"a": "they are zero", "b": "they are anti-resonant (negative energy): broadening them would leak an unphysical Im Σ at ω > 0", "c": "for speed", "d": "they are broadened"},
+         answer="b", explanation="Only decay and absorption channels can be resonant."),
+    dict(type="num", question="Hands-on: sc_square(1.0) — Born maximum Γ on the grid (meV, 2 decimals)?",
+         answer=2.62, tol=0.03, explanation="2.62 meV (h = 0.85 h_s, S = 1, 10×10 grid)."),
+    dict(type="num", question="Hands-on: the same — self-consistent maximum Γ (meV, 2 decimals)?",
+         answer=1.30, tol=0.03, explanation="1.30 meV: the self-consistent internal widths halve the extreme Born values."),
+    dict(type="num", question="Hands-on: the same — mean self-consistent Γ over the grid magnons (meV, 2 decimals)?",
+         answer=0.56, tol=0.02, explanation="0.56 meV vs the Born mean 0.96 meV."),
+    dict(type="num", question="Hands-on: ⟨Γ_sc⟩/⟨Γ_Born⟩ for S = 3 (2 decimals)?",
+         answer=0.73, tol=0.03, explanation="0.73: still a strong self-consistency correction."),
+    dict(type="num", question="Hands-on: ⟨Γ_sc⟩/⟨Γ_Born⟩ for S = 100 (2 decimals)?",
+         answer=1.04, tol=0.04, explanation="≈ 1: the Born limit is recovered for large S."),
+    dict(type="mc", question="Hands-on: at h = 0.75 h_s (just below the decay threshold) …",
+         options={"a": "Born and self-consistent agree", "b": "Born gives max Γ ≈ 1.0 meV (grid/threshold artefact), self-consistent ≈ 0.13 meV", "c": "both vanish exactly", "d": "self-consistent is larger"},
+         answer="b", explanation="The threshold singularity of the Born result is removed."),
+    dict(type="mc", question="Hands-on: triangular AFM — near-Goldstone modes with the Lorentzian line shape …",
+         options={"a": "stay undamped", "b": "become overdamped (Γ/E ≈ 2) — unphysical tails of the large off-resonant weights; the Gaussian keeps Γ/E < 0.01",
+                  "c": "vanish", "d": "are unchanged"},
+         answer="b", explanation="Hence profile='gauss' is the default."),
+    dict(type="mc", question="Which quantity measures self-consistency?",
+         options={"a": "the number of iterations", "b": "residual(): max |Γ − (−2 Im Σ(E))| with the converged internal widths", "c": "the energy", "d": "Z"},
+         answer="b", explanation="Typically 10⁻⁶ meV after convergence."),
+    dict(type="mc", question="What is Z in the output?",
+         options={"a": "the magnon number", "b": "the quasiparticle residue 1/(1 − ∂Re Σ/∂ω)", "c": "the coordination number", "d": "the partition function"},
+         answer="b", explanation="Z < 1: weight transferred to the two-magnon continuum."),
+    dict(type="mc", question="How are widths at off-grid momenta (band paths) obtained?",
+         options={"a": "recomputed self-consistently", "b": "periodic linear interpolation of the converged grid widths for the internal lines, then one evaluation", "c": "set to zero", "d": "nearest neighbour"},
+         answer="b", explanation="SelfConsistentDecay.at(qs)."),
+    dict(type="mc", question="Which CLI option switches on the self-consistent decay?",
+         options={"a": "--relax", "b": "--hf T --cubic --sc-decay [--sc-grid ...]", "c": "--damping4", "d": "--spectral"},
+         answer="b", explanation="Writes *_scdecay.dat."),
+    dict(type="mc", question="What does mode='dyson' do?",
+         options={"a": "the recommended method", "b": "a diagnostic: real off-shell root with bare lines (mixes orders; breaks Goldstone near Goldstone modes)", "c": "four-magnon damping", "d": "HF only"},
+         answer="b", explanation="Use 'sc' for results."),
+    dict(type="mc", question="Which convergence check matters most for self-consistent widths?",
+         options={"a": "none", "b": "the closed-grid size (and η): Γ is a BZ sum with discrete poles", "c": "the number of bands", "d": "the temperature"},
+         answer="b", explanation="Closed grids are coarse; compare two grid sizes."),
+    dict(type="mc", question="Is the four-magnon damping Γ⁴ part of the self-consistency?",
+         options={"a": "yes", "b": "no — it is added on top (on-shell); the self-consistency treats the cubic self-energy", "c": "it replaces Γ³", "d": "it is ignored"},
+         answer="b", explanation="Γ⁴ is O(1/S²) and smooth."),
+    dict(type="mc", question="What happens to the self-consistent result when S → ∞?",
+         options={"a": "it diverges", "b": "it approaches the Born result (relative corrections ∝ 1/S)", "c": "it vanishes", "d": "it oscillates"},
+         answer="b", explanation="Checked in the tests (S = 100: within 5 %)."),
+]
+build_bank(os.path.join(DATA, "quiz_scdecay.json"), "Quiz 11 — self-consistent magnon decay", SQ)
+quiz_nb("27_quiz_self_consistent_decay.ipynb", "Quiz 11 — self-consistent magnon decay (20 questions)",
+        SQ, "scdecay", "Work through **26_tutorial_self_consistent_decay.ipynb** first. Questions 6–12 are hands-on.", SC_HELPER)

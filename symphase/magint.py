@@ -542,6 +542,14 @@ class MagnonSelfEnergy:
         """H1 = √N Σ_ν η_ν Φ_{0,ν} from Wick-decoupling the cubic terms (thermal); returns (η, ε_0)"""
         hf = self.hf
         ks = self.kgrid(grid) if ks is None else np.asarray(ks, float)
+        key = (float(T), ks.shape, float(np.round(ks.sum(), 9)), float(np.round(np.abs(ks).sum(), 9)))
+        lc = self.__dict__.setdefault("_lin_cache", {})
+        if key not in lc:
+            lc[key] = self._linear_terms(T, ks)
+        return lc[key]
+
+    def _linear_terms(self, T, ks):
+        hf = self.hf
         keep, hf.hf = hf.hf, None
         try:
             Cks = hf.correlations(ks, T)
@@ -605,12 +613,302 @@ class MagnonSelfEnergy:
         return out
 
 
+# =============================================================================
+#  self-consistent magnon decay (iΓ approximation)
+# =============================================================================
+class SelfConsistentDecay:
+    """Non-perturbative treatment of the cubic (three-magnon) self-energy on a closed (unshifted) k grid.
+
+    For every grid magnon (k, n) the energy E_k and the damping Γ_k, with δ_k = first-order Hartree–Fock + tadpole
+    (static, `static=True`) and
+        Σ³_k(ω) = Σ_poles v |F| / (ω − e' + i[η + (Γ_1 + Γ_2)/2]),
+    e' = Σ_created E − Σ_annihilated E of the two internal magnons.  Modes:
+        'onshell' : E = ε + δ + Re Σ(ε), Γ = −2 Im Σ(ε), bare internal lines (= MagnonSelfEnergy.onshell) — Born;
+        'sc'      : self-consistent iΓ approximation (Chernyshev & Zhitomirsky, Rev. Mod. Phys. 85, 219 (2013)):
+                    the resonant channels (decay, absorption) get ω − ε_q − ε_{k−q} + i(Γ_q + Γ_{k−q})/2 with the
+                    current widths, Γ_k = −2 Im Σ_k(E_k) is iterated on the grid to self-consistency; the energy is
+                    the 1/S on-shell value E = ε + δ + Re Σ(ε) (bare lines), which keeps the Hartree–Fock/cubic
+                    Goldstone cancellation of non-collinear magnets exact.  The threshold singularities of the Born
+                    damping are removed by the internal widths;
+        'dyson'   : diagnostic only — real off-shell root of ω − ε − δ − Re Σ(ω) with bare lines; mixes orders in 1/S
+                    (in non-collinear magnets it violates the Goldstone theorem near the Goldstone modes).
+    renormalise=True also feeds the energies E into the internal lines (beyond 1/S; use with care).
+    profile: 'gauss' (default) or 'lorentz' (canonical iΓ) line shape of the broadened resonant poles in Γ.
+    energy_grid: shifted grid for the 1/S energies (recommended for non-collinear magnets: the Hartree–Fock/cubic
+    cancellation near Goldstone modes needs a converged sum; default: the closed grid itself).
+    Thermal factors use the bare energies.  Grid values are interpolated (periodic, linear) for off-grid momenta."""
+
+    def __init__(self, se, grid=(16, 16, 1), T=0.0, eta=0.02, static=True, renormalise=False, energy_grid=None,
+                 profile="gauss"):
+        self.se, self.T, self.eta, self.renormalise = se, float(T), float(eta), renormalise
+        self.profile = profile
+        self.n = np.array(list(grid) + [1] * (3 - len(grid)))[:3]
+        f = [np.arange(m) / m for m in self.n]
+        self.kf = np.array(np.meshgrid(*f, indexing="ij")).reshape(3, -1).T
+        self.ks = self.kf @ se.rec
+        self.M = se.M
+        self.e0 = se._batch(self.ks)[0]
+        self.emin = 1e-3 * float(self.e0.max())
+        self.gold = self.e0 <= self.emin
+        self.static = static
+        self.delta = self._static(self.ks) if static else np.zeros_like(self.e0)
+        self.poles = [self._lines(k) for k in self.ks]
+        self.energy_grid = energy_grid
+        self.E1S = self._energies(self.ks, self.e0, self.delta)
+        self.E = self.E1S.copy()
+        self.G = np.zeros_like(self.e0)
+        self.Z = np.ones_like(self.e0)
+        self.iterations = 0
+        self.history = []
+
+    # ---------------------------------------------------------------- set-up
+    def _static(self, ks):
+        se, hf = self.se, self.se.hf
+        if hf.hf is None:
+            hf.solve(grid=tuple(self.n), T=self.T)
+        out = hf.first_order_shift(ks)
+        for i, k in enumerate(ks):
+            for n in range(self.M):
+                out[i, n] += se.tadpole(k, n, self.T, grid=tuple(self.n))     # shifted grid: no Γ zero modes
+        return out
+
+    def _energies(self, ks, e0, delta, poles=None):
+        """1/S on-shell energies ε + δ + Re Σ³(ε): on the fine shifted energy_grid if given (the Hartree–Fock/cubic
+        cancellation near Goldstone modes needs a well-converged BZ sum), else from the closed grid itself"""
+        out = np.zeros_like(e0)
+        for i, k in enumerate(ks):
+            if self.energy_grid is not None:
+                o = self.se.onshell(k, self.T, self.energy_grid, eta=self.eta, tadpole=False)
+                out[i] = e0[i] + delta[i] + o["re3"]
+            else:
+                P = self.poles[i] if poles is None else poles[i]
+                for n in range(self.M):
+                    L = P["lines"][n]
+                    out[i, n] = e0[i, n] + delta[i, n] + np.sum(L["v"] / (e0[i, n] - L["e"] + 1j * self.eta)).real
+        return np.where(e0 > self.emin, out, 0.0)
+
+    def _lines(self, k):
+        """per external band: pole weights v = 2|c|²·F_bare, the slot-momentum rows and band indices of both lines"""
+        se, M = self.se, self.M
+        qs = self.ks
+        B = len(qs)
+        slots = [qs, -k[None, :] - qs]
+        fr, eb = [], []
+        for p in slots:
+            ep, em, _ = se._T(p)
+            eb.append(np.concatenate([ep, em], axis=0))                 # rows: +p (b), −p (B + b) ; (2B, M)
+            fr.append(np.concatenate([p, -p], axis=0) @ se.lat.T / (2 * np.pi))
+        nu = np.arange(2 * M)
+        row = lambda b, v: b + B * (v >= M)                             # noqa: E731  ν ≥ M: created α_{−p}
+        b_, v2_, v3_ = np.meshgrid(np.arange(B), nu, nu, indexing="ij")
+        r2, r3 = row(b_, v2_), row(b_, v3_)
+        bd2, bd3 = v2_ % M, v3_ % M
+        s2, s3 = np.where(v2_ >= M, 1.0, -1.0), np.where(v3_ >= M, 1.0, -1.0)
+        E2, E3 = eb[0][r2, bd2], eb[1][r3, bd3]
+        ok = (E2 > self.emin) & (E3 > self.emin)
+        n2, n3 = _bose(E2, self.T), _bose(E3, self.T)
+        A1 = np.where(s2 > 0, 1 + n2, n2) * np.where(s3 > 0, 1 + n3, n3)
+        A2 = np.where(s2 > 0, n2, 1 + n2) * np.where(s3 > 0, n3, 1 + n3)
+        out = []
+        for n in range(M):
+            c = se._coeffs(se.terms3, k, n, slots, B)
+            v = 2.0 * np.abs(c) ** 2 * (A1 - A2) * ok
+            keep = np.abs(v) > 1e-13 * max(np.abs(v).max(), 1e-300)
+            out.append(dict(v=v[keep], r2=r2[keep], r3=r3[keep], b2=bd2[keep], b3=bd3[keep], s2=s2[keep], s3=s3[keep],
+                            e=(s2 * E2 + s3 * E3)[keep]))
+        return dict(fr=fr, lines=out)
+
+    # ---------------------------------------------------------------- interpolation of grid data
+    def _interp(self, data, fr):
+        """periodic linear interpolation of (Nk, M) grid data at fractional coordinates fr (P, 3) -> (P, M)"""
+        from scipy.ndimage import map_coordinates
+        D = data.reshape(tuple(self.n) + (self.M,))
+        crd = (np.asarray(fr) * self.n[None, :]).T
+        return np.stack([map_coordinates(D[..., m], crd, order=1, mode="grid-wrap") for m in range(self.M)], axis=1)
+
+    def _internal(self, P):
+        """renormalised energies and dampings of the internal lines for one external k"""
+        if self.renormalise:
+            Et = [self._interp(self.E, f) for f in P["fr"]]
+        else:
+            Et = None
+        Gt = [self._interp(self.G, f) for f in P["fr"]]
+        return Et, Gt
+
+    # ---------------------------------------------------------------- one (k, n)
+    def _solve_one(self, L, eps, delta, Et, Gt, mode, w0, Efix=None):
+        """returns (E, Γ, Z, overdamped): the real root of ω − ε − δ − Re Σ(ω) closest to ε + δ (window scan +
+        Newton); without a root the minimum of |ω − ε − δ − Σ(ω)| (spectral peak) is used and flagged"""
+        if Et is not None and mode == "sc":
+            e = L["s2"] * Et[0][L["r2"], L["b2"]] + L["s3"] * Et[1][L["r3"], L["b3"]]
+        else:
+            e = L["e"]
+        g = self.eta
+        if mode == "sc":                     # widths on the resonant channels only (decay, absorption), not on the source
+            res = (L["s2"] > 0) | (L["s3"] > 0)
+            g = self.eta + 0.5 * res * (Gt[0][L["r2"], L["b2"]] + Gt[1][L["r3"], L["b3"]])
+        v = L["v"]
+        e_b = L["e"]
+
+        def sig_bare(w):
+            d = 1.0 / (np.atleast_1d(w)[:, None] - e_b[None, :] + 1j * self.eta)
+            return d @ v, -(d * d) @ v
+
+        def sig(w):
+            d = 1.0 / (np.atleast_1d(w)[:, None] - e[None, :] + 1j * np.broadcast_to(g, e.shape)[None, :])
+            return d @ v, -(d * d) @ v
+        if mode == "onshell":
+            s0, _ = sig(eps)
+            return (eps + delta + s0[0].real) if Efix is None or self.energy_grid is None else Efix, -2 * s0[0].imag, 1.0, False
+        c0 = eps + delta
+        if mode == "sc":
+            # iΓ approximation: 1/S-consistent energy (Re Σ at the bare ε keeps the Hartree–Fock/cubic Goldstone
+            # cancellation), damping −2 Im Σ at that energy with damped internal lines
+            s_e, ds_e = sig_bare(eps)
+            E = c0 + s_e[0].real if Efix is None else Efix
+            return E, self._gamma(v, e, g, E if E > 0 else eps), 1.0 / max(1.0 - ds_e[0].real, 1e-6), False
+        c1 = c0 + sig(eps)[0][0].real                                       # 1/S (on-shell) estimate
+        W = max(0.6 * abs(c1), 0.15 * self.e0.max(), 20 * self.eta)
+        ws = np.linspace(max(c1 - W, 0.5 * self.emin), c1 + W, 81)
+        s, _ = sig(ws)
+        D = ws - c0 - s.real
+        idx = np.where(np.sign(D[:-1]) != np.sign(D[1:]))[0]
+        if len(idx):
+            roots = []
+            for j in idx:
+                a, b = ws[j], ws[j + 1]
+                fa = D[j]
+                for _ in range(50):                                         # bisection (robust near poles)
+                    m = 0.5 * (a + b)
+                    fm = m - c0 - sig(m)[0][0].real
+                    if np.sign(fm) == np.sign(fa):
+                        a, fa = m, fm
+                    else:
+                        b = m
+                    if b - a < 1e-10 * max(1.0, abs(m)):
+                        break
+                m = 0.5 * (a + b)
+                s0, ds = sig(m)
+                if abs(m - c0 - s0[0].real) < 1e-6 * max(1.0, abs(c0)) + 1e-3 * abs(s0[0].imag) + 1e-8:
+                    roots.append((abs(m - (c1 if w0 is None else w0)), m, s0[0], ds[0]))   # genuine root, not a pole crossing
+            if roots:
+                _, w, s0, ds = min(roots)
+                return w, -2 * s0.imag, 1.0 / max(1.0 - ds.real, 1e-6), False
+        j = int(np.argmin(np.abs(ws - c0 - s) + 1e-9 * np.abs(ws - c1)))
+        s0, ds = sig(ws[j])
+        return ws[j], -2 * s0[0].imag, 1.0 / max(abs(1.0 - ds[0].real), 1e-6), True
+
+    def _gamma(self, v, e, g, w):
+        """Γ = 2π Σ v · δ_g(w − e): Lorentzian (canonical iΓ, long tails) or Gaussian of the same FWHM (default:
+        the internal widths broaden only near resonance — no tails from far off-shell poles with large weights)"""
+        x = w - e
+        if self.profile == "lorentz":
+            return float(2 * np.sum(v * g / (x * x + g * g)))
+        sg = g / math.sqrt(2 * math.log(2))
+        return float(2 * math.pi * np.sum(v * np.exp(-0.5 * (x / sg) ** 2) / (sg * math.sqrt(2 * math.pi))))
+
+    def sweep(self, mode="sc"):
+        E, G, Z = self.E.copy(), self.G.copy(), self.Z.copy()
+        self.overdamped = np.zeros(self.E.shape, bool)
+        for i, P in enumerate(self.poles):
+            Et, Gt = self._internal(P) if mode == "sc" else (None, None)
+            for n in range(self.M):
+                if self.gold[i, n]:
+                    E[i, n], G[i, n], Z[i, n] = 0.0, 0.0, 1.0
+                    continue
+                w0 = self.E[i, n] if mode == "sc" else None
+                E[i, n], G[i, n], Z[i, n], self.overdamped[i, n] = self._solve_one(
+                    P["lines"][n], self.e0[i, n], self.delta[i, n], Et, Gt, mode, w0, self.E1S[i, n])
+        return E, np.maximum(G, 0.0), Z
+
+    def solve(self, mode="sc", maxiter=60, tol=1e-5, mix=0.5, verbose=False):
+        """mode 'onshell' | 'dyson' | 'sc' (iterate to self-consistency)"""
+        if mode != "sc":
+            self.E, self.G, self.Z = self.sweep(mode)
+            self.iterations = 1
+            self.mode = mode
+            return self
+        self.E, self.G, self.Z = self.sweep("onshell")                     # start: Born result
+        for it in range(1, maxiter + 1):
+            E, G, Z = self.sweep("sc")
+            dE, dG = np.abs(E - self.E).max(), np.abs(G - self.G).max()
+            self.E = mix * E + (1 - mix) * self.E
+            self.G = mix * G + (1 - mix) * self.G
+            self.Z = Z
+            self.history.append((dE, dG))
+            if verbose:
+                print(f"  iteration {it}: max|ΔE| = {dE:.2e}, max|ΔΓ| = {dG:.2e} meV")
+            if max(dE, dG) < tol:
+                break
+        self.iterations = it
+        self.mode = mode
+        return self
+
+    def residual(self):
+        """max |Γ − (−2 Im Σ(E))| with the current internal widths (and |E − E_1/S|): the self-consistency residual"""
+        r = 0.0
+        for i, P in enumerate(self.poles):
+            Et, Gt = self._internal(P)
+            for n in range(self.M):
+                if self.gold[i, n] or getattr(self, "overdamped", np.zeros_like(self.gold))[i, n]:
+                    continue
+                L = P["lines"][n]
+                e = (L["s2"] * Et[0][L["r2"], L["b2"]] + L["s3"] * Et[1][L["r3"], L["b3"]]) if Et is not None else L["e"]
+                res = (L["s2"] > 0) | (L["s3"] > 0)
+                g = self.eta + 0.5 * res * (Gt[0][L["r2"], L["b2"]] + Gt[1][L["r3"], L["b3"]])
+                if self.E1S[i, n] <= 0:
+                    continue
+                r = max(r, abs(self.E[i, n] - self.E1S[i, n]), abs(self.G[i, n] - self._gamma(L["v"], e, g, self.E[i, n])))
+        return r
+
+    # ---------------------------------------------------------------- arbitrary momenta
+    def at(self, qs, mode=None):
+        """(ε, E, Γ, Z) at arbitrary momenta, internal lines from the converged grid solution"""
+        mode = mode or getattr(self, "mode", "sc")
+        qs = np.atleast_2d(np.asarray(qs, float))
+        e0 = self.se._batch(qs)[0]
+        dl = self._static(qs) if self.static else np.zeros_like(e0)
+        E, G, Z = np.zeros_like(e0), np.zeros_like(e0), np.ones_like(e0)
+        Ps = [self._lines(k) for k in qs]
+        E1 = self._energies(qs, e0, dl, Ps)
+        for i, k in enumerate(qs):
+            P = Ps[i]
+            Et, Gt = self._internal(P) if mode == "sc" else (None, None)
+            for n in range(self.M):
+                if e0[i, n] <= self.emin:
+                    continue
+                E[i, n], G[i, n], Z[i, n], _ = self._solve_one(P["lines"][n], e0[i, n], dl[i, n], Et, Gt, mode, None,
+                                                               E1[i, n])
+        return e0, E, np.maximum(G, 0), Z
+
+    def spectral(self, k, n, omegas, mode=None, eta0=1e-3):
+        """A_n(k, ω) = −(1/π) Im 1/(ω − ε − δ − Σ³(ω)) with the self-consistent internal lines"""
+        mode = mode or getattr(self, "mode", "sc")
+        k = np.asarray(k, float)
+        e0 = self.se._batch(k[None])[0][0, n]
+        dl = self._static(k[None])[0, n] if self.static else 0.0
+        P = self._lines(k)
+        L = P["lines"][n]
+        Et, Gt = self._internal(P)
+        if mode == "sc":
+            e = (L["s2"] * Et[0][L["r2"], L["b2"]] + L["s3"] * Et[1][L["r3"], L["b3"]]) if Et is not None else L["e"]
+            g = self.eta + 0.5 * ((L["s2"] > 0) | (L["s3"] > 0)) * (Gt[0][L["r2"], L["b2"]] + Gt[1][L["r3"], L["b3"]])
+        else:
+            e, g = L["e"], self.eta
+        om = np.asarray(omegas, float)
+        sig = np.array([np.sum(L["v"] / (w - e + 1j * g)) for w in om])
+        return -np.imag(1.0 / (om - e0 - dl - sig + 1j * eta0)) / math.pi
+
+
 def analyse_interacting(lat, frac, types, symbols, mags, rotations, translations, T=0.0, order="first",
                         grid=(64, 1, 1), n_per=60, path=None, relax=False, cubic=False, quartic=False,
-                        se_grid=None, grid4=None, eta=0.05, sigma=None, every=1, **model_kw):
+                        se_grid=None, grid4=None, eta=0.05, sigma=None, every=1, sc_decay=None, sc_grid=None,
+                        sc_eta=0.02, **model_kw):
     """linear vs Hartree–Fock (four-magnon) renormalised magnon bands along a path; with cubic=True also the
     cubic one-loop + tadpole terms (complete 1/S spectrum ε + δε_HF + Re Σ³ + Σ_tad and the T = 0/thermal decay
-    rate Γ³), with quartic=True the second-order four-magnon damping Γ⁴ (and Re Σ⁴), on every `every`-th q"""
+    rate Γ³), with quartic=True the second-order four-magnon damping Γ⁴ (and Re Σ⁴), on every `every`-th q;
+    sc_decay = 'sc' | 'dyson' | 'onshell': SelfConsistentDecay of the cubic self-energy on the closed grid sc_grid
+    (energies E and widths Γ of all internal magnons iterated to self-consistency — no threshold singularities)"""
     from .magnons import analyse, relax_spins, make_path, DEFAULT_PATH
     m = analyse(lat, frac, types, symbols, mags, rotations, translations, return_model=True, **model_kw)
     dirs = m["dirs0"]
@@ -653,6 +951,17 @@ def analyse_interacting(lat, frac, types, symbols, mags, rotations, translations
         out["omega_1S"] = e0 + dhf + tab["re3"] + tab["tad"]
         out["omega_int"] = out["omega_1S"] + tab["re4"]
         out["gamma"] = tab["gamma3"] + tab["gamma4"]
+        if sc_decay:
+            scd = SelfConsistentDecay(se, grid=sc_grid or se_grid or grid, T=T, eta=sc_eta,
+                                      energy_grid=se_grid or grid).solve(
+                sc_decay, mix=0.3, maxiter=300, tol=1e-6)
+            e0p, Ep, Gp, Zp = scd.at(qs[idx])
+            om_sc, ga_sc, z_sc = (np.full((len(qs), M), np.nan) for _ in range(3))
+            om_sc[idx], ga_sc[idx], z_sc[idx] = Ep, Gp, Zp
+            om_sc[bad] = np.nan
+            ga_sc[bad] = np.nan
+            g4 = np.nan_to_num(tab["gamma4"])
+            out.update(scd=scd, omega_sc=om_sc + np.nan_to_num(tab["re4"]), gamma_sc=ga_sc + g4, Z_sc=z_sc, sc_mode=sc_decay)
     return out
 
 
@@ -696,6 +1005,11 @@ def _plot_selfenergy(res, save=None, title=None, figsize=(7.4, 6.4)):
             ax2.plot(x[i], res["gamma3"][i, n], color="#16325c", lw=1.8, label="Γ³ (cubic: decay)" if n == 0 else None)
         if res.get("quartic"):
             ax2.plot(x[i], res["gamma4"][i, n], color="#e67e22", lw=1.8, label="Γ⁴ (four-magnon)" if n == 0 else None)
+        if "omega_sc" in res:
+            ws_, gs_ = res["omega_sc"][i, n], res["gamma_sc"][i, n]
+            ax.plot(x[i], ws_, color="#16325c", lw=1.8, ls="-.", label=f"self-consistent decay ({res['sc_mode']})" if n == 0 else None)
+            ax.fill_between(x[i], ws_ - gs_ / 2, ws_ + gs_ / 2, color="#16325c", alpha=0.2, lw=0)
+            ax2.plot(x[i], gs_, color="#16325c", lw=1.8, ls="-.", label="Γ self-consistent" if n == 0 else None)
     for a in (ax, ax2):
         for t, _ in res["ticks"]:
             a.axvline(t, color="0.85", lw=0.7, zorder=0)

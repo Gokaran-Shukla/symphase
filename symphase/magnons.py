@@ -810,6 +810,11 @@ def main(argv=None):
     ap.add_argument("--se-eta", type=float, default=0.05, help="Lorentzian broadening of the self-energies (meV) [0.05]")
     ap.add_argument("--se-sigma", type=float, default=None, help="Gaussian δ width for the linewidths (meV) [Lorentzian]")
     ap.add_argument("--se-every", type=int, default=1, help="evaluate the self-energies on every n-th path point [1]")
+    ap.add_argument("--sc-decay", nargs="?", const="sc", default=None, choices=("sc", "dyson", "onshell"),
+                    help="with --hf --cubic: self-consistent (iΓ) magnon decay on a closed grid — internal magnons carry "
+                         "their own E and Γ; 'dyson' = off-shell root with bare lines [sc]")
+    ap.add_argument("--sc-grid", type=int, nargs="+", default=None, help="closed k grid of the self-consistent decay [12 12 / 48]")
+    ap.add_argument("--sc-eta", type=float, default=0.02, help="residual broadening of the self-consistent decay (meV) [0.02]")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -921,6 +926,12 @@ def _grid4_default(g):
     return tuple(min(m, cap) if m > 1 else 1 for m in g)
 
 
+def _sc_grid_default(g):
+    g = list(g) + [1] * (3 - len(g))
+    cap = {1: 48, 2: 12, 3: 6}[max(1, sum(m > 1 for m in g))]
+    return tuple(min(m, cap) if m > 1 else 1 for m in g)
+
+
 def _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
     from .magint import analyse_interacting, plot_interacting
     res = analyse_interacting(lat, frac, types, symbols, mags, rots, trs, T=args.hf, order=args.hf_order,
@@ -929,7 +940,10 @@ def _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
                               K_local=args.K_local, field=args.field, g=args.g, cubic=args.cubic, quartic=args.damping4,
                               se_grid=tuple(args.se_grid) if args.se_grid else None,
                               grid4=tuple(args.grid4) if args.grid4 else _grid4_default(args.hf_grid) if args.damping4 else None,
-                              eta=args.se_eta, sigma=args.se_sigma, every=args.se_every)
+                              eta=args.se_eta, sigma=args.se_sigma, every=args.se_every,
+                              sc_decay=args.sc_decay if args.cubic else None,
+                              sc_grid=tuple(args.sc_grid) if args.sc_grid else _sc_grid_default(args.hf_grid),
+                              sc_eta=args.sc_eta)
     print(f"\n  four-magnon interactions (Hartree–Fock, {args.hf_order}{', ' + str(res['iterations']) + ' iterations' if args.hf_order == 'sc' else ''}), "
           f"T = {args.hf:g} K, grid {args.hf_grid}")
     if not res["collinear"] and not args.cubic:
@@ -949,6 +963,11 @@ def _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
             print(f"  cubic terms: Re Σ³ {np.nanmin(res['re3']):+.4f} … {np.nanmax(res['re3']):+.4f} meV, tadpole "
                   f"{np.nanmin(res['tad']):+.4f} … {np.nanmax(res['tad']):+.4f} meV (|linear terms| {np.abs(eta).max():.2e}), "
                   f"decay rate Γ³ ≤ {np.nanmax(res['gamma3']):.4f} meV")
+        if "omega_sc" in res:
+            sd = res["scd"]
+            print(f"  self-consistent decay ({res['sc_mode']}, grid {tuple(sd.n)}): {sd.iterations} iterations, residual "
+                  f"{sd.residual():.1e} meV, overdamped modes {int(sd.overdamped.sum())}; Γ ≤ {np.nanmax(res['gamma_sc']):.4f} meV "
+                  f"(on-shell Γ³ ≤ {np.nanmax(res['gamma3']):.4f})")
         if args.damping4:
             print(f"  four-magnon sunset: Re Σ⁴ {np.nanmin(res['re4']):+.4f} … {np.nanmax(res['re4']):+.4f} meV, "
                   f"Γ⁴ ≤ {np.nanmax(res['gamma4']):.4f} meV")
@@ -960,6 +979,10 @@ def _hf_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
             np.savetxt(f"{stem}_selfenergy.dat", np.column_stack([res["x"][i], res["omega0"][i], res["d_hf"][i], res["re3"][i],
                        res["tad"][i], res["re4"][i], res["omega_int"][i], res["gamma3"][i], res["gamma4"][i]]),
                        header="x(1/Å)  ω_LSWT  δε_HF  ReΣ3  Σ_tad  ReΣ4  ω_int  Γ3  Γ4  (each 1..N, meV)")
+            if "omega_sc" in res:
+                np.savetxt(f"{stem}_scdecay.dat", np.column_stack([res["x"][i], res["omega0"][i], res["omega_sc"][i],
+                           res["gamma_sc"][i], res["Z_sc"][i]]), header="x(1/Å)  ω_LSWT  E_sc  Γ_sc  Z  (each 1..N, meV)")
+                print(f"  written: {stem}_scdecay.dat")
             print(f"  written: {stem}_selfenergy.dat")
         np.savetxt(f"{stem}_hf.dat", np.column_stack([res["x"], res["omega0"], res["omega"]]),
                    header="x(1/Å)  omega_LSWT_1..N  omega_HF_1..N (meV)")
