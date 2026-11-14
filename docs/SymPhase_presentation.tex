@@ -1,0 +1,687 @@
+% =============================================================================
+%  SymPhase — presentation (LaTeX Beamer, 16:9)
+%  compile:  latexmk -pdf SymPhase_presentation.tex     (figures: python make_figures.py)
+%  colour code for physical quantities and operators (see slide "Notation"):
+%    electric field  -> red      charge current / sigma_ij -> navy     spin  -> green
+%    orbital         -> purple   response tensors          -> orange   symmetry operators -> blue
+%    energies        -> gold
+% =============================================================================
+\documentclass[aspectratio=169,11pt]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,array,tabularx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,shadows}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+
+% ------------------------------------------------------------------ colours
+\definecolor{navy}{HTML}{16325C}
+\definecolor{navylight}{HTML}{E8EEF7}
+\definecolor{accent}{HTML}{E67E22}
+\definecolor{fieldc}{HTML}{C0392B}   % electric field
+\definecolor{curc}{HTML}{16325C}     % charge current
+\definecolor{spinc}{HTML}{1E8449}    % spin
+\definecolor{orbc}{HTML}{8E44AD}     % orbital
+\definecolor{tensc}{HTML}{D35400}    % response tensors
+\definecolor{opc}{HTML}{2471A3}      % symmetry operators
+\definecolor{enc}{HTML}{9A7D0A}      % energies
+\definecolor{greyt}{HTML}{5D6D7E}
+
+% ------------------------------------------------------------------ physics macros (coloured)
+\newcommand{\Ef}{\textcolor{fieldc}{E}}
+\newcommand{\Jc}{\textcolor{curc}{J}}
+\newcommand{\Sv}{\textcolor{spinc}{S}}
+\newcommand{\Lv}{\textcolor{orbc}{L}}
+\newcommand{\sig}{\textcolor{tensc}{\sigma}}
+\newcommand{\chiT}{\textcolor{tensc}{\chi}}
+\newcommand{\Rop}{\textcolor{opc}{R}}
+\newcommand{\Top}{\textcolor{opc}{\mathcal{T}}}
+\newcommand{\Pop}{\textcolor{opc}{\mathcal{P}}}
+\newcommand{\Dop}{\textcolor{opc}{D}}
+\newcommand{\Mop}{\textcolor{opc}{\mathcal{M}}}
+\newcommand{\Etot}{\textcolor{enc}{E_{\mathrm{tot}}}}
+\newcommand{\Eform}{\textcolor{enc}{E_{f}}}
+\newcommand{\Ehull}{\textcolor{enc}{E_{\mathrm{hull}}}}
+\newcommand{\muzero}{\textcolor{enc}{\mu^{0}}}
+\newcommand{\cmd}[1]{\texttt{\textcolor{navy}{#1}}}
+
+% ------------------------------------------------------------------ theme
+\setbeamercolor{structure}{fg=navy}
+\setbeamercolor{frametitle}{fg=white,bg=navy}
+\setbeamercolor{title}{fg=white}
+\setbeamercolor{normal text}{fg=black!88}
+\setbeamercolor{itemize item}{fg=accent}
+\setbeamercolor{itemize subitem}{fg=navy}
+\setbeamercolor{enumerate item}{fg=navy}
+\setbeamercolor{block title}{fg=white,bg=navy}
+\setbeamercolor{block body}{bg=navylight}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize item}{\small$\blacktriangleright$}
+\setbeamertemplate{itemize subitem}{\scriptsize$\bullet$}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth,ht=2.6ex,dp=1.3ex,leftskip=1.2em]{frametitle}
+    \usebeamerfont{frametitle}\insertframetitle
+  \end{beamercolorbox}%
+  \vspace{-0.3ex}{\color{accent}\rule{\paperwidth}{1.2pt}}}
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+  \begin{beamercolorbox}[wd=\paperwidth,ht=2.4ex,dp=1ex]{}%
+    \hspace*{1.2em}{\color{greyt}\scriptsize \textbf{SymPhase} \;|\; symmetry \& phase stability for VASP \;|\; G.~Shukla, KAUST}%
+    \hfill{\color{navy}\scriptsize\bfseries\insertframenumber\,/\,\inserttotalframenumber}\hspace*{1.2em}%
+  \end{beamercolorbox}}}
+\setbeamertemplate{section in toc}{\color{navy}\inserttocsectionnumber.\;\inserttocsection}
+
+\tcbset{sp/.style={colback=navylight,colframe=navy,boxrule=0.6pt,arc=2pt,left=4pt,right=4pt,top=2pt,bottom=2pt,fontupper=\small},
+        hl/.style={colback=accent!8,colframe=accent,boxrule=0.6pt,arc=2pt,left=4pt,right=4pt,top=2pt,bottom=2pt,fontupper=\small}}
+
+\lstset{basicstyle=\ttfamily\scriptsize,keywordstyle=\color{opc}\bfseries,commentstyle=\color{greyt},
+        stringstyle=\color{spinc},backgroundcolor=\color{navylight},frame=single,rulecolor=\color{navy!40},
+        columns=fullflexible,keepspaces=true,showstringspaces=false,xleftmargin=2pt,xrightmargin=2pt}
+
+\newcommand{\sectionslide}[2]{%
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[navy] (current page.south west) rectangle (current page.north east);
+    \fill[accent] ([yshift=-1.6cm]current page.west) rectangle ++(\paperwidth,0.08);
+    \node[anchor=west,text=white,font=\Huge\bfseries] at ([xshift=1.5cm,yshift=0.3cm]current page.west) {#1};
+    \node[anchor=west,text=white!80,font=\large] at ([xshift=1.5cm,yshift=-0.8cm]current page.west) {#2};
+  \end{tikzpicture}
+\end{frame}}
+
+\title{SymPhase}
+\author{Gokaran Shukla}
+\date{KAUST}
+
+\begin{document}
+
+% =============================================================================
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[navy] (current page.south west) rectangle (current page.north east);
+    \fill[accent] ([yshift=-0.35cm]current page.west) rectangle ++(\paperwidth,0.07);
+    \node[anchor=west,text=white,font=\fontsize{46}{50}\selectfont\bfseries] at ([xshift=1.4cm,yshift=1.9cm]current page.west) {SymPhase};
+    \node[anchor=west,text=white,font=\Large] at ([xshift=1.45cm,yshift=0.55cm]current page.west)
+      {magnetic symmetry, response tensors \& phase stability for VASP};
+    \node[anchor=west,text=white!85,font=\large] at ([xshift=1.45cm,yshift=-1.3cm]current page.west) {Gokaran Shukla};
+    \node[anchor=west,text=white!70,font=\normalsize] at ([xshift=1.45cm,yshift=-1.95cm]current page.west)
+      {King Abdullah University of Science and Technology (KAUST)};
+    \node[anchor=west,text=white!70,font=\small\ttfamily] at ([xshift=1.45cm,yshift=-2.9cm]current page.west)
+      {github.com/Gokaran-Shukla/symphase \quad|\quad v1.0.0};
+    % decorative hull
+    \begin{scope}[shift={([xshift=-4.3cm,yshift=-0.2cm]current page.east)},scale=1.25]
+      \fill[white,opacity=0.08] (0,0)--(0.6,-0.9)--(1.2,-1.35)--(1.9,-1.05)--(2.6,-0.5)--(3,0)--cycle;
+      \draw[white,line width=1.4pt] (0,0)--(0.6,-0.9)--(1.2,-1.35)--(1.9,-1.05)--(2.6,-0.5)--(3,0);
+      \foreach \p in {(0,0),(0.6,-0.9),(1.2,-1.35),(1.9,-1.05),(2.6,-0.5),(3,0)} \fill[white] \p circle (2.4pt);
+      \foreach \p in {(0.9,-0.95),(1.55,-1.0),(2.2,-0.62),(0.35,-0.35)} \fill[accent] \p ++(-2pt,-2pt) rectangle ++(4pt,4pt);
+      \draw[white!70,dashed] (0,0)--(3,0);
+    \end{scope}
+  \end{tikzpicture}
+\end{frame}
+
+% =============================================================================
+\begin{frame}{Outline}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\begin{enumerate}\setlength\itemsep{0.7em}
+  \item \textbf{SymPhase at a glance} — three commands
+  \item \textbf{Magnetic symmetry} — MSG, $\Pop$, $\Top$, $\Pop\Top$, $\Top\tau$, mirrors
+  \item \textbf{Response tensors} — charge, spin, orbital conductivity
+  \item \textbf{Examples} — Pt, Fe, altermagnetic RuO$_2$
+\end{enumerate}
+\column{0.48\textwidth}
+\begin{enumerate}\setcounter{enumi}{4}\setlength\itemsep{0.7em}
+  \item \textbf{Convex hull} — any number of elements
+  \item \textbf{Elements in, everything out} — OQMD / MP $\to$ VASP $\to$ Ibex
+  \item \textbf{Parallel engine} — all cores, MPI
+  \item \textbf{Tutorials \& quizzes}, validation, outlook
+\end{enumerate}
+\end{columns}
+\vfill
+\begin{tcolorbox}[sp]
+\textbf{Notation (colour code used throughout):}\;
+field $\Ef$ \;·\; charge current $\Jc$ \;·\; spin $\Sv$ \;·\; orbital $\Lv$ \;·\; tensors $\sig,\chiT$ \;·\;
+symmetry operators $\Rop,\Pop,\Top,\Dop$ \;·\; energies $\Eform,\Ehull,\muzero$
+\end{tcolorbox}
+\end{frame}
+
+% =============================================================================
+\sectionslide{1 \; SymPhase at a glance}{one package, three commands}
+
+\begin{frame}{Why SymPhase?}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{Questions asked for every new material}
+\begin{itemize}\setlength\itemsep{0.4em}
+  \item Which \textbf{magnetic space group}? Is $\Pop$, $\Top$ or $\Pop\Top$ broken?
+  \item Which components of the spin/orbital Hall tensor are \textbf{allowed}? Any \textbf{unconventional} spin polarisation (SOT)?
+  \item Is an anomalous Hall effect possible for this Néel vector?
+  \item Is the compound \textbf{thermodynamically stable}? How far above the hull?
+\end{itemize}
+\column{0.48\textwidth}
+\textbf{Usual practice}
+\begin{itemize}\setlength\itemsep{0.4em}
+  \item Bilbao / ISOTROPY by hand, tables per point group
+  \item ad-hoc scripts for $\Ehull$, only binaries/ternaries plotted
+  \item separate tools, no link to the VASP run
+\end{itemize}
+\vspace{0.6em}
+\begin{tcolorbox}[hl]
+\textbf{SymPhase} reads the VASP files directly, solves Neumann's principle numerically for any magnetic group,
+and builds the hull for \emph{any} number of elements — in parallel.
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Architecture}
+\centering
+\begin{tikzpicture}[font=\small,
+  box/.style={draw=navy,fill=navylight,rounded corners=3pt,minimum width=3.0cm,minimum height=0.95cm,align=center,line width=0.7pt},
+  cmd/.style={fill=navy,text=white,rounded corners=3pt,minimum width=3.0cm,minimum height=0.75cm,font=\small\ttfamily\bfseries},
+  outb/.style={draw=accent,fill=accent!8,rounded corners=3pt,minimum width=3.2cm,minimum height=0.95cm,align=center,line width=0.7pt},
+  arr/.style={-{Stealth[length=2.5mm]},line width=0.9pt,navy}]
+  \node[cmd] (t) at (0,2.2) {symphase tensors};
+  \node[cmd] (h) at (5.2,2.2) {symphase hull};
+  \node[cmd] (r) at (10.4,2.2) {symphase run};
+  \node[box] (ti) at (0,0.8) {POSCAR · OUTCAR\\OSZICAR};
+  \node[box] (hi) at (5.2,0.8) {VASP runs · CSV\\Materials Project};
+  \node[box] (ri) at (10.4,0.8) {\textbf{elements only}\\\texttt{Ti Ni Sn}};
+  \node[outb] (to) at (0,-1.1) {space group, MSG\\$\Pop,\Top,\Pop\Top,\Mop,\dots$\\$\sig_{ij},\ \sig^{k}_{ij}$ (spin, orbital)};
+  \node[outb] (ho) at (5.2,-1.1) {$\Eform$, $\Ehull$, decomposition\\stability margin\\figures, screening};
+  \node[outb] (ro) at (10.4,-1.1) {OQMD/MP phases, hull,\\figures, POSCARs,\\VASP + Ibex array, report};
+  \foreach \a/\b in {t/ti,h/hi,r/ri} \draw[arr] (\a)--(\b);
+  \foreach \a/\b in {ti/to,hi/ho,ri/ro} \draw[arr] (\a)--(\b);
+  \draw[arr,accent,dashed] (ro.west) to[bend left=12] node[below,font=\scriptsize,text=accent]{finished VASP runs} (ho.east);
+  \draw[arr,accent,dashed] (ho.west) to[bend left=12] node[below,font=\scriptsize,text=accent]{stable phases} (to.east);
+  \node[font=\scriptsize,text=greyt] at (5.2,-2.55) {spglib (symmetry) \;·\; pymatgen/Qhull (hull) \;·\; NumPy SVD (tensors) \;·\; multiprocessing / mpi4py (parallel)};
+\end{tikzpicture}
+\end{frame}
+
+\begin{frame}[fragile]{Installation and quick start}
+\begin{columns}[T]
+\column{0.57\textwidth}
+\textbf{Install}
+\begin{lstlisting}[language=bash]
+git clone https://github.com/Gokaran-Shukla/symphase
+cd symphase && pip install -e .
+pip install -e ".[mp,mpi]"   # optional extras
+\end{lstlisting}
+\textbf{Symmetry and tensors of a VASP run}
+\begin{lstlisting}[language=bash]
+cd my_vasp_run/ && symphase tensors
+symphase tensors --mdir 1 1 0
+\end{lstlisting}
+\column{0.40\textwidth}
+\textbf{Hull from anything}%
+\begin{lstlisting}[language=bash]
+symphase hull --scan calcs/ -n 40
+symphase hull --csv data.csv --bar
+\end{lstlisting}
+\textbf{Elements in, everything out}
+\begin{lstlisting}[language=bash]
+symphase run Ti Ni Sn
+symphase run symphase.in
+\end{lstlisting}
+\textbf{Python}
+\begin{lstlisting}[language=Python]
+from symphase import analyze_tensors
+from symphase import HullAnalysis, run
+\end{lstlisting}
+\end{columns}
+\end{frame}
+
+% =============================================================================
+\sectionslide{2 \; Magnetic symmetry}{from the VASP files to the magnetic space group}
+
+\begin{frame}{Magnetic space groups in one slide}
+\begin{columns}[T]
+\column{0.53\textwidth}
+Operations $g=\{\Rop|\tau\}$ and $g'=\{\Rop|\tau\}\Top$; moments are \textbf{axial} and $\Top$-odd:
+\[
+  g:\ \mathbf m \mapsto \det(\Rop)\,\Rop\,\mathbf m,\quad g':\ \mathbf m \mapsto -\det(\Rop)\,\Rop\,\mathbf m
+\]
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}lll@{}}
+\toprule
+type & content & example \\ \midrule
+I   & no $\Top$ at all            & colourless \\
+II  & $\Top$ itself (grey, $G1'$) & Pt, paramagnets \\
+III & $\Top$ with point ops only  & Fe, RuO$_2$ \\
+IV  & $\Top\tau$ (antitranslation)& many AFMs \\ \bottomrule
+\end{tabular}
+\column{0.44\textwidth}
+\textbf{Reported by SymPhase}
+{\small\begin{itemize}\setlength\itemsep{0.05em}
+  \item BNS \& OG symbol/number, UNI number, type
+  \item magnetic point group, unitary subgroup
+  \item $\Pop$, $\Top$, $\Top\tau$, $\Pop\Top$ present?
+  \item mirrors/glides $\Mop$, $\Mop\Top$ (Miller indices)
+  \item rotations/screws $C_n$, $C_n\Top$, rotoinversions
+  \item every operation + intrinsic translation
+\end{itemize}}
+\begin{tcolorbox}[hl]
+$\Top$ or $\Top\tau$ $\Rightarrow$ all $\Top$-odd responses vanish.
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Reading the VASP calculation}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\begin{itemize}\setlength\itemsep{0.45em}
+  \item \textbf{POSCAR/CONTCAR}: lattice, species, positions (VASP 4/5, Cartesian/direct, negative scale = volume)
+  \item \textbf{OUTCAR}: ISPIN, LSORBIT, \texttt{SAXIS}, last \texttt{magnetization (x/y/z)} blocks, orbital moments, $E_F$
+  \item \textbf{OSZICAR}: ionic steps, $F$, $E_0$, total moment
+  \item non-collinear moments are rotated from the \texttt{SAXIS} spinor frame:
+  $\mathbf m_{\rm cart} = R_z(\alpha)R_y(\beta)\,\mathbf m_{\rm SAXIS}$
+\end{itemize}
+\column{0.46\textwidth}
+\textbf{Moment priority}
+\begin{enumerate}\setlength\itemsep{0.25em}
+  \item \cmd{--magmom} (user, $N$ or $3N$ values)
+  \item OUTCAR site moments (last ionic step)
+  \item MAGMOM echoed in OUTCAR (initial guess)
+  \item none $\to$ grey group
+\end{enumerate}
+\vspace{0.4em}
+Collinear runs: $\mathbf m_i = M_i\,\hat{\mathbf n}$, $\hat{\mathbf n}$ = \cmd{--mdir} or \texttt{SAXIS}.\\[0.3em]
+Noise control: \cmd{--mmin} (zero small moments), \cmd{--mag-symprec}.
+\end{columns}
+\end{frame}
+
+% =============================================================================
+\sectionslide{3 \; Response tensors}{Neumann's principle, solved numerically}
+
+\begin{frame}{Neumann's principle for magnetic groups}
+\[
+  \Jc_i = \sig_{ij}\,\Ef_j,\qquad
+  \Jc^{\,\Sv_k}_i = \sig^{\,k}_{ij}\,\Ef_j,\qquad
+  \Jc^{\,\Lv_k}_i = \sig^{\,k}_{ij}\,\Ef_j
+\]
+\begin{columns}[T]
+\column{0.5\textwidth}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}lll@{}}
+\toprule
+tensor & character & $\Dop(\Rop)$\\ \midrule
+$\sig_{ij}$ & polar, rank 2 & $\Rop\otimes\Rop$ \\
+$\sig^{k}_{ij}$ ($\Sv$) & axial, rank 3 & $\det\Rop\;\Rop\otimes\Rop\otimes\Rop$\\
+$\sig^{k}_{ij}$ ($\Lv$) & axial, rank 3 & $\det\Rop\;\Rop\otimes\Rop\otimes\Rop$\\ \bottomrule
+\end{tabular}
+\vspace{0.4em}
+
+{\small spin current $\{v_i,\Sv_k\}/2$: polar($i$) $\times$ axial($k$), $\Top$-even.}
+\column{0.47\textwidth}
+\begin{tcolorbox}[sp]
+For every $g$ and $g'$ of the magnetic point group:
+\[
+ \chiT^{\rm even} = \Dop(\Rop)\,\chiT^{\rm even},\qquad
+ \chiT^{\rm odd} = \theta_g\,\Dop(\Rop)\,\chiT^{\rm odd}
+\]
+$\theta_g=+1$ for $g$, $-1$ for $g'$.
+\end{tcolorbox}
+\textbf{Onsager} (charge only): $\sig_{ij}(\mathbf M)=\sig_{ji}(-\mathbf M)$ $\Rightarrow$
+even part symmetric, odd part antisymmetric:
+$\sig^{\rm odd}_{ij}=\epsilon_{ijk}h_k$ (Hall vector).
+\end{columns}
+\end{frame}
+
+\begin{frame}{Algorithm}
+\begin{columns}[T]
+\column{0.55\textwidth}
+\begin{enumerate}\setlength\itemsep{0.55em}
+  \item Convert spglib operations to Cartesian: $\Rop_c = A^{T}\Rop A^{-T}$
+  \item Stack constraints $\big(\theta_g\Dop(\Rop)-\mathbb 1\big)\,\mathrm{vec}(\chiT)=0$ for all point operations (+ Onsager rows)
+  \item Null space by \textbf{SVD} $\to$ basis of allowed tensors
+  \item \textbf{Reduced row echelon form} $\to$ independent components (pivots)
+  \item Rationalise coefficients ($\tfrac12$, $\sqrt3$, $\tfrac1{\sqrt3}$, …) $\to$ symbolic matrices
+\end{enumerate}
+\column{0.42\textwidth}
+\begin{tcolorbox}[sp,title=Output for each tensor]
+\begin{itemize}\setlength\itemsep{0.2em}
+  \item 3×3 matrix per spin direction $k$
+  \item number of independent components
+  \item antisymmetric (SHE-like) vs symmetric (spin-splitter) pairs
+  \item conventional ($k\perp i\perp j$) vs \textbf{unconventional} components
+  \item allowed $\Sv_k$ for every flow $\perp$ field geometry (SOT)
+\end{itemize}
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+% =============================================================================
+\sectionslide{4 \; Examples}{non-magnetic, ferromagnetic, altermagnetic}
+
+\begin{frame}{fcc Pt (grey group $Fm\bar3m1'$) and bcc Fe ($\mathbf m\parallel z$, $I4/mm'm'$)}
+\begin{columns}[T]
+\column{0.47\textwidth}
+\textbf{Pt} — $\Top$ present: every $\Top$-odd tensor vanishes.\\[0.3em]
+Spin Hall ($\Top$-even), \textbf{one} component:
+\[
+\sig^{\,z}=\begin{pmatrix}0&\sig^{x}_{yz}&0\\-\sig^{x}_{yz}&0&0\\0&0&0\end{pmatrix},\quad
+\sig^{\,k}_{ij}=\sig_{\rm SH}\,\epsilon_{kij}
+\]
+\column{0.5\textwidth}
+\textbf{Fe} — MPG $4/mm'm'$, $\Pop$ yes, $\Top$ no.
+\[
+\sig^{\rm odd}=\begin{pmatrix}0&\sig_{xy}&0\\-\sig_{xy}&0&0\\0&0&0\end{pmatrix}
+\ \Rightarrow\ \mathbf h\parallel\hat z\ \ \text{(AHE)}
+\]
+Magnetic SHE: 4 independent $\Top$-odd components,
+e.g.\ $\sig^{\,z}_{xx},\ \sig^{\,z}_{zz},\ \sig^{\,x}_{xz}$ — spin $\parallel\mathbf m$.
+\end{columns}
+\vfill
+\begin{tcolorbox}[hl]
+Same code path for both: only the moments differ. Moments come straight from the OUTCAR (non-collinear, SAXIS-rotated).
+\end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Altermagnetic RuO$_2$: the Néel vector decides}
+\begin{columns}[T]
+\column{0.58\textwidth}
+\renewcommand{\arraystretch}{1.3}\small\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lllcl@{}}
+\toprule
+Néel & MSG (BNS) & MPG & AHE & Hall vector $\mathbf h$ \\ \midrule
+$[001]$ & $P4_2'/mnm'$ & $4'/mmm'$ & -- & 0 \\
+$[100]$ & $Pnn'm'$ & $mm'm'$ & \textcolor{spinc}{\checkmark} & $(0,-\sig_{xz},0)$ \\
+$[110]$ & $Cmm'm'$ & $mm'm'$ & \textcolor{spinc}{\checkmark} & $(-\sig_{xz},-\sig_{xz},0)$ \\ \bottomrule
+\end{tabular}
+\vspace{0.6em}
+
+\textbf{Spin splitter} (Néel $\parallel[001]$, $\Top$-odd):
+\[
+\sig^{\,z}_{\rm odd}=\begin{pmatrix}0&\sig^{z}_{xy}&0\\ \sig^{z}_{xy}&0&0\\0&0&0\end{pmatrix}
+\]
+symmetric $\Rightarrow$ not a spin Hall effect.
+\column{0.36\textwidth}
+\begin{tcolorbox}[sp]
+\texttt{symphase tensors} \\ \texttt{\;\;--mdir 1 1 0}\\[0.3em]
+rotates collinear moments: one VASP run, all orientations.
+\end{tcolorbox}
+\begin{tcolorbox}[hl]
+SymPhase flags \emph{compensated, no $\Pop\Top$, no $\Top\tau$} $\Rightarrow$ altermagnet-like.
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
+\begin{columns}[T]
+\column{0.5\textwidth}
+For every current flow $i$ $\perp$ field $j$ SymPhase lists the allowed spin (orbital) polarisations:
+\begin{lstlisting}
+allowed polarisations (flow i, field j):
+  flow x, E || y : S_{z}
+  flow x, E || z : S_{y}
+  flow z, E || x : S_{y}
+  flow z, E || y : S_{x}
+\end{lstlisting}
+\small Conventional SHE: $\Sv\perp$ flow $\perp$ field. Any additional entry
+(e.g.\ $\Sv_z$ for flow $z$, $\Ef\parallel x$) is an \textbf{unconventional} torque channel — field-free switching.
+\column{0.46\textwidth}
+\begin{tcolorbox}[sp,title=Typical use (interfaces)]
+\begin{itemize}\setlength\itemsep{0.25em}
+  \item slab with heavy metal / magnet (Ni, NbP, CrSb, Mn$_3$Sn …)
+  \item $\Top$-even block: intrinsic (Fermi-sea) torques
+  \item $\Top$-odd block: magnetic / Fermi-surface ($\propto 1/\Gamma$)
+  \item orbital tensor: same shape, different magnitude
+\end{itemize}
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+% =============================================================================
+\sectionslide{5 \; Convex hull}{thermodynamic stability for any number of elements}
+
+\begin{frame}{Thermodynamics on one slide}
+\begin{columns}[T]
+\column{0.52\textwidth}
+\[
+\Eform = \frac{\Etot - \sum_i n_i\,\muzero_i}{\sum_i n_i}
+\]
+\begin{itemize}\setlength\itemsep{0.4em}
+  \item hull = lower convex envelope of $(\mathbf x,\Eform)$ in the composition simplex (Qhull)
+  \item $\Ehull\ge0$: energy released on decomposing into hull phases (lever rule)
+  \item \textbf{stability margin}: depth of a stable phase below the hull of all other phases
+  \item hull energy at any composition, pseudo-binary cuts $\mathbf x(t)=(1-t)\mathbf x_A+t\,\mathbf x_B$
+\end{itemize}
+\column{0.45\textwidth}
+\includegraphics[width=\linewidth]{figures/binary.pdf}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Ternary: Gibbs triangle and 3D hull surface}
+\begin{columns}[c]
+\column{0.5\textwidth}
+\includegraphics[width=\linewidth]{figures/ternary.pdf}
+\column{0.5\textwidth}
+\includegraphics[width=\linewidth]{figures/surface.pdf}
+\end{columns}
+\vspace{-0.3em}
+{\scriptsize\color{greyt} toy energies (teaching data set shipped with SymPhase). Shaded triangles: three-phase facets; lines: tie-lines; diamonds: $\Ehull$ colour scale.}
+\end{frame}
+
+\begin{frame}{Four and more elements}
+\begin{columns}[c]
+\column{0.40\textwidth}
+\includegraphics[width=\linewidth,height=0.72\textheight,keepaspectratio]{figures/quaternary.pdf}
+\column{0.60\textwidth}
+\includegraphics[width=\linewidth,height=0.74\textheight,keepaspectratio]{figures/sub5.pdf}
+\end{columns}
+\vspace{-0.3em}
+{\small Quaternary: tetrahedron with tie-lines. $n\ge5$: grid of all binary (or ternary) sub-hulls, here Ti–Zr–Hf–Ni–Sn.}
+\end{frame}
+
+\begin{frame}{Pseudo-binary slices, $\Ehull$ ranking and screening}
+\begin{columns}[c]
+\column{0.52\textwidth}
+\includegraphics[width=\linewidth,height=0.6\textheight,keepaspectratio]{figures/slice.pdf}
+\column{0.46\textwidth}\centering
+\includegraphics[width=\linewidth,height=0.64\textheight,keepaspectratio]{figures/ehull_bar.pdf}
+\end{columns}
+\begin{tcolorbox}[sp]
+\texttt{h.evaluate\_many(candidates)} / \cmd{symphase hull --screen cand.csv}: $\Ehull$ and decomposition of
+thousands of hypothetical compounds against a fixed hull, in parallel.
+\end{tcolorbox}
+\end{frame}
+
+% =============================================================================
+\sectionslide{6 \; Elements in, everything out}{\texttt{symphase run Ti Ni Sn}}
+
+\begin{frame}[fragile]{The automatic pipeline}
+\begin{columns}[T]
+\column{0.42\textwidth}
+\textbf{Input file} (\texttt{symphase.in}):
+\begin{lstlisting}
+elements = Ti Ni Sn
+\end{lstlisting}
+optional: \texttt{ehull\_window}, \texttt{write\_vasp}, \texttt{source}, Ibex settings …\\[0.5em]
+\textbf{Output folder}
+\begin{lstlisting}
+symphase_Ni-Sn-Ti/
+  SUMMARY.html  SUMMARY.md
+  hull_table.csv  hull.json
+  figures/   structures/
+  vasp/  (INCAR KPOINTS POSCAR
+          POTCAR.spec, submit_ibex.sh)
+  data/  (cached database entries)
+\end{lstlisting}
+\column{0.55\textwidth}
+\centering
+\begin{tikzpicture}[font=\small,node distance=0.32cm,
+  st/.style={draw=navy,fill=navylight,rounded corners=2pt,minimum width=6.4cm,minimum height=0.62cm,align=left,line width=0.6pt},
+  arr/.style={-{Stealth[length=2mm]},navy,line width=0.8pt}]
+  \node[st] (a) {\textbf{1} phases of all sub-systems: MP (key) or \textbf{OQMD}};
+  \node[st,below=of a] (b) {\textbf{2} hull, $\Eform$, $\Ehull$, decompositions (all cores)};
+  \node[st,below=of b] (c) {\textbf{3} figures: hull, surface, sub-systems, slices};
+  \node[st,below=of c] (d) {\textbf{4} POSCARs of phases with $\Ehull<$ window};
+  \node[st,below=of d,fill=accent!10,draw=accent] (e) {\textbf{5} VASP inputs + Ibex job array (optional)};
+  \node[st,below=of e] (f) {\textbf{6} \texttt{SUMMARY.html} report};
+  \foreach \x/\y in {a/b,b/c,c/d,d/e,e/f} \draw[arr] (\x)--(\y);
+\end{tikzpicture}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{From database phases to your own DFT on Ibex}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\begin{lstlisting}[language=bash]
+# login node (internet), ~1 min
+symphase run Ti Ni Sn write_vasp=yes
+cd symphase_Ni-Sn-Ti/vasp
+./submit_ibex.sh      # POTCARs + job array
+# ... jobs finished:
+symphase run Ti Ni Sn source=vasp \
+     vasp_dir=symphase_Ni-Sn-Ti/vasp
+# tensors of any finished run
+cd 01_TiNiSn_*/ && symphase tensors
+\end{lstlisting}
+\column{0.46\textwidth}
+\textbf{Generated job script}
+\begin{itemize}\setlength\itemsep{0.25em}
+  \item \texttt{--array=0-N\%10}, \texttt{largemem}, 40 tasks
+  \item oneAPI \texttt{setvars.sh} (guarded by \texttt{set +e})
+  \item POTCARs built on the login node from \texttt{potpaw\_PBE} (MP-recommended PAWs)
+  \item MAGMOM, POSCAR and POTCAR orders consistent
+  \item restart-safe: finished runs skipped
+\end{itemize}
+\begin{tcolorbox}[hl]
+second pass: hull purely from \textbf{your} energies (same settings for every phase).
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+% =============================================================================
+\sectionslide{7 \; Parallel engine}{any number of cores, any number of nodes}
+
+\begin{frame}[fragile]{What runs in parallel}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\renewcommand{\arraystretch}{1.2}\small\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}ll@{}}
+\toprule
+task & parallel over \\ \midrule
+$\Ehull$, decomposition, margin & entries \\
+screening (\texttt{--screen}) & candidates \\
+VASP folder parsing (\texttt{--scan}) & run directories \\
+pseudo-binary hull & composition points \\
+symmetry of near-hull phases & structures \\
+Qhull construction & serial (fast) \\ \bottomrule
+\end{tabular}
+\vspace{0.5em}
+
+{\small\textbf{Backends}: \texttt{process} (fork, copy-on-write, no pickling of the hull), \texttt{mpi} (mpi4py, round-robin + allgather), \texttt{serial}. Results identical to serial (tested).}
+\column{0.46\textwidth}
+\begin{lstlisting}[language=bash]
+# one node, all 40 cores
+symphase hull --scan calcs/ -n 40
+sbatch jobs/ibex_symphase.slurm
+
+# 4 nodes x 40 ranks
+srun -n 160 python -m symphase hull \
+     --csv refs.csv --screen big.csv
+sbatch jobs/ibex_symphase_mpi.slurm
+\end{lstlisting}
+\small Cores: \texttt{-n}, \texttt{SYMPHASE\_NPROC}, \texttt{SLURM\_CPUS\_PER\_TASK}, CPU affinity. BLAS threads pinned to 1 per worker.
+\end{columns}
+\end{frame}
+
+% =============================================================================
+\sectionslide{8 \; Learning material}{tutorials, quizzes, validation}
+
+\begin{frame}{Tutorial and quiz notebooks}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.2cm}@{}}
+\toprule
+notebook & content\\ \midrule
+01 & symmetry \& tensors: Pt, Fe, RuO$_2$ \\
+02 & hull: 2, 3, 4, 5 elements, slices, screening, benchmark\\
+03 & elements-only pipeline, Ibex workflow\\
+04 & \textbf{Quiz 1}: 20 questions, symmetry\\
+05 & \textbf{Quiz 2}: 20 questions, hull\\ \bottomrule
+\end{tabular}
+\column{0.46\textwidth}
+\begin{tcolorbox}[sp,title=Self-checking quizzes]
+\texttt{q = Quiz("hull")}\\
+\texttt{q.answer(10, 42.5)} $\to$ \textcolor{spinc}{\checkmark} + explanation\\
+\texttt{q.hint(n)}, \texttt{q.reveal(n)}, \texttt{q.score()}\\
+\texttt{q.widget(n)} clickable (ipywidgets)
+\end{tcolorbox}
+Conceptual + hands-on questions; hands-on answers are computed by SymPhase on the shipped examples.
+\end{columns}
+\end{frame}
+
+\begin{frame}{Validation}
+\renewcommand{\arraystretch}{1.18}
+\centering\small
+\begin{tabular}{@{}p{4.3cm}p{7.2cm}c@{}}
+\toprule
+test & expected & ok \\ \midrule
+fcc Pt & $Fm\bar3m1'$, 1 SHE component, no AHE & \textcolor{spinc}{\checkmark} \\
+bcc Fe, $\mathbf m\parallel z$ & $I4/mm'm'$, $\mathbf h\parallel z$ & \textcolor{spinc}{\checkmark} \\
+RuO$_2$, Néel $\parallel[001]$ & $P4_2'/mnm'$, no AHE, spin splitter & \textcolor{spinc}{\checkmark} \\
+RuO$_2$, Néel $\parallel[100]$ & $Pnn'm'$, AHE allowed & \textcolor{spinc}{\checkmark} \\
+non-collinear, \texttt{SAXIS}$\parallel x$ & moments rotated to $x$ & \textcolor{spinc}{\checkmark} \\
+hull: process / MPI & identical to serial & \textcolor{spinc}{\checkmark} \\
+Ibex script & file orders consistent, array dry run & \textcolor{spinc}{\checkmark} \\
+quiz keys & 40 / 40 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+\end{tabular}
+\vspace{0.5em}
+
+{\small Automated tests: \texttt{pytest tests/}. Database download (OQMD/MP) verified against the documented API with a mock server.}
+\end{frame}
+
+\begin{frame}{Limitations and outlook}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\textbf{Limitations}
+\begin{itemize}\setlength\itemsep{0.35em}
+  \item relativistic MSG analysis; \textbf{spin groups} (no SOC) not yet
+  \item symmetry gives the \emph{shape}, not the magnitude, of tensors
+  \item hull at $T=0$; no vibrational/configurational free energy
+  \item mixing energy sources requires identical DFT settings
+\end{itemize}
+\column{0.46\textwidth}
+\textbf{Outlook}
+\begin{itemize}\setlength\itemsep{0.35em}
+  \item spin-group analysis (non-relativistic altermagnetism)
+  \item Edelstein, nonlinear Hall, torkance tensors
+  \item finite-$T$ hulls (mixing entropy, phonons)
+  \item link to Wannier-based Kubo codes for magnitudes
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{References}
+\scriptsize
+\begin{itemize}\setlength\itemsep{0.25em}
+  \item A. Togo, K. Shinohara, I. Tanaka, \emph{Spglib: a software library for crystal symmetry search}, Sci. Technol. Adv. Mater. Meth. \textbf{4}, 2384822 (2024).
+  \item S. P. Ong \emph{et al.}, \emph{Python Materials Genomics (pymatgen)}, Comput. Mater. Sci. \textbf{68}, 314 (2013).
+  \item H. T. Stokes, B. J. Campbell, ISO-MAG tables of magnetic space groups (BNS/OG labels).
+  \item M. Seemann, D. Ködderitzsch, S. Wimmer, H. Ebert, \emph{Symmetry-imposed shape of linear response tensors}, Phys. Rev. B \textbf{92}, 155138 (2015).
+  \item J. Železný \emph{et al.}, \emph{Spin-orbit torques in locally and globally noncentrosymmetric crystals}, Phys. Rev. B \textbf{95}, 014403 (2017).
+  \item L. Šmejkal \emph{et al.}, \emph{Crystal time-reversal symmetry breaking and spontaneous Hall effect}, Sci. Adv. \textbf{6}, eaaz8809 (2020).
+  \item L. Šmejkal, J. Sinova, T. Jungwirth, \emph{Emerging research landscape of altermagnetism}, Phys. Rev. X \textbf{12}, 040501 (2022).
+  \item R. González-Hernández \emph{et al.}, \emph{Efficient electrical spin splitter based on nonrelativistic collinear antiferromagnetism}, Phys. Rev. Lett. \textbf{126}, 127701 (2021).
+  \item J. E. Saal \emph{et al.}, JOM \textbf{65}, 1501 (2013); S. Kirklin \emph{et al.}, npj Comput. Mater. \textbf{1}, 15010 (2015) — OQMD.
+  \item A. Jain \emph{et al.}, \emph{The Materials Project}, APL Mater. \textbf{1}, 011002 (2013).
+\end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[navy] (current page.south west) rectangle (current page.north east);
+    \node[text=white,font=\fontsize{34}{38}\selectfont\bfseries] at ([yshift=1.2cm]current page.center) {Thank you};
+    \node[text=white!85,font=\large\ttfamily] at ([yshift=-0.2cm]current page.center) {pip install -e .  \&\&  symphase run Ti Ni Sn};
+    \node[text=white!70,font=\normalsize\ttfamily] at ([yshift=-1.2cm]current page.center) {github.com/Gokaran-Shukla/symphase};
+    \fill[accent] ([yshift=-2.0cm,xshift=-3cm]current page.center) rectangle ++(6,0.06);
+  \end{tikzpicture}
+\end{frame}
+
+\end{document}

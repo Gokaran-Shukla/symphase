@@ -1,0 +1,7 @@
+# SymPhase input — the only required line is the element list
+elements = Ti Ni Sn
+
+# everything below is optional (defaults shown in `symphase run -h`)
+# ehull_window = 0.10          # eV/atom: phases kept for structures / VASP
+# write_vasp   = yes           # VASP inputs + Ibex job array for every kept phase
+# source       = auto          # auto (MP if MP_API_KEY set, else OQMD) | mp | oqmd | vasp | csv

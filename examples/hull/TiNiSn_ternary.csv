@@ -1,0 +1,26 @@
+# TOY DATA for SymPhase tutorials - not DFT results
+# Ti-Ni-Sn half-Heusler system: 23 toy entries
+formula,energy,energy_type,name,structure
+Ti,-7.890000,per_atom,Ti-hcp,structures/Ti_hcp.vasp
+Ni,-5.570000,per_atom,Ni-fcc,structures/Ni_fcc.vasp
+Sn,-3.980000,per_atom,Sn-alpha,structures/Sn_diamond.vasp
+Ti,-7.830000,per_atom,Ti-bcc,
+TiNi,-7.110000,per_atom,TiNi-B2,structures/TiNi_B2.vasp
+TiNi3,-6.610000,per_atom,TiNi3-D024,
+Ti2Ni,-7.416667,per_atom,Ti2Ni-E93,
+TiNi2,-6.673333,per_atom,TiNi2-hyp,
+Ni3Sn,-5.412500,per_atom,Ni3Sn-D019,
+Ni3Sn2,-5.234000,per_atom,Ni3Sn2-B81,
+Ni3Sn4,-4.931429,per_atom,Ni3Sn4-mC14,
+NiSn,-4.990000,per_atom,NiSn-hyp,
+Ti3Sn,-7.202500,per_atom,Ti3Sn-D019,
+Ti2Sn,-6.946667,per_atom,Ti2Sn-B82,
+Ti5Sn3,-6.853750,per_atom,Ti5Sn3-D88,
+Ti6Sn5,-6.512727,per_atom,Ti6Sn5-hP22,
+TiSn2,-5.533333,per_atom,TiSn2-hyp,
+TiNiSn,-6.423333,per_atom,TiNiSn-HH,structures/TiNiSn_HH.vasp
+TiNi2Sn,-6.337500,per_atom,TiNi2Sn-FH,structures/TiNi2Sn_FH.vasp
+TiNiSn2,-5.685000,per_atom,TiNiSn2-hyp,
+Ti2NiSn,-6.752500,per_atom,Ti2NiSn-inverseHeusler,
+TiNiSn,-6.373333,per_atom,TiNiSn-other,
+Ti2Ni2Sn,-6.640000,per_atom,Ti2Ni2Sn-hyp,

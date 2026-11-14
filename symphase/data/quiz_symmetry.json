@@ -1,0 +1,243 @@
+{
+ "title": "Quiz 1 — magnetic symmetry & response tensors",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "Neumann's principle states that …",
+   "options": {
+    "a": "the symmetry group of a physical property contains the point group of the crystal",
+    "b": "every tensor component is non-zero unless forbidden by translations",
+    "c": "only polar tensors are affected by crystal symmetry",
+    "d": "magnetic order never changes response tensors"
+   },
+   "hint": "Symmetry of the cause appears in the effect.",
+   "explanation": "Every response tensor must be invariant under all operations of the (magnetic) point group; components that are not invariant vanish.",
+   "id": 1,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "How does a spin (or magnetic moment) transform?",
+   "options": {
+    "a": "polar vector, T-even",
+    "b": "axial vector, T-odd",
+    "c": "polar vector, T-odd",
+    "d": "axial vector, T-even"
+   },
+   "explanation": "S and L are axial (do not flip under inversion) and odd under time reversal.",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "The spin current J^{S_k}_i = {v_i, S_k}/2 is …",
+   "options": {
+    "a": "polar in i and k, T-odd",
+    "b": "polar in i, axial in k, T-even",
+    "c": "axial in i, polar in k, T-odd",
+    "d": "a scalar"
+   },
+   "explanation": "v is polar & T-odd, S is axial & T-odd; their product is polar(i)×axial(k) and T-even. Hence D(R)=det(R) R⊗R⊗R for σ^k_ij.",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "A type-II (grey) magnetic space group …",
+   "options": {
+    "a": "contains no operation with T",
+    "b": "contains T itself as a symmetry",
+    "c": "contains T only combined with a translation",
+    "d": "only exists for ferromagnets"
+   },
+   "explanation": "Grey groups G1' contain pure time reversal: paramagnets and non-magnetic crystals.",
+   "id": 4,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which symmetry forbids ALL macroscopic T-odd responses (anomalous Hall, magnetic SHE, MOKE …)?",
+   "options": {
+    "a": "inversion P",
+    "b": "a mirror plane",
+    "c": "T or T·τ (time reversal, possibly with a translation)",
+    "d": "PT"
+   },
+   "hint": "Point-group part of T·τ is the identity combined with T.",
+   "explanation": "For macroscopic tensors only the point part matters; T or T·τ maps a T-odd tensor onto minus itself.",
+   "id": 5,
+   "key": "ImMi"
+  },
+  {
+   "type": "mc",
+   "question": "The anomalous Hall effect corresponds to which part of σ_ij?",
+   "options": {
+    "a": "T-even symmetric",
+    "b": "T-odd antisymmetric",
+    "c": "T-even antisymmetric",
+    "d": "T-odd symmetric"
+   },
+   "explanation": "Onsager: σ_ij(M)=σ_ji(−M). The part odd in M is antisymmetric; σ^odd_ij = ε_ijk h_k with Hall vector h.",
+   "id": 6,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "In a PT-symmetric antiferromagnet the electronic bands are …",
+   "options": {
+    "a": "spin split everywhere",
+    "b": "Kramers (doubly) degenerate at every k",
+    "c": "flat",
+    "d": "gapped"
+   },
+   "explanation": "PT maps (k, ↑) to (k, ↓), so every band is doubly degenerate although T is broken.",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which combination characterises an altermagnet?",
+   "options": {
+    "a": "net moment ≠ 0, T present",
+    "b": "compensated, PT present",
+    "c": "compensated, neither PT nor T·τ, non-relativistic spin splitting",
+    "d": "non-magnetic, broken inversion"
+   },
+   "explanation": "Altermagnets (e.g. RuO2, CrSb, MnTe) are compensated collinear magnets whose sublattices are related by rotations, not by translation or inversion.",
+   "id": 8,
+   "key": "ImMi"
+  },
+  {
+   "type": "mc",
+   "question": "Which magnetic point group allows an anomalous Hall effect?",
+   "options": {
+    "a": "m-3m1'",
+    "b": "4'/mmm'",
+    "c": "4/mm'm'",
+    "d": "all of them"
+   },
+   "hint": "Compare the outputs for Pt, RuO2 [001] and Fe [001].",
+   "explanation": "4/mm'm' (bcc Fe, m∥z) allows σ_xy^odd; m-3m1' is grey and 4'/mmm' (RuO2, Néel∥z) forbids the Hall vector.",
+   "id": 9,
+   "key": "ImMi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: run analyze_tensors on examples/vasp/fcc_Pt. How many magnetic symmetry operations does it list (input cell)?",
+   "tol": 0.1,
+   "hint": "res['magnetic']['n_operations']",
+   "explanation": "48 operations of Fm-3m × {1, T} = 96 for the grey group Fm-3m1'.",
+   "id": 10,
+   "key": "Njk="
+  },
+  {
+   "type": "text",
+   "question": "Hands-on: what is the BNS symbol of the magnetic space group of examples/vasp/bcc_Fe_m001 (m ∥ z)?",
+   "hint": "res['magnetic']['bns_symbol']",
+   "explanation": "I4/mm'm' (BNS 139.537): the 4-fold axis is along m; mirrors containing m are primed.",
+   "id": 11,
+   "key": "XSInbSdtbS80SSJb"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: for bcc Fe with m ∥ z, the anomalous Hall vector h points along …",
+   "options": {
+    "a": "x",
+    "b": "y",
+    "c": "z",
+    "d": "it vanishes"
+   },
+   "explanation": "h = (0, 0, σ_xy): the Hall vector is parallel to the magnetisation, as for any ferromagnet with a high-symmetry moment.",
+   "id": 12,
+   "key": "ImMi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many independent T-odd (magnetic) spin-conductivity components does bcc Fe (m ∥ z) have?",
+   "tol": 0.1,
+   "hint": "res['tensors']['spin']['n_odd']",
+   "explanation": "σ^x_xz, σ^x_zx, σ^z_xx and σ^z_zz (plus symmetry-related ones): spin-polarised longitudinal/transverse currents with spin ∥ m.",
+   "id": 13,
+   "key": "NA=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: RuO2 with Néel vector ∥ [001]. Is the anomalous Hall effect allowed?",
+   "options": {
+    "a": "yes, h ∥ z",
+    "b": "yes, h ∥ x",
+    "c": "no"
+   },
+   "explanation": "P4_2'/mnm' (MPG 4'/mmm') forbids any Hall vector: no axial vector is invariant under all its operations.",
+   "id": 14,
+   "key": "ImMi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: RuO2 with Néel ∥ [001]: what is the form of the T-odd σ^z block?",
+   "options": {
+    "a": "σ^z_xy = −σ^z_yx (SHE-like)",
+    "b": "σ^z_xy = +σ^z_yx (spin-splitter)",
+    "c": "σ^z_xx only",
+    "d": "it vanishes"
+   },
+   "explanation": "The symmetric, T-odd σ^z_xy=σ^z_yx is the spin-splitter effect of altermagnetic RuO2 (spin current with spin ∥ Néel vector).",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "text",
+   "question": "Hands-on: BNS symbol of RuO2 with the Néel vector along [100] (examples/vasp/RuO2_Neel100_SOC)?",
+   "explanation": "Pnn'm' (58.398), MPG mm'm': rotating the Néel vector into the plane lowers the symmetry.",
+   "id": 16,
+   "key": "XSInbSdublAiWw=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: for RuO2 with Néel ∥ [100], the Hall vector is along …",
+   "options": {
+    "a": "[100]",
+    "b": "[010]",
+    "c": "[001]",
+    "d": "zero"
+   },
+   "explanation": "h = (0, −σ_xz, 0): the crystal Hall vector is perpendicular to the Néel vector — a hallmark of the crystal Hall effect.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: number of independent T-even spin Hall components of fcc Pt?",
+   "tol": 0.1,
+   "explanation": "Cubic Oh symmetry leaves one component: σ^k_ij = σ_SH ε_kij.",
+   "id": 18,
+   "key": "MQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Why do orbital and spin conductivities obey identical symmetry constraints?",
+   "options": {
+    "a": "because L = S in metals",
+    "b": "L and S are both axial, T-odd vectors",
+    "c": "orbital currents are always zero",
+    "d": "they do not — orbital tensors are rank 2"
+   },
+   "explanation": "The tensor shape only depends on how the operator transforms; L and S transform identically. Their magnitudes differ completely.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "SymPhase analyses a calculation WITHOUT spin–orbit coupling. Which statement is right?",
+   "options": {
+    "a": "the result is exact",
+    "b": "the true symmetry is a larger spin group, so some components allowed by the magnetic group may vanish without SOC",
+    "c": "no magnetic group can be defined",
+    "d": "all spin tensors vanish"
+   },
+   "explanation": "Without SOC spin rotations are decoupled from the lattice (spin groups); the relativistic MSG analysis gives the components that SOC can switch on.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

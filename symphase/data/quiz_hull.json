@@ -1,0 +1,243 @@
+{
+ "title": "Quiz 2 — convex hull & phase stability",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "The formation energy per atom of a compound is …",
+   "options": {
+    "a": "its total energy per atom",
+    "b": "(E_tot − Σ n_i μ_i⁰) / Σ n_i with elemental reference energies μ_i⁰",
+    "c": "the energy above hull",
+    "d": "the cohesive energy"
+   },
+   "explanation": "Energy relative to the elements in their reference states, per atom.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "A phase with E_hull = 0 …",
+   "options": {
+    "a": "is on the convex hull (thermodynamically stable at 0 K)",
+    "b": "is unstable",
+    "c": "has zero formation energy",
+    "d": "is an element"
+   },
+   "explanation": "E_hull = 0 means no combination of other phases has lower energy at that composition.",
+   "id": 2,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "The convex hull is constructed from …",
+   "options": {
+    "a": "the upper envelope of (composition, E_f)",
+    "b": "the lower convex envelope of (composition, E_f) points",
+    "c": "a spline through all points",
+    "d": "only binary compounds"
+   },
+   "explanation": "Lower convex hull in composition–energy space (Qhull in pymatgen).",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "For a metastable phase, E_hull is …",
+   "options": {
+    "a": "its formation energy",
+    "b": "the energy per atom released by decomposing into the hull phases at the same composition",
+    "c": "the barrier for decomposition",
+    "d": "always > 1 eV/atom"
+   },
+   "explanation": "It is a thermodynamic driving force, not a kinetic barrier.",
+   "id": 4,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does SymPhase refuse to build a hull when an element has no reference entry?",
+   "options": {
+    "a": "Qhull needs at least 10 points",
+    "b": "formation energies and the simplex corners require the elemental references",
+    "c": "pymatgen only supports metals",
+    "d": "it does not refuse"
+   },
+   "explanation": "Every element must have at least one pure-element calculation to define μ_i⁰ and the hull corners.",
+   "id": 5,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Can you put Materials Project energies and your own VASP energies into one hull?",
+   "options": {
+    "a": "always",
+    "b": "only if computed with identical settings (functional, PAW, U, corrections …)",
+    "c": "never, pymatgen forbids it",
+    "d": "yes, if ENCUT is the same"
+   },
+   "explanation": "Total energies are only comparable for identical computational settings; MP uses its own correction scheme (MP2020).",
+   "id": 6,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which statement about E_hull and synthesizability is most accurate?",
+   "options": {
+    "a": "E_hull > 0 can never be synthesised",
+    "b": "many metastable phases with E_hull of a few tens of meV/atom are made; there is no universal cut-off",
+    "c": "everything below 1 eV/atom is stable",
+    "d": "E_hull determines the melting point"
+   },
+   "explanation": "Kinetics, entropy and finite temperature matter; typical screening windows are 25–100 meV/atom.",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "The stability margin (equilibrium reaction energy) of a stable phase is …",
+   "options": {
+    "a": "its E_hull",
+    "b": "how far it lies below the hull formed by all OTHER phases (negative = robust)",
+    "c": "its band gap",
+    "d": "always zero"
+   },
+   "explanation": "Removing the phase and recomputing the hull gives the energy it gains relative to its neighbours.",
+   "id": 8,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: load examples/hull/NiAl_binary.csv. How many entries are stable (elements included)?",
+   "tol": 0.1,
+   "hint": "len(h.pd.stable_entries)",
+   "explanation": "Ni, Al, Ni3Al, NiAl, Ni2Al3 and NiAl3 (toy data).",
+   "id": 9,
+   "key": "Ng=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on (Ni–Al): E_hull of 'Ni5Al3-Pt5Ga3' in meV/atom?",
+   "tol": 0.6,
+   "unit": "meV/atom",
+   "explanation": "It decomposes into 1/2 Ni3Al + 1/2 NiAl, 42.5 meV/atom higher.",
+   "id": 10,
+   "key": "NS4yNA=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on (Ni–Al): 'NiAl2-hyp' decomposes into …",
+   "options": {
+    "a": "NiAl + Al",
+    "b": "Ni2Al3 + NiAl3",
+    "c": "Ni3Al + Al",
+    "d": "it is stable"
+   },
+   "explanation": "0.556 Ni2Al3 + 0.444 NiAl3: the two hull phases bracketing x(Ni)=1/3.",
+   "id": 11,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on (Ni–Al): E_hull of the L1₀ polymorph 'NiAl-L10' (meV/atom)?",
+   "tol": 0.6,
+   "unit": "meV/atom",
+   "explanation": "A polymorph decomposes into the ground state of the same composition: −0.540 − (−0.665) = 125 meV/atom.",
+   "id": 12,
+   "key": "NTIx"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on (Ti–Ni–Sn): stability margin of half-Heusler TiNiSn in meV/atom?",
+   "tol": 1.0,
+   "unit": "meV/atom",
+   "hint": "look at 'stability_margin' in h.table()",
+   "explanation": "−97.4 meV/atom: removing TiNiSn from the hull would raise the energy at its composition by that amount.",
+   "id": 13,
+   "key": "NC43OS0="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on (Ti–Ni–Sn): 'TiNiSn2-hyp' decomposes into …",
+   "options": {
+    "a": "TiSn2 + Ni3Sn4",
+    "b": "TiNiSn + Sn",
+    "c": "TiNi2Sn + Sn",
+    "d": "it is stable"
+   },
+   "explanation": "0.75 TiNiSn + 0.25 Sn, E_hull = 127.5 meV/atom.",
+   "id": 14,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on (Ti–Zr–Ni–Sn): E_hull of the (Ti0.5Zr0.5)NiSn SQS in meV/atom?",
+   "tol": 0.3,
+   "unit": "meV/atom",
+   "explanation": "5 meV/atom above the TiNiSn + ZrNiSn tie-line: a small positive mixing energy.",
+   "id": 15,
+   "key": "MC41"
+  },
+  {
+   "type": "mc",
+   "question": "Experimentally (Ti,Zr)NiSn solid solutions exist although the SQS lies above the hull. The main reason is …",
+   "options": {
+    "a": "DFT errors only",
+    "b": "configurational entropy −TΔS_mix lowers the free energy at synthesis temperatures",
+    "c": "pressure",
+    "d": "spin–orbit coupling"
+   },
+   "explanation": "A few meV/atom of mixing enthalpy is easily overcome by ideal mixing entropy at 1000 K (next question).",
+   "id": 16,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Ideal mixing on ONE sublattice per formula unit of (Ti0.5Zr0.5)NiSn (3 atoms). What is T·S_mix at 1000 K in meV per atom?",
+   "tol": 0.5,
+   "unit": "meV/atom",
+   "hint": "S_mix = k_B ln 2 per mixing site; k_B = 8.617e-5 eV/K",
+   "explanation": "k_B·1000 K·ln2 = 59.7 meV per mixing site = 19.9 meV/atom ≫ 5 meV/atom mixing enthalpy.",
+   "id": 17,
+   "key": "OS45MQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on (Ti–Zr–Hf–Ni–Sn): the high-entropy (TiZrHf)NiSn SQS decomposes into …",
+   "options": {
+    "a": "TiNiSn + ZrNiSn + HfNiSn",
+    "b": "(Zr,Hf)NiSn + TiNiSn",
+    "c": "TiNi2Sn + Sn",
+    "d": "it is stable"
+   },
+   "explanation": "2/3 (Zr0.5Hf0.5)NiSn + 1/3 TiNiSn, E_hull ≈ 2.7 meV/atom: in the toy data (Zr,Hf)NiSn is itself on the hull.",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How does SymPhase visualise systems with more than four elements?",
+   "options": {
+    "a": "it cannot",
+    "b": "grids of all binary/ternary sub-system hulls, E_hull bar charts and pseudo-binary slices",
+    "c": "a 5D projection",
+    "d": "only text output"
+   },
+   "explanation": "plot_subsystems, plot_ehull_bar and plot_pseudo_binary work for any number of elements.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does `symphase hull -n 40` (or MPI) parallelise?",
+   "options": {
+    "a": "only plotting",
+    "b": "the Qhull construction itself",
+    "c": "per-entry E_hull/decompositions/margins, candidate screening, VASP-folder parsing and pseudo-binary hull points",
+    "d": "nothing, -n is ignored"
+   },
+   "explanation": "The hull construction (Qhull) is serial and fast; everything done per entry or per candidate is distributed over processes (one node) or MPI ranks (many nodes).",
+   "id": 20,
+   "key": "ImMi"
+  }
+ ]
+}
