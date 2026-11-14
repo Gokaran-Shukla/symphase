@@ -21,3 +21,4 @@ contain only POSCAR + INCAR (moments from `MAGMOM`).
 | `Conical_J1J2_field` | J₁–J₂ chain in B = 2 T | — | conical spiral via `--supercell auto` (analytic cone angle) |
 | `Distorted_spiral_K` | J₁–J₂ chain + in-plane easy axis | — | distorted spiral (3q harmonic), `--scan` |
 | `Skyrmion_triangular` | triangular FM + interfacial DMI + field | — | 3Q skyrmion crystal, N_sk = −3 per 10×10 cell |
+| `MagnonPhonon_FM_chain` | FM chain + springs + magnetoelastic ∂J/∂d | — | magnon polarons, 1.11 meV anticrossing gap |

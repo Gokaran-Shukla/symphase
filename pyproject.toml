@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Gokaran Shukla"}]
 requires-python = ">=3.9"
-dependencies = ["numpy>=1.21", "spglib>=2.0", "pymatgen>=2023.1", "matplotlib>=3.5"]
+dependencies = ["numpy>=1.21", "scipy>=1.7", "spglib>=2.0", "pymatgen>=2023.1", "matplotlib>=3.5"]
 keywords = ["VASP", "magnetic space group", "spin Hall", "orbital Hall", "convex hull", "phase stability", "DFT"]
 classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: Physics",
                "License :: OSI Approved :: MIT License"]
@@ -19,6 +19,9 @@ classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engin
 mp = ["mp-api"]
 mpi = ["mpi4py"]
 notebooks = ["jupyter", "ipywidgets"]
+ssg = ["findspingroup>=0.16"]        # OSSG numbers of Chen et al. (2024), Python >= 3.11
+phonons = ["phonopy>=2.20"]         # phonopy force constants (magnon–phonon) and QHA cross-checks
+full = ["mp-api", "findspingroup>=0.16", "phonopy>=2.20", "jupyter", "ipywidgets"]
 dev = ["pytest"]
 
 [project.scripts]

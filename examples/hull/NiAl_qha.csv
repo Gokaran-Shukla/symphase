@@ -1,0 +1,18 @@
+# TOY DATA for SymPhase tutorials - not DFT results
+# Ni-Al with quasi-harmonic Debye-Grueneisen parameters (volume in A^3/atom, bulk modulus in GPa)
+# and an intrinsic anharmonic parameter anh_a (1/K): F_anh = -(3/2) k_B a T^2 per atom
+formula,energy,energy_type,name,debye_T,volume,bulk_modulus,bulk_modulus_prime,gruneisen,anh_a
+Ni,-5.570000,per_atom,Ni-fcc,450,10.90,186,4.6,1.95,
+Al,-3.750000,per_atom,Al-fcc,428,16.60,76,4.6,2.20,
+Ni,-5.545000,per_atom,Ni-hcp,440,10.95,180,4.6,1.95,
+Al,-3.720000,per_atom,Al-hcp,420,16.70,74,4.6,2.20,
+Ni3Al,-5.545000,per_atom,Ni3Al-L12,460,11.70,175,4.6,1.95,
+Ni3Al,-5.533000,per_atom,Ni3Al-D019,445,11.80,165,4.8,2.60,3.0e-5
+Ni5Al3,-5.392500,per_atom,Ni5Al3-Pt5Ga3,455,12.30,165,4.6,1.95,
+Ni2Al,-5.433333,per_atom,Ni2Al-hyp,450,12.10,160,4.6,1.95,
+NiAl,-5.325000,per_atom,NiAl-B2,470,12.00,160,4.5,1.90,
+NiAl,-5.200000,per_atom,NiAl-L10,430,12.30,150,4.6,2.00,
+Ni2Al3,-5.063000,per_atom,Ni2Al3-D513,450,13.10,135,4.6,2.00,
+NiAl2,-4.826667,per_atom,NiAl2-hyp,440,14.00,120,4.6,2.05,
+NiAl3,-4.625000,per_atom,NiAl3-D011,430,14.70,105,4.6,2.10,
+NiAl4,-4.414000,per_atom,NiAl4-hyp,430,15.20,95,4.6,2.15,

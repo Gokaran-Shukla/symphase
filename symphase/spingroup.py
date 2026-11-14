@@ -467,3 +467,41 @@ def identify_ssg(lat, frac, types, sg, symprec=1e-3, mag_symprec=0.05):
                label=f"G = {len(sg['ops'])} lattice ops, spin-preserving subgroup {nH} ops, "
                      f"spin point group of order {len(Qs)} ⊗ {'m1' if kind == 'coplanar' else '1'}")
     return out
+
+
+# ----------------------------------------------------------------------------
+#  oriented spin space group number (collinear, coplanar AND non-coplanar)
+# ----------------------------------------------------------------------------
+def identify_ossg(lat, frac, symbols, mags, space_tol=0.02, mtol=0.02):
+    """Oriented spin-space-group (OSSG) index of X. Chen et al., Phys. Rev. X 14, 031038 (2024),
+    for any magnetic order, through the FindSpinGroup package of the same group
+    (pip install findspingroup; Apache-2.0).  Returns a dict; available=False if the package is absent.
+
+    The index (e.g. 136.65.1.1.L for RuO2, 194.6.1.1.P for Mn3Sn) is the four-index SSG
+    nomenclature of Chen et al. plus a suffix for the spin-only part.  The magnetic space group
+    that FindSpinGroup derives for the SOC case is returned too (msg_bns) and can be compared
+    with SymPhase's own spglib result as an independent consistency check."""
+    try:
+        import warnings
+        import findspingroup as fsg
+    except ImportError:
+        return dict(available=False, note="install 'findspingroup' (pip install findspingroup) for OSSG numbers "
+                                           "of non-collinear orders")
+    lat = np.asarray(lat, float)
+    mags = np.asarray(mags, float)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = fsg.find_spin_group_basic_from_data("symphase", lat, np.asarray(frac, float) % 1.0, list(symbols),
+                                                [1.0] * len(symbols), mags, input_spin_setting="cartesian",
+                                                space_tol=space_tol, mtol=mtol)
+    pick = ("index", "ossg_symbol_linear", "conf", "magnetic_phase", "spin_space_point_group_hm",
+            "nontrivial_spin_space_point_group_hm", "g0_number", "g0_symbol", "l0_number", "l0_symbol", "it", "ik",
+            "msg_bns_number", "msg_symbol", "net_moment", "ssg_is_polar", "ssg_is_chiral")
+    out = {k: r.get(k) for k in pick}
+    out["available"] = True
+    try:
+        from importlib.metadata import version
+        out["findspingroup_version"] = version("findspingroup")
+    except Exception:  # noqa: BLE001
+        out["findspingroup_version"] = "?"
+    return out

@@ -1185,3 +1185,253 @@ build_bank(os.path.join(DATA, "quiz_supercells.json"), "Quiz 5 — magnetic supe
 quiz_nb("13_quiz_magnetic_supercells.ipynb", "Quiz 5 — magnetic supercells: multi-Q, conical and distorted spirals (20 questions)",
         SC, "supercells", "Work through **12_tutorial_magnetic_supercells.ipynb** and `docs/SUPERCELL_WORKFLOW.md` first. "
         "Questions 6–11 and 12–17 are hands-on.", SC_HELPER)
+
+
+# =============================================================================
+# 14  OSSG numbers + magnon–phonon coupling;  15  QHA + anharmonic;  16 quiz
+# =============================================================================
+OL_HELPER = 'import numpy as np, spglib, math, copy, warnings\nimport matplotlib.pyplot as plt\nwarnings.simplefilter("ignore")\nfrom symphase import analyze_tensors\nfrom symphase.tensors import read_poscar\nfrom symphase.magphon import analyse_mp, bond_springs, read_magnetoelastic, plot_mp\nfrom symphase.qha import QHA, plot_qha, EV_A3_TO_GPA\nfrom symphase.thermo import FiniteTHull, KB\nfrom symphase.hull import load_csv\na = 3.0\nlat, fr = np.diag([a, 12, 12]), np.zeros((1, 3))\nds = spglib.get_symmetry_dataset((lat, fr, [0])); m0 = np.array([[0, 0, 2.0]])\nmpdir = f"{EX}/vasp/MagnonPhonon_FM_chain"\ndef fm_chain(lam=6.0, dJdr=None, J=-5.0, K=0.3, n_per=120):\n    me = None\n    if lam:\n        G = np.zeros((3, 3)); G[0, 2] = G[2, 0] = lam\n        me = {(0, 0, (1, 0, 0)): [(0, G)]}\n    return analyse_mp(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, springs=[(0, 0, [1, 0, 0], 600.0, 300.0)],\n                      magnetoelastic=me, dJdr=dJdr, J=[J], K=K, K_axis=[0, 0, 1], spin=1.0, rmax=3.1, n_per=n_per)\ntri = f"{EX}/vasp/Triangular_120AFM_INCAR"\ndef triangular(dJdr=1.5):\n    t = analyze_tensors(tri, tensors="charge", ossg="no")\n    p = read_poscar(f"{tri}/POSCAR"); syms = t["structure"]["symbols"]; ty = [0] * len(syms)\n    d3 = spglib.get_symmetry_dataset((p["lattice"], p["frac"], ty))\n    return analyse_mp(p["lattice"], p["frac"], ty, syms, np.array(t["structure"]["moments"]), d3.rotations, d3.translations,\n                      springs=bond_springs(p["lattice"], p["frac"], ty, 3.6, 400.0, 150.0), dJdr=[dJdr], J=[1.0],\n                      spin=1.5, rmax=3.6, n_per=40)\nni = QHA.debye_gruneisen(0.0, 10.90, 186.0, 4.6, 450.0, 1.95)          # toy fcc Ni (Debye–Grüneisen)\nqcsv = f"{EX}/hull/NiAl_qha.csv"\n'
+
+save([
+    md(r"""# SymPhase tutorial 14 — spin-space-group numbers for any order, and magnon–phonon coupling
+
+**Part A.** Every magnetic order — collinear, coplanar or non-coplanar — gets the **oriented spin-space-group (OSSG) number** of
+X. Chen *et al.*, Phys. Rev. X **14**, 031038 (2024). SymPhase calls their FindSpinGroup package (`pip install findspingroup`)
+and cross-checks the magnetic space group it derives against its own spglib result.
+
+**Part B.** Magnons and phonons as **one harmonic system**: spin deviations $(X_a, Y_a)$ and atomic displacements/momenta
+$(u_{j\alpha}, P_{j\alpha})$ are canonical pairs; the bond-length dependence of the exchange,
+$J_{ij}(\mathbf d_0+\delta\mathbf d)=J_{ij}+\sum_\gamma G^\gamma_{ij}\,\delta d_\gamma$, couples them. The Bloch Hessian is diagonalised
+symplectically → hybrid "magnon-polaron" bands with a magnon weight per mode."""),
+    SETUP,
+    code(OL_HELPER),
+    md("## A. OSSG numbers (Chen et al. 2024) for collinear and non-collinear orders"),
+    code("""rows = []
+for d in ["RuO2_Neel001_noSOC", "MnTe_altermagnet_INCAR", "Mn3Sn_allin", "Triangular_120AFM_INCAR", "CantedChain_DMI_INCAR"]:
+    r = analyze_tensors(f"{EX}/vasp/{d}", tensors="charge")
+    o = r["spin_group"]["ossg"]
+    rows.append((d, o["index"], o["conf"], o["spin_space_point_group_hm"], o["msg_bns_number"], r["magnetic"]["bns_number"]))
+print(f"{'example':<26s} {'OSSG index':<16s} {'order':<10s} {'spin PG':<8s} MSG(FSG)  MSG(SymPhase)")
+for row in rows:
+    print(f"{row[0]:<26s} {row[1]:<16s} {row[2]:<10s} {row[3]:<8s} {row[4]:<9s} {row[5]}")"""),
+    md(r"""* The index starts with $G_0.L_0$: $G_0$ is the space group of the spatial parts and $L_0$ the spin-preserving subgroup — it coincides with
+  SymPhase's own subgroup $H$ (RuO₂: Cmmm 65, MnTe: P-3m1 164). Then follow the enumeration indices and a suffix for the spin-only
+  group (**L** collinear, **P** coplanar, none for non-coplanar). Full definitions: Chen *et al.*, PRX **14**, 031038 (2024).
+* Collinear SSGs are also labelled by SymPhase's own scheme (BNS number of the $C_{2\perp}\to T$ black-and-white group, 1421 groups) —
+  both are printed by `symphase tensors`.
+* The magnetic space group that FindSpinGroup derives for the SOC case agrees with SymPhase's spglib result in every case: an independent check.
+
+The same works for the non-coplanar **skyrmion crystal** of tutorial 12 (written by the supercell workflow):"""),
+    code("""from symphase.supercell import run_supercell, write_outputs
+from symphase.magnons import read_exchange_file
+import tempfile
+sk = f"{EX}/vasp/Skyrmion_triangular"; ps = read_poscar(f"{sk}/POSCAR")
+dss = spglib.get_symmetry_dataset((ps["lattice"], ps["frac"], [0]))
+rsk = run_supercell(ps["lattice"], ps["frac"], [0], ["Mn"], np.array([[0, 0, 2.0]]), dss.rotations, dss.translations,
+                    size=[10, 10, 1], restarts=2, spectrum=False, exchange=read_exchange_file(f"{sk}/J_DMI.dat"), spin=1.0,
+                    rmax=3.1, field=[0, 0, 14])
+out = write_outputs(rsk, ["Mn"], np.array([[0, 0, 2.0]]), tempfile.mkdtemp())
+o = analyze_tensors(out, tensors="charge")["spin_group"]["ossg"]
+print("skyrmion crystal:", rsk["character"]["cls"], "->  OSSG", o["index"], o["conf"], " MSG", o["msg_symbol"], o["msg_bns_number"])"""),
+    md(r"""## B. Magnon–phonon coupling
+
+### B1. Ferromagnetic chain with a magnetoelastic (pseudo-dipolar) term
+
+$J=-5$ meV, easy axis $K=0.3$ meV, $S=1$, Fe masses, springs $k_L=600$, $k_T=300$ meV/Å². The derivative of the bond tensor along the chain
+has a symmetric $xz$ element $\lambda=6$ meV/Å (`examples/vasp/MagnonPhonon_FM_chain/magnetoelastic.dat`): a longitudinal displacement tilts
+the easy axis → linear coupling to the **longitudinal** acoustic phonon. Colour = magnon weight; dashed = uncoupled."""),
+    code("""r = fm_chain()
+plot_mp(r, title=f"FM chain: magnon polarons, gap {r['max_gap']:.3f} meV");
+for g in r["gaps"]:
+    print(f"anticrossing at k = {g['x']:.3f} 1/Å, ω ≈ {g['omega']:.3f} meV, gap = {g['gap']:.4f} meV")"""),
+    md(r"""**Analytic check.** One magnon ($\omega_m$) coupled to one phonon ($\omega_p$, $\kappa=\hbar^2/M$) through $H_c = g\,X u$ obeys
+$(\omega^2-\omega_m^2)(\omega^2-\omega_p^2)=\omega_m\kappa g^2$ with $g = 2\lambda S^{3/2}|\sin ka|$ here:"""),
+    code("""from symphase.magphon import HB2_AMU
+k = r["q"][:, 0]; S, J, K, lam = 1.0, -5.0, 0.3, 6.0
+wm = 2 * S * abs(J) * (1 - np.cos(k * a)) + 2 * K * S
+kap = HB2_AMU / 55.845; wL = np.sqrt(kap * 1200 * (1 - np.cos(k * a))); wT = np.sqrt(kap * 600 * (1 - np.cos(k * a)))
+g = 2 * lam * S ** 1.5 * np.abs(np.sin(k * a)); B = wm**2 + wL**2; C = wm**2 * wL**2 - wm * kap * g**2
+ref = np.sort(np.c_[np.sqrt((B + np.sqrt(B*B - 4*C)) / 2), np.sqrt(np.maximum((B - np.sqrt(B*B - 4*C)) / 2, 0)), wT, wT], axis=1)
+print("max |SymPhase − analytic| =", np.abs(r["omega"][1:] - ref[1:]).max(), "meV")"""),
+    md("The gap grows **linearly** with the magnetoelastic constant (first-order level repulsion):"),
+    code("""lams = [2, 4, 6, 8]
+gaps = [fm_chain(lam=l, n_per=200)["max_gap"] for l in lams]
+fig, ax = plt.subplots(figsize=(4.6, 3.2)); ax.plot(lams, gaps, "o-", color="#16325c")
+ax.set_xlabel("λ (meV/Å)"); ax.set_ylabel("anticrossing gap (meV)")
+print(dict(zip(lams, np.round(gaps, 4))))"""),
+    md(r"""### B2. Exchange striction needs non-collinear spins
+
+Isotropic striction $G^\gamma = (\mathrm dJ/\mathrm dr)\,\hat r_\gamma\,\mathbb 1$ enters as $x_a\cdot v_b$ — zero for collinear order. The FM chain is
+unchanged, the 120° triangular antiferromagnet couples:"""),
+    code("""r0 = fm_chain(lam=0, dJdr=[3.0])
+print("collinear FM chain, dJ/dr = 3 meV/Å:  max |ω − ω0| =", np.nanmax(np.abs(r0["omega"] - r0["omega0"])), "meV")
+rt = triangular(dJdr=1.5)
+print("120° triangular, dJ/dr = 1.5 meV/Å :  max |ω − ω0| =", round(float(np.nanmax(np.abs(rt["omega"] - rt["omega0"]))), 4),
+      "meV;", rt["n_magnon"], "magnon +", rt["n_phonon"], "phonon branches")
+plot_mp(rt, title="120° triangular AFM + exchange striction", ylim=(0, 12));"""),
+    md(r"""### B3. Phonons from phonopy
+
+`symphase magnons ... --phonons phonopy_params.yaml` uses DFT force constants (same primitive cell and atom order as the POSCAR).
+SymPhase converts phonopy's dynamical matrix to $\Phi(\mathbf k)$ in its own phase convention — identical to the spring model when the
+force constants are those springs (checked to $10^{-12}$ in `tests/`).
+
+### B4. Command line
+```bash
+cd examples/vasp/MagnonPhonon_FM_chain
+symphase magnons --J -5 --K 0.3 --K-axis 0 0 1 --spin 1 --rmax 3.1 --phonons springs.dat --magnetoelastic magnetoelastic.dat
+symphase magnons --J 1.0 --rmax 3.6 --springs-nn 400 150 3.6 --dJdr 1.5           # 120° triangular (Triangular_120AFM_INCAR)
+symphase magnons ... --phonons phonopy_params.yaml --magnetoelastic dJ.dat          # DFT phonons
+```"""),
+], "14_tutorial_ossg_magnon_phonon.ipynb")
+
+save([
+    md(r"""# SymPhase tutorial 15 — quasi-harmonic and anharmonic free energies, and finite-T hulls
+
+$$G(T,P=0)=\min_V\Big[E_\text{static}(V)+F_\text{vib}(V,T)+F_\text{anh}(V,T)\Big]$$
+
+* $E_\text{static}$: Birch–Murnaghan EOS (fit to E–V data, or $E_0,V_0,B_0,B_0'$);
+* $F_\text{vib}$: phonopy `thermal_properties.yaml` at several volumes (the phonopy-QHA workflow) **or** the Debye–Grüneisen model
+  $\theta(V)=\theta_0\exp[\gamma_0(1-(V/V_0)^q)/q]$;
+* $F_\text{anh}=-\tfrac32 k_B\,a\,T^2$ per atom (intrinsic anharmonicity, $a>0$ lowers $F$; $S_\text{anh}=3k_Ba T$), or a table $F_\text{anh}(T)$ from TDEP / thermodynamic integration.
+
+Outputs: $V(T)$, volumetric $\beta=\mathrm d\ln V/\mathrm dT$ (linear $\alpha=\beta/3$), $B_T(T)$, $C_P(T)$ — and $G(T)$ for the finite-T convex hull."""),
+    SETUP,
+    code(OL_HELPER),
+    md("## 1. Toy fcc Ni in the Debye–Grüneisen model ($V_0=10.9$ Å³, $B_0=186$ GPa, $\\theta_0=450$ K, $\\gamma_0=1.95$)"),
+    code("""print(ni.summary())
+plot_qha(ni, np.arange(0, 1201, 20), title="toy Ni: quasi-harmonic thermal expansion");
+p = ni.properties([300, 600, 1000])
+for T, V, b, al, B, cp in zip(p["T"], p["V"], p["beta"], p["alpha_lin"], p["B_T"], p["Cp"]):
+    print(f"T = {T:5.0f} K  V = {V:.4f} Å³  β = {b*1e6:5.1f}e-6/K  α = {al*1e6:5.1f}e-6/K  B_T = {B:6.1f} GPa  C_P = {cp:.3f} k_B")
+print("zero-point expansion: V(0 K) =", round(ni.equilibrium(0)[0], 4), "Å³ vs static V0 =", ni.V0)"""),
+    md(r"""**Checks.** (i) $\gamma_0=0$ ⇒ $\theta$ independent of $V$ ⇒ no thermal expansion; (ii) the Grüneisen relation $\beta B_T V=\gamma C_V$;
+(iii) the anharmonic term shifts $G$ by exactly $-\tfrac32k_BaT^2$."""),
+    code("""q0 = QHA.debye_gruneisen(0.0, 10.9, 186.0, 4.6, 450.0, 0.0)
+print("γ = 0: V(T) =", np.round(q0.properties([10, 600, 1200])["V"], 6))
+p = ni.properties([800.0]); gam = 1.95 * p["V"][0] / ni.V0
+print("Grüneisen ratio βBV/(γ·3k_B) at 800 K =", round(p["beta"][0] * p["B_T"][0] / EV_A3_TO_GPA * p["V"][0] / (gam * 3 * KB), 4),
+      "(→ C_V/3k_B < 1)")
+qa = QHA.debye_gruneisen(0.0, 10.9, 186.0, 4.6, 450.0, 0.0, anh_a=2e-5)
+print("anharmonic shift at 1000 K:", round((qa.G(1000) - q0.G(1000)) * 1e3, 6), "meV;  −3/2 k_B a T² =",
+      round(-1.5 * KB * 2e-5 * 1e6 * 1e3, 6), "meV")"""),
+    md(r"""## 2. Phonopy workflow
+
+Put `e-v.dat` (volume and energy per cell) and `thermal_properties-1.yaml … -N.yaml` (one phonopy run per volume) in one folder:
+`QHA.from_phonopy_dir(folder, anh_a=...)`. The minimisation is identical to phonopy-qha — tested against `phonopy.PhonopyQHA`
+($V$ to $2\times10^{-4}$ Å³, $G$ to $10^{-6}$ eV/atom). Here we build such a folder from the Debye–Grüneisen model and read it back:"""),
+    code("""import tempfile, os
+from symphase.qha import birch_murnaghan, debye_theta
+from symphase.thermo import debye_free_energy
+tmp = tempfile.mkdtemp(); nat = 4; EVK = 96.48533212
+Vs = ni.V0 * np.linspace(0.94, 1.08, 9); Ts = np.arange(0, 1201, 20.0)
+with open(f"{tmp}/e-v.dat", "w") as fh:
+    for V in Vs: fh.write(f"{V*nat:.8f} {birch_murnaghan(V, 0.0, ni.V0, ni.B0, ni.Bp)*nat:.10f}\\n")
+for k, V in enumerate(Vs):
+    with open(f"{tmp}/thermal_properties-{k+1}.yaml", "w") as fh:
+        fh.write(f"natom: {nat}\\nthermal_properties:\\n")
+        for T in Ts:
+            fh.write(f"- temperature: {T}\\n  free_energy: {debye_free_energy(T, debye_theta(V, ni.V0, 450.0, 1.95))*nat*EVK:.10f}\\n")
+qp = QHA.from_phonopy_dir(tmp)
+for T in (300, 900):
+    print(f"T = {T} K:  V from tables {qp.equilibrium(T)[0]:.5f}   analytic model {ni.equilibrium(T)[0]:.5f}  Å³/atom")"""),
+    md(r"""## 3. Finite-temperature convex hull: harmonic → quasi-harmonic → anharmonic
+
+`examples/hull/NiAl_qha.csv` (toy data) adds `volume, bulk_modulus, bulk_modulus_prime, gruneisen` and `anh_a` columns. The metastable
+polymorph Ni₃Al-D0₁₉ has a slightly lower θ_D, a **larger Grüneisen parameter** and some intrinsic anharmonicity — it softens more on heating."""),
+    code("""ents = load_csv(qcsv)
+noanh = copy.deepcopy(ents)
+for e in noanh: e.data.pop("anh_a", None)
+models = [("harmonic Debye", noanh, "debye"), ("quasi-harmonic", noanh, "qha-debye"), ("QHA + anharmonic", ents, "qha-debye")]
+Tg = np.arange(0, 1601, 50)
+fig, ax = plt.subplots(figsize=(6.4, 3.8))
+for (lab, E, vib), c in zip(models, ["0.5", "#16325c", "#c0392b"]):
+    ft = FiniteTHull(E, vib=vib, mixing=False)
+    eh = [{r_["name"]: r_["e_hull"] for r_ in ft.hull_at(T).table()}["Ni3Al-D019"] * 1e3 for T in Tg]
+    Ts = ft.stabilisation_temperature("Ni3Al-D019", Tmax=3000)
+    ax.plot(Tg, eh, lw=2.2, color=c, label=f"{lab}: T* = {Ts:.0f} K")
+    print(f"{lab:18s}  T* = {Ts:7.1f} K")
+ax.set_xlabel("T (K)"); ax.set_ylabel("E$_{hull}$(Ni$_3$Al-D0$_{19}$) (meV/atom)"); ax.legend(fontsize=9); ax.set_ylim(bottom=-0.5)"""),
+    md(r"""Volume-dependent phonons (QHA) almost halve the transition temperature here; intrinsic anharmonicity lowers it further.
+
+## 4. Command line
+```bash
+symphase hull --csv examples/hull/NiAl_qha.csv --temperatures 0 600 1200 --vib qha-debye --no-mixing
+symphase hull --csv my.csv --temperatures 300 900 --vib qha        # CSV column qha = folder with e-v.dat + thermal_properties-*.yaml
+symphase run Ni Al temperatures="300 900" vib=qha-debye             # elements-only workflow (with the extra CSV columns)
+```
+Continue with **16_quiz_ossg_magnon_phonon_qha.ipynb**."""),
+], "15_tutorial_qha_anharmonic.ipynb")
+
+OL = [
+    dict(type="mc", question="What does the OSSG number of Chen et al. (2024) add to SymPhase's own collinear SSG label?",
+         options={"a": "nothing", "b": "a standard number for every order, including coplanar and non-coplanar ones",
+                  "c": "the magnon gap", "d": "only the crystal space group"},
+         answer="b", explanation="SymPhase numbers collinear SSGs via the C2⊥→T black-and-white group; FindSpinGroup gives the four-index OSSG for any order."),
+    dict(type="mc", question="Hands-on: the OSSG index of Mn3Sn (all-in coplanar 120° order, examples/vasp/Mn3Sn_allin) is …",
+         options={"a": "194.164.1.1.L", "b": "194.6.1.1.P", "c": "191.187.3.1.P", "d": "136.65.1.1.L"},
+         answer="b", explanation="Coplanar ('P' suffix), G0 = P6_3/mmc (194), spin point group 6/mmm."),
+    dict(type="mc", question="Hands-on: the OSSG index of the altermagnet MnTe is …",
+         options={"a": "194.164.1.1.L", "b": "194.6.1.1.P", "c": "229.229.1.1.L", "d": "191.6.1.2"},
+         answer="a", explanation="Collinear ('L'), spin point group ∞/mm; the same index appears in the FindSpinGroup documentation."),
+    dict(type="mc", question="Hands-on: which suffix does the non-coplanar skyrmion crystal of tutorial 12 get (OSSG 191.6.1.2)?",
+         options={"a": "L", "b": "P", "c": "none (non-coplanar)", "d": "P2"},
+         answer="c", explanation="Collinear orders end in L, coplanar in P; a non-coplanar order has a trivial spin-only group and no suffix."),
+    dict(type="mc", question="Why does SymPhase compare the MSG derived by FindSpinGroup with its own spglib result?",
+         options={"a": "to pick the larger group", "b": "as an independent consistency check of moments, tolerances and frames",
+                  "c": "because spglib cannot find MSGs", "d": "it does not"},
+         answer="b", explanation="Two independent codes must agree on the SOC magnetic group; a mismatch flags tolerance or input problems."),
+    dict(type="mc", question="Which canonical variables describe one spin in the joint magnon–phonon model?",
+         options={"a": "S_x and S_z", "b": "(X, Y) with S⊥ = √S (X x + Y y) and [X, Y] = i", "c": "the angles θ and φ only", "d": "u and P"},
+         answer="b", explanation="Holstein–Primakoff to linear order: transverse deviations scaled by √S are a canonical pair, like (u, P) for atoms."),
+    dict(type="mc", question="Why does isotropic exchange striction (G = dJ/dr r̂ 𝟙) not hybridise magnons and phonons in a collinear magnet?",
+         options={"a": "the phonons are too fast", "b": "the linear coupling ∝ x_a·v_b vanishes when all spins are (anti)parallel",
+                  "c": "dJ/dr is always zero", "d": "it does"},
+         answer="b", explanation="Only non-collinear order (x_a·v_b ≠ 0) or anisotropic/DMI derivatives give terms linear in both u and the magnon."),
+    dict(type="num", question="Hands-on: FM chain of tutorial 14 (λ = 6 meV/Å): largest anticrossing gap in meV (2 decimals)?",
+         answer=1.11, tol=0.02, unit="meV", hint="fm_chain()['max_gap']",
+         explanation="≈ 1.11 meV where the magnon crosses the longitudinal acoustic phonon."),
+    dict(type="mc", question="Hands-on: how does the anticrossing gap scale with the magnetoelastic constant λ?",
+         options={"a": "∝ λ² ", "b": "linearly ∝ λ", "c": "independent of λ", "d": "∝ √λ"},
+         answer="b", explanation="0.37, 0.74, 1.11, 1.48 meV for λ = 2, 4, 6, 8 meV/Å: first-order level repulsion, gap ≈ 2|coupling|."),
+    dict(type="mc", question="In the chain example, which phonon branch hybridises with the magnon?",
+         options={"a": "both transverse acoustic", "b": "the longitudinal acoustic phonon", "c": "none", "d": "an optical phonon"},
+         answer="b", explanation="Only ∂J/∂d_x (along the chain) is non-zero, so only longitudinal displacements u_x couple."),
+    dict(type="num", question="Hands-on: 120° triangular AFM with dJ/dr = 1.5 meV/Å: max |ω − ω_uncoupled| in meV (3 decimals)?",
+         answer=0.033, tol=0.003, unit="meV", hint="triangular(1.5)",
+         explanation="≈ 0.033 meV: non-collinear spins make isotropic striction couple linearly."),
+    dict(type="mc", question="What must phonopy force constants satisfy to be used with --phonons phonopy_params.yaml?",
+         options={"a": "nothing", "b": "same primitive cell and atom order as the POSCAR (SymPhase checks it)", "c": "a 1x1x1 supercell", "d": "no magnetism"},
+         answer="b", explanation="Φ(k) is mapped atom by atom onto the magnetic model; SymPhase refuses a different cell or order."),
+    dict(type="mc", question="How is the magnon weight of a hybrid mode defined?",
+         options={"a": "fraction of the energy in spins", "b": "fraction of the symplectic (boson) norm carried by the spin pairs (X, Y)",
+                  "c": "1 if ω < 5 meV", "d": "random"},
+         answer="b", explanation="For each canonical pair c = −2 Im(q* p); the spin pairs' share of Σc is the magnon weight (1 = pure magnon)."),
+    dict(type="mc", question="What does the quasi-harmonic approximation compute?",
+         options={"a": "F at the static volume only", "b": "G(T) = min_V [E(V) + F_vib(V, T)] with volume-dependent phonons",
+                  "c": "only the zero-point energy", "d": "anharmonic phonon lifetimes"},
+         answer="b", explanation="Phonon frequencies depend on V; minimising F over V gives V(T), thermal expansion and G(T)."),
+    dict(type="num", question="Hands-on: toy Ni (tutorial 15): volumetric thermal expansion β at 300 K in 10⁻⁶/K (1 decimal)?",
+         answer=38.0, tol=1.0, unit="1e-6/K", hint="ni.properties([300])['beta'] * 1e6",
+         explanation="β ≈ 38 × 10⁻⁶ /K, i.e. a linear α = β/3 ≈ 12.7 × 10⁻⁶ /K — the right size for Ni."),
+    dict(type="num", question="Hands-on: the corresponding LINEAR thermal expansion α at 300 K in 10⁻⁶/K?",
+         answer=12.7, tol=0.4, unit="1e-6/K", hint="ni.properties([300])['alpha_lin'] * 1e6",
+         explanation="α = β/3 for an isotropic solid."),
+    dict(type="mc", question="With a Grüneisen parameter γ0 = 0 the quasi-harmonic model gives …",
+         options={"a": "large expansion", "b": "no thermal expansion: θ_D does not depend on V", "c": "negative expansion", "d": "melting"},
+         answer="b", explanation="Expansion needs ∂F_vib/∂V ≠ 0, i.e. volume-dependent phonons (β B V = γ C_V)."),
+    dict(type="num", question="Hands-on: NiAl_qha.csv, harmonic Debye (anh_a removed): stabilisation temperature of Ni3Al-D019 in K?",
+         answer=1393, tol=10, unit="K", hint="FiniteTHull(noanh, vib='debye', mixing=False).stabilisation_temperature('Ni3Al-D019', Tmax=3000)",
+         explanation="1393 K harmonically; QHA lowers it to 742 K."),
+    dict(type="num", question="Hands-on: with quasi-harmonic + anharmonic free energies (vib='qha-debye', anh_a kept): T* of Ni3Al-D019 in K?",
+         answer=667, tol=10, unit="K",
+         explanation="667 K: the larger Grüneisen parameter and the intrinsic anharmonicity of D019 soften it on heating."),
+    dict(type="mc", question="In SymPhase's convention F_anh = −(3/2) k_B a T² per atom; what is the anharmonic entropy?",
+         options={"a": "zero", "b": "S_anh = 3 k_B a T", "c": "S_anh = −3 k_B a T", "d": "S_anh = k_B ln a"},
+         answer="b", explanation="S = −∂F/∂T = 3 k_B a T, and C_anh = T ∂S/∂T = 3 k_B a T: a > 0 raises the heat capacity linearly in T."),
+]
+build_bank(os.path.join(DATA, "quiz_magphon_qha.json"),
+           "Quiz 6 — spin-space-group numbers, magnon–phonon coupling, quasi-harmonic & anharmonic hulls", OL)
+quiz_nb("16_quiz_ossg_magnon_phonon_qha.ipynb",
+        "Quiz 6 — spin-space-group numbers, magnon–phonon coupling, quasi-harmonic & anharmonic hulls (20 questions)",
+        OL, "magphon_qha", "Work through tutorials **14** and **15** first. Questions 2–4, 8, 9, 11, 15, 16, 18 and 19 are hands-on.",
+        OL_HELPER + "\nents = load_csv(qcsv); noanh = copy.deepcopy(ents)\nfor e in noanh: e.data.pop('anh_a', None)")

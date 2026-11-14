@@ -1,0 +1,3 @@
+SYSTEM = FM chain for magnon-phonon coupling (toy)
+ISPIN = 2
+MAGMOM = 2.0

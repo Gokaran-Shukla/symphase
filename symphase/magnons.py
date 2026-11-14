@@ -779,6 +779,14 @@ def main(argv=None):
     ap.add_argument("--scan", type=int, nargs=2, default=None, metavar=("NMIN", "NMAX"),
                     help="scan supercell sizes n = NMIN..NMAX along the ordering directions (E per cell)")
     ap.add_argument("--sc-out", default="supercell", help="output folder of the supercell workflow")
+    ap.add_argument("--phonons", default=None, metavar="FILE",
+                    help="magnon–phonon coupling: springs file (i j n1 n2 n3 kL kT, meV/Å²) or phonopy_params.yaml")
+    ap.add_argument("--springs-nn", type=float, nargs=3, default=None, metavar=("KL", "KT", "RMAX"),
+                    help="Born–von Kármán springs kL, kT (meV/Å²) on all bonds up to RMAX (Å)")
+    ap.add_argument("--magnetoelastic", default=None, metavar="FILE",
+                    help="∂J/∂d per bond: 'i j n1 n2 n3 dJdr' or 'i j n1 n2 n3 x|y|z G11..G33' (meV/Å)")
+    ap.add_argument("--dJdr", type=float, nargs="+", default=None,
+                    help="isotropic exchange striction dJ/dr per bond class (meV/Å), in --J order")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -811,6 +819,8 @@ def main(argv=None):
     exch = read_exchange_file(args.exchange) if args.exchange else None
     if args.supercell is not None or args.scan is not None:
         return _supercell_cli(args, lat, frac, types, symbols, mags, rots, trs, exch)
+    if args.phonons or args.springs_nn:
+        return _magphon_cli(args, lat, frac, types, symbols, mags, rots, trs, exch)
     res = analyse(lat, frac, types, symbols, mags, rots, trs, J=args.J, exchange=exch, K=args.K,
                   spin=args.spin, rmax=args.rmax, mmin=args.mmin, nproc=args.nproc, n_per=args.nq,
                   nmap=args.nmap, sg=sg, K_axis=args.K_axis, K_local=args.K_local, relax=args.relax,
@@ -877,6 +887,41 @@ def main(argv=None):
                    header="x(1/Å)  omega_1..N (meV)  dSz_1..N  split(meV)")
         print(f"\n  written: {args.plot}" + (f", {stem}_split_map{ext}" if np.isfinite(res["map_split"]).any() else "")
               + f", {stem}_bands.dat")
+    return res
+
+
+def _magphon_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
+    from . import magphon as mpm
+    springs, phon = None, None
+    if args.springs_nn:
+        springs = mpm.bond_springs(lat, frac, types, args.springs_nn[2], args.springs_nn[0], args.springs_nn[1])
+    elif args.phonons.endswith((".yaml", ".yml")):
+        phon = mpm.PhonopyFC(args.phonons, lat, frac)
+    else:
+        springs = mpm.read_springs(args.phonons)
+    me = mpm.read_magnetoelastic(args.magnetoelastic) if args.magnetoelastic else None
+    res = mpm.analyse_mp(lat, frac, types, symbols, mags, rots, trs, springs=springs, phonopy=phon, magnetoelastic=me,
+                         dJdr=args.dJdr, n_per=args.nq, relax=args.relax, J=args.J, exchange=exch, K=args.K,
+                         spin=args.spin, rmax=args.rmax, mmin=args.mmin, K_axis=args.K_axis, K_local=args.K_local,
+                         field=args.field, g=args.g)
+    print(f"\n  magnon–phonon model: {res['n_magnon']} magnon + {res['n_phonon']} phonon branches;  "
+          f"{res['coupled_bonds']} magnetic bonds with ∂J/∂d;  phonons from "
+          + ("phonopy force constants" if phon is not None else f"{len(springs)} Born–von Kármán springs"))
+    if not res["coupled_bonds"]:
+        print("  (no magnetoelastic input: give --magnetoelastic or --dJdr; bands are uncoupled)")
+    elif res["max_gap"] == 0.0 and np.nanmax(np.abs(res["omega"] - res["omega0"])) < 1e-9:
+        print("  coupling has no effect: isotropic exchange striction does not couple linearly to collinear spins"
+              " (x_a·v_b = 0) -> use anisotropic / DMI derivatives (Kittel magnetoelastic terms)")
+    print(f"  max |ω − ω_uncoupled| = {np.nanmax(np.abs(res['omega'] - res['omega0'])):.4f} meV")
+    for g in res["gaps"]:
+        print(f"  anticrossing (magnon polaron): x = {g['x']:.3f} 1/Å, ω ≈ {g['omega']:.3f} meV, gap = {g['gap']:.4f} meV")
+    if args.plot and args.plot.lower() != "none":
+        stem, ext = os.path.splitext(args.plot)
+        from .magphon import plot_mp
+        plot_mp(res, save=f"{stem}_magphon{ext}")
+        np.savetxt(f"{stem}_magphon.dat", np.column_stack([res["x"], res["omega"], res["w_magnon"]]),
+                   header="x(1/Å)  omega_1..M (meV)  magnon_weight_1..M")
+        print(f"\n  written: {stem}_magphon{ext}, {stem}_magphon.dat")
     return res
 
 

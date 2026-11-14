@@ -10,13 +10,13 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 
 | command | input | output |
 |---|---|---|
-| `symphase tensors` | `POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR` of a VASP run (POSCAR + INCAR is enough) | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations; **spin group** (no SOC): altermagnet / AFM / FM class, spin Laue group, d/g/i-wave spin splitting, NR tensors, SOC-only components |
-| `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening, **finite-T hulls** (mixing entropy, phonons); parallel (all cores or MPI) |
-| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames) **incommensurate single-Q spirals without supercells** (rotating frame, optimal q) and a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
+| `symphase tensors` | `POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR` of a VASP run (POSCAR + INCAR is enough) | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations; **spin group** (no SOC): **oriented spin-space-group number for any order** (collinear, coplanar, non-coplanar; Chen et al. 2024 via FindSpinGroup), altermagnet / AFM / FM class, spin Laue group, d/g/i-wave spin splitting, NR tensors, SOC-only components |
+| `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening, **finite-T hulls** (mixing entropy, harmonic, **quasi-harmonic** and **anharmonic** free energies); parallel (all cores or MPI) |
+| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames) **incommensurate single-Q spirals without supercells** (rotating frame, optimal q) a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) and **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (42 slides, Beamer source included)
-📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 8 tutorials, 5 quizzes × 20 self-checking questions
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (44 slides, Beamer source included)
+📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 10 tutorials, 6 quizzes × 20 self-checking questions
 🧭 **Supercell guide:** [`docs/SUPERCELL_WORKFLOW.md`](docs/SUPERCELL_WORKFLOW.md) — every step from exchange constants to DFT checks for multi-Q / conical / distorted states
 
 ---
@@ -28,6 +28,7 @@ git clone https://github.com/Gokaran-Shukla/symphase
 cd symphase
 pip install -e .                 # numpy, spglib>=2, pymatgen, matplotlib
 pip install -e ".[mp,mpi,notebooks]"   # optional: Materials Project, MPI, Jupyter
+pip install -e ".[ssg,phonons]"        # optional: OSSG numbers (findspingroup, Python ≥ 3.11), phonopy force constants / QHA
 ```
 
 On Ibex (conda):
@@ -158,6 +159,19 @@ the size for incommensurate states. Checks: cone angle = analytic (0.46307 at 2 
 10×10 cell for 8–20 T (MSG P6m'm', σ_xy allowed), J₂ = 0.4 chain: 7-cell approximant within 2×10⁻⁶ meV of the exact spiral.
 Full step-by-step guide: [`docs/SUPERCELL_WORKFLOW.md`](docs/SUPERCELL_WORKFLOW.md).
 
+### Magnon–phonon coupling (magnon polarons)
+Spins (X, Y) and lattice (u, P) are treated as one harmonic system; the bond-length dependence of the exchange,
+J(d₀ + δd) = J + Σ<sub>γ</sub> G<sup>γ</sup> δd<sub>γ</sub> (G = ∂J/∂d, meV/Å), couples them, and the Bloch Hessian is diagonalised
+symplectically → hybrid bands coloured by magnon weight, anticrossing gaps.
+```bash
+cd examples/vasp/MagnonPhonon_FM_chain
+symphase magnons --J -5 --K 0.3 --K-axis 0 0 1 --spin 1 --rmax 3.1 --phonons springs.dat --magnetoelastic magnetoelastic.dat
+symphase magnons --J 1.0 --rmax 3.6 --springs-nn 400 150 3.6 --dJdr 1.5       # 120° triangular (exchange striction)
+symphase magnons ... --phonons phonopy_params.yaml --magnetoelastic dJ.dat       # DFT force constants (same cell / order)
+```
+Exact against the two-oscillator formula (3×10⁻¹⁴ meV); phonopy Φ(k) equals the spring model to 10⁻¹²; isotropic
+exchange striction couples only non-collinear spins (zero effect on a collinear magnet, as it must).
+
 ### Finite-temperature hulls
 G<sub>i</sub>(T) = E<sub>i</sub> + F<sup>vib</sup><sub>i</sub>(T) − T S<sup>conf</sup><sub>i</sub>
 ```bash
@@ -168,6 +182,23 @@ CSV columns: `mixing` (sublattices, e.g. `Ti0.5Zr0.5|Ni|Sn` → S = k<sub>B</sub
 vibrations `debye` (`debye_T`), `phonopy` (`phonons` → `total_dos.dat` / `thermal_properties.yaml`) or `bartel`
 (SISSO model via pymatgen). Reports E<sub>hull</sub>(T) and the temperature at which each phase reaches (or leaves) the hull;
 (Ti₀.₅Zr₀.₅)NiSn with E<sub>hull</sub> = 5 meV/atom → T* = 251 K (analytic 251.1 K).
+
+**Quasi-harmonic and anharmonic free energies** (`symphase.qha`): G(T) = min<sub>V</sub>[E(V) + F<sub>vib</sub>(V,T) + F<sub>anh</sub>(V,T)]
+with a Birch–Murnaghan E(V) and either phonopy `thermal_properties.yaml` at several volumes (`--vib qha`, CSV column `qha` =
+folder with `e-v.dat` + `thermal_properties-*.yaml`) or the Debye–Grüneisen model (`--vib qha-debye`, columns `volume`,
+`bulk_modulus`, `bulk_modulus_prime`, `debye_T`, `gruneisen`). Intrinsic anharmonicity F<sub>anh</sub> = −(3/2) k<sub>B</sub> a T²
+per atom (column `anh_a`, works with every model) or a table (`anh_table`, e.g. from TDEP). Outputs V(T), volumetric
+β = d ln V/dT (linear α = β/3), B<sub>T</sub>(T), C<sub>P</sub>(T). Identical to `phonopy.PhonopyQHA` (V to 2×10⁻⁴ Å³, G to 10⁻⁶ eV).
+```bash
+symphase hull --csv examples/hull/NiAl_qha.csv --temperatures 0 600 1200 --vib qha-debye --no-mixing
+```
+Toy Ni₃Al-D0₁₉ reaches the hull at 1393 K (harmonic), 742 K (QHA) and 667 K (QHA + anharmonic).
+
+### Spin-space-group numbers for non-collinear orders
+With the optional `findspingroup` package (X. Chen *et al.*, PRX 14, 031038 (2024)) `symphase tensors` prints the
+**oriented SSG number** of every order and checks its SOC magnetic group against SymPhase's own (`--ossg auto|yes|no`):
+RuO₂ `136.65.1.1.L`, MnTe `194.164.1.1.L`, Mn₃Sn `194.6.1.1.P`, 120° triangular `191.187.3.1.P`, skyrmion crystal
+`191.6.1.2` — all with matching magnetic space groups.
 
 ### Low-symmetry example: monoclinic MoO₂
 `examples/vasp/MoO2_monoclinic` (P2₁/c, POSCAR + INCAR, unique axis b ∥ y): grey group P2₁/c1′, MPG 2/m1′;
@@ -226,6 +257,9 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 | `11_quiz_noncollinear_spirals.ipynb` | **20 questions**: non-collinear magnets and incommensurate spirals |
 | `12_tutorial_magnetic_supercells.ipynb` | supercell workflow: size convergence, cone in a field, distorted spiral, skyrmion crystal field scan, DFT files, symmetry |
 | `13_quiz_magnetic_supercells.ipynb` | **20 questions**: multi-Q, conical and distorted states in supercells |
+| `14_tutorial_ossg_magnon_phonon.ipynb` | OSSG numbers for collinear/coplanar/non-coplanar orders, magnon polarons, exchange striction, phonopy |
+| `15_tutorial_qha_anharmonic.ipynb` | quasi-harmonic thermal expansion, anharmonic free energy, phonopy-QHA workflow, T-dependent hulls |
+| `16_quiz_ossg_magnon_phonon_qha.ipynb` | **20 questions**: SSG numbers, magnon–phonon coupling, QHA & anharmonic hulls |
 | `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on, incl. MoO₂) |
 | `05_quiz_convex_hull.ipynb` | **20 questions** (conceptual + hands-on) |
 

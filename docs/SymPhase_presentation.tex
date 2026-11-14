@@ -640,6 +640,51 @@ J$_1$–J$_2$ + easy axis $K=0.4$ & distorted spiral, 3$q$ weight 0.015, locked 
 \end{tabular}}
 \end{frame}
 
+\begin{frame}{Spin-space-group numbers for every magnetic order}
+\noindent{\footnotesize Collinear SSGs: SymPhase's own label (BNS number of the $C_{2\perp}\!\to\!\Top$ group, 1421 groups).
+\textbf{Any} order — collinear, coplanar, non-coplanar — now also gets the \textbf{oriented SSG number} of Chen \emph{et al.},
+PRX \textbf{14}, 031038 (2024), via their FindSpinGroup package; its SOC magnetic group is checked against SymPhase's spglib result.}
+\vspace{0.4em}
+
+\centering{\scriptsize\renewcommand{\arraystretch}{1.1}\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llllll@{}}
+\toprule
+example & order & OSSG index & spin PG & MSG (FSG) & SymPhase\\ \midrule
+RuO$_2$ & collinear altermagnet & \texttt{136.65.1.1.L} & $\infty/mm$ & 136.499 & 136.499 \textcolor{spinc}{\checkmark}\\
+MnTe & collinear altermagnet & \texttt{194.164.1.1.L} & $\infty/mm$ & 194.268 & 194.268 \textcolor{spinc}{\checkmark}\\
+Mn$_3$Sn & coplanar 120° & \texttt{194.6.1.1.P} & $6/mmm$ & 194.271 & 194.271 \textcolor{spinc}{\checkmark}\\
+triangular 120° AFM & coplanar & \texttt{191.187.3.1.P} & $\bar62m$ & 189.223 & 189.223 \textcolor{spinc}{\checkmark}\\
+canted DMI chain & coplanar FM & \texttt{123.123.2.2.P2} & $mm2$ & 51.295 & 51.295 \textcolor{spinc}{\checkmark}\\
+skyrmion crystal & non-coplanar & \texttt{191.6.1.2} & $6mm$ & 183.189 & 183.189 \textcolor{spinc}{\checkmark}\\ \bottomrule
+\end{tabular}}
+\vspace{0.5em}
+
+\begin{tcolorbox}[sp,width=0.92\textwidth]
+\footnotesize $L_0$ of the index = SymPhase's spin-preserving subgroup $H$ (RuO$_2$: Cmmm, MnTe: $P\bar3m1$).
+\quad \cmd{symphase tensors} prints it automatically (\cmd{--ossg auto|yes|no}; \texttt{pip install findspingroup}).
+\end{tcolorbox}
+\end{frame}
+
+\begin{frame}{Magnon–phonon coupling and quasi-harmonic / anharmonic hulls}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\footnotesize
+\textbf{Magnon polarons.} Spins $(X,Y)$ + lattice $(u,P)$ as one harmonic system;
+$J(\mathbf d)=J+\sum_\gamma G^\gamma\delta d_\gamma$ $\Rightarrow$
+$\partial^2E/\partial X_a\partial u_{j\gamma}=\sqrt{S_a}S_b\,\mathbf x_a\!\cdot\! G^\gamma\!\cdot\mathbf v_b$;
+symplectic diagonalisation. Isotropic striction couples only non-collinear spins.
+\column{0.46\textwidth}
+\footnotesize
+\textbf{QHA + anharmonic.} $G(T)=\min_V[E(V)+F_\text{vib}(V,T)+F_\text{anh}]$;
+phonopy tables or Debye–Grüneisen $\theta(V)$; $F_\text{anh}=-\tfrac32k_BaT^2$; \cmd{--vib qha|qha-debye}.
+\end{columns}
+\vspace{0.2em}
+
+\centering\includegraphics[width=0.74\textwidth]{figures/magphon_qha.pdf}
+
+{\tiny Checks: two-oscillator formula ($3\times10^{-14}$ meV), phonopy $\Phi(\mathbf k)$ = springs ($10^{-12}$), \texttt{PhonopyQHA}: $V$ to $2\times10^{-4}$ Å$^3$, $G$ to $10^{-6}$ eV.}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -859,7 +904,9 @@ notebook & content\\ \midrule
 08 & non-collinear FM/AFM: triangular, canted DMI\\
 10 & incommensurate spirals (rotating frame)\\
 12 & supercells: multi-Q, conical, distorted\\
-04, 05, 09, 11, 13 & \textbf{5 quizzes $\times$ 20 questions}\\ \bottomrule
+14 & OSSG numbers, magnon–phonon coupling\\
+15 & quasi-harmonic \& anharmonic hulls\\
+04, 05, 09, 11, 13, 16 & \textbf{6 quizzes $\times$ 20 questions}\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -873,7 +920,7 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{0.92}
+\renewcommand{\arraystretch}{0.82}
 \centering\scriptsize
 \begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
@@ -894,11 +941,14 @@ finite-$T$ hull & $T^*=251$ K (analytic), Debye limits & \textcolor{spinc}{\chec
 non-collinear LSWT & FM[111], 120° triangular, canted DMI & \textcolor{spinc}{\checkmark} \\
 incommensurate spirals & J$_1$–J$_2$, DMI helix, 6-site supercell & \textcolor{spinc}{\checkmark} \\
 supercells & cone angle (analytic), SkX $N_{sk}=-3$, exact mapping & \textcolor{spinc}{\checkmark} \\
-quiz keys & 100 / 100 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+OSSG numbers (6 orders) & MSG of FindSpinGroup = SymPhase & \textcolor{spinc}{\checkmark} \\
+magnon–phonon & two-oscillator formula, phonopy $\Phi$ = springs & \textcolor{spinc}{\checkmark} \\
+QHA & \texttt{PhonopyQHA}; $\gamma=0$, Grüneisen relation & \textcolor{spinc}{\checkmark} \\
+quiz keys & 120 / 120 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (53); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (66); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -906,7 +956,7 @@ quiz keys & 100 / 100 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \column{0.5\textwidth}
 \textbf{Limitations}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item SSG numbers only for collinear order (non-collinear: structured description)
+  \item non-collinear OSSG numbers need the optional FindSpinGroup package (Python $\ge$ 3.11)
   \item symmetry gives the \emph{shape}, not the magnitude, of tensors
   \item LSWT harmonic; incommensurate multi-Q only as commensurate supercell approximants; exchange constants supplied by the user
   \item mixing energy sources requires identical DFT settings
@@ -914,9 +964,9 @@ quiz keys & 100 / 100 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item non-collinear SSG numbering (Chen \emph{et al.} tables), magnon–phonon coupling
+  \item magnon–phonon: second-order (two-magnon) striction terms, damping
   \item Edelstein, nonlinear Hall, torkance tensors
-  \item anharmonic / quasi-harmonic free energies
+  \item self-consistent anharmonic phonons (TDEP / SSCHA input)
   \item link to Wannier-based Kubo codes for magnitudes
 \end{itemize}
 \end{columns}

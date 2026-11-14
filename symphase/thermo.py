@@ -14,9 +14,16 @@ Vibrational free energy (choose with vib=)
     "debye"   : Debye model with θ_D per entry (CSV column debye_T, K); compounds without θ_D
                 use the composition-weighted mean of their elements (ΔF_vib ≈ 0 for them)
     "phonopy" : phonon DOS 'total_dos.dat' or 'thermal_properties.yaml' (CSV column phonons)
+    "qha"     : quasi-harmonic: folder per entry (CSV column qha) with e-v.dat and phonopy
+                thermal_properties*.yaml at several volumes -> G(T) = min_V F(V, T)
+    "qha-debye": quasi-harmonic Debye–Grüneisen model from CSV columns volume (Å³/atom),
+                bulk_modulus (GPa), bulk_modulus_prime, debye_T, gruneisen [, gruneisen_q]
     "bartel"  : SISSO descriptor of Bartel et al., Nat. Commun. 9, 4168 (2018) via pymatgen's
                 GibbsComputedStructureEntry (needs structures; 300–2000 K)
     "none"    : only configurational entropy
+
+Anharmonic correction (any model): CSV columns anh_a (1/K) [, anh_m] -> F_anh = −(3/2) k_B a T²
+per atom, or anh_table (file: T, F_anh in meV/atom).  See symphase.qha.
 
 The hull is rebuilt at every temperature (in parallel over entries, as at T = 0);
 `stabilisation_temperature` finds where a phase reaches the hull by bisection.
@@ -81,7 +88,8 @@ def _debye_function(x, n=400):
     if x <= 0:
         return 1.0
     t = np.linspace(1e-8, x, n)
-    return 3.0 / x ** 3 * np.trapezoid(t ** 3 / np.expm1(t), t)
+    with np.errstate(over="ignore"):
+        return 3.0 / x ** 3 * np.trapezoid(t ** 3 / np.expm1(t), t)
 
 
 def debye_free_energy(T, theta):
@@ -177,11 +185,48 @@ class FiniteTHull:
                     raise ValueError(f"{entry_name(e)}: vib='phonopy' needs a 'phonons' file for every entry")
                 p = p if os.path.isabs(p) else os.path.join(e.data.get("csv_dir", "."), p)
                 self.ph.append(PhononF(p))
+        elif vib in ("qha", "qha-debye"):
+            from .qha import QHA
+            self.qha = []
+            for e in self.entries:
+                kw = self._anh_kw(e)
+                if vib == "qha":
+                    p = e.data.get("qha")
+                    if not p:
+                        raise ValueError(f"{entry_name(e)}: vib='qha' needs a 'qha' folder for every entry")
+                    p = p if os.path.isabs(p) else os.path.join(e.data.get("csv_dir", "."), p)
+                    self.qha.append(QHA.from_phonopy_dir(p, **kw))
+                else:
+                    need = ("volume", "bulk_modulus", "bulk_modulus_prime", "debye_T", "gruneisen")
+                    miss = [k for k in need if e.data.get(k) in (None, "")]
+                    if miss:
+                        raise ValueError(f"{entry_name(e)}: vib='qha-debye' needs columns {', '.join(miss)}")
+                    self.qha.append(QHA.debye_gruneisen(
+                        0.0, float(e.data["volume"]), float(e.data["bulk_modulus"]),
+                        float(e.data["bulk_modulus_prime"]), float(e.data["debye_T"]), float(e.data["gruneisen"]),
+                        q=float(e.data.get("gruneisen_q") or 1.0), **kw))
         elif vib == "bartel":
             if not all(isinstance(e, ComputedStructureEntry) for e in self.entries):
                 raise ValueError("vib='bartel' needs structures for every entry (CSV 'structure' column or VASP runs)")
         elif vib != "none":
             raise ValueError(f"unknown vib model {vib}")
+        # anharmonic corrections on top of harmonic / no-vib models (QHA handles them inside)
+        self.anh = None
+        if vib not in ("qha", "qha-debye") and any(e.data.get("anh_a") not in (None, "") or e.data.get("anh_table")
+                                                    for e in self.entries):
+            from .qha import QHA
+            self.anh = [QHA(eos=(0.0, 1.0, 1.0, 4.0), **self._anh_kw(e)) for e in self.entries]
+            self.notes.append("intrinsic anharmonic free energy F_anh added (columns anh_a / anh_table)")
+
+    @staticmethod
+    def _anh_kw(e):
+        from .qha import read_anh_table
+        tab = e.data.get("anh_table")
+        if tab:
+            tab = tab if os.path.isabs(tab) else os.path.join(e.data.get("csv_dir", "."), tab)
+            tab = read_anh_table(tab)
+        return dict(anh_a=float(e.data.get("anh_a") or 0.0), anh_m=float(e.data.get("anh_m") or 0.0),
+                    anh_table=tab)
 
     def energies(self, T):
         """total G (eV per entry formula) at temperature T"""
@@ -202,6 +247,10 @@ class FiniteTHull:
                 Ga = Ga + np.array([debye_free_energy(T, th) for th in self.theta])
             elif self.vib == "phonopy":
                 Ga = Ga + np.array([p(T) for p in self.ph])
+            elif self.vib in ("qha", "qha-debye"):
+                Ga = Ga + np.array([q.delta_G(T) for q in self.qha])
+            if self.anh is not None:
+                Ga = Ga + np.array([float(a.F_anh(1.0, T)) for a in self.anh])
         Ga = Ga - T * KB * self.S
         return Ga * n
 

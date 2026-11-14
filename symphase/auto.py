@@ -37,7 +37,7 @@ All optional keys (defaults shown):
     ehull_window  = 0.10              # eV/atom: phases analysed in detail
     max_phases    = 40                # cap on detailed analyses
     temperatures  =                   # e.g. 300 600 900 1200: finite-T hulls (mixing entropy + vib)
-    vib           = none              # none | debye | phonopy | bartel  (finite-T vibrations)
+    vib           = none              # none | debye | phonopy | qha | qha-debye | bartel  (finite-T vibrations)
     tensors       =                   # e.g. charge,spin,orbital: also symmetry-analyse
                                       # database structures (default off: use `symphase tensors`
                                       # on your own VASP POSCAR/OUTCAR/OSZICAR instead)

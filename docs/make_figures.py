@@ -142,3 +142,45 @@ ax.set_title("conical spiral, J$_1$–J$_2$ chain", fontsize=10)
 fig.subplots_adjust(left=0.04, right=0.98, bottom=0.15, top=0.9)
 fig.savefig(os.path.join(F, "supercell.pdf")); fig.savefig(os.path.join(F, "supercell.png"), dpi=160); plt.close(fig)
 print("figure supercell")
+
+# ---------------------------------------------------------------- outlook 1 & 3: magnon–phonon coupling, QHA + anharmonic hulls
+import copy
+from symphase.magphon import analyse_mp, HB2_AMU
+from symphase.qha import QHA
+from symphase.thermo import FiniteTHull
+from symphase.hull import load_csv
+def fm_chain(lam=6.0, n_per=160):
+    G = np.zeros((3, 3)); G[0, 2] = G[2, 0] = lam
+    return analyse_mp(latc, frc, [0], ["Fe"], m0, dsc.rotations, dsc.translations, springs=[(0, 0, [1, 0, 0], 600.0, 300.0)],
+                      magnetoelastic={(0, 0, (1, 0, 0)): [(0, G)]} if lam else None, J=[-5.0], K=0.3, K_axis=[0, 0, 1],
+                      spin=1.0, rmax=3.1, n_per=n_per)
+import matplotlib
+rmp = fm_chain()
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.6), gridspec_kw=dict(width_ratios=[1.6, 1]))
+cmap = matplotlib.colormaps["coolwarm"]
+from matplotlib.collections import LineCollection
+x = rmp["x"] * a / np.pi
+for n in range(rmp["omega0"].shape[1]):
+    a1.plot(x, rmp["omega0"][:, n], "--", color="0.6", lw=0.9)
+for n in range(rmp["omega"].shape[1]):
+    pts = np.array([x, rmp["omega"][:, n]]).T.reshape(-1, 1, 2)
+    lc = LineCollection(np.concatenate([pts[:-1], pts[1:]], axis=1), cmap=cmap, norm=matplotlib.colors.Normalize(0, 1), lw=2.4)
+    lc.set_array(0.5 * (rmp["w_magnon"][:-1, n] + rmp["w_magnon"][1:, n])); a1.add_collection(lc)
+a1.set_xlim(0, 1); a1.set_ylim(0, 21); a1.set_xlabel("k (π/a)"); a1.set_ylabel("ω (meV)")
+a1.set_title("FM chain: magnon polaron (colour = magnon weight)", fontsize=10)
+gmax = max(rmp["gaps"], key=lambda g_: g_["gap"])
+a1.annotate(f"gap {gmax['gap']:.2f} meV", xy=(gmax["x"] * a / np.pi, gmax["omega"] + 0.5 * gmax["gap"]),
+            xytext=(0.55, 4.0), fontsize=9, arrowprops=dict(arrowstyle="->"))
+ents = load_csv(os.path.join(H, "..", "examples", "hull", "NiAl_qha.csv")); noanh = copy.deepcopy(ents)
+for e in noanh: e.data.pop("anh_a", None)
+Tg = np.arange(0, 1601, 50)
+for (lab, E, vib), c in zip([("harmonic", noanh, "debye"), ("QHA", noanh, "qha-debye"), ("QHA + anh.", ents, "qha-debye")],
+                            ["0.5", "#16325c", "#c0392b"]):
+    ft = FiniteTHull(E, vib=vib, mixing=False)
+    eh = [{r_["name"]: r_["e_hull"] for r_ in ft.hull_at(T).table()}["Ni3Al-D019"] * 1e3 for T in Tg]
+    a2.plot(Tg, eh, lw=2.2, color=c, label=f"{lab}: T* = {ft.stabilisation_temperature('Ni3Al-D019', Tmax=3000):.0f} K")
+a2.set_xlabel("T (K)"); a2.set_ylabel("E$_{hull}$ (meV/atom)"); a2.set_ylim(-0.3, 11)
+a2.legend(fontsize=8, frameon=False); a2.set_title("Ni$_3$Al-D0$_{19}$ (toy data)", fontsize=10)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "magphon_qha.pdf")); fig.savefig(os.path.join(F, "magphon_qha.png"), dpi=160); plt.close(fig)
+print("figure magphon_qha")

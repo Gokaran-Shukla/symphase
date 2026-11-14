@@ -710,7 +710,7 @@ def _nonzero(E, piv, names):
     return {names[c] for c in range(len(names)) if expr(E, piv, c, names) != "0"}
 
 
-def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which, rel_results, SIG):
+def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which, rel_results, SIG, msg_bns=None):
     from . import spingroup as sgm
     sg = sgm.spin_group(lat, frac, types, mags, _g(ds, "rotations"), _g(ds, "translations"),
                         symprec=args.symprec, mtol=max(args.mag_symprec, 0.02))
@@ -752,6 +752,25 @@ def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which,
         ssg = dict(label=f"(identification failed: {err})", number=None, family="")
     P(f"  spin space group      : {ssg['label']}")
     P(f"                          {ssg.get('family', '')}")
+    ossg = None
+    if getattr(args, "ossg", "auto") != "no":
+        try:
+            ossg = sgm.identify_ossg(lat, frac, symbols, mags)
+        except Exception as err:  # noqa: BLE001
+            ossg = dict(available=False, note=f"FindSpinGroup failed: {err}")
+        if ossg.get("available"):
+            P(f"  OSSG number (Chen 2024): {ossg['index']}   {ossg['ossg_symbol_linear']}")
+            P(f"                          G0 = {ossg['g0_symbol']} ({ossg['g0_number']}),  L0 = {ossg['l0_symbol']} "
+              f"({ossg['l0_number']}),  i_t = {ossg['it']},  i_k = {ossg['ik']};  spin point group "
+              f"{ossg['spin_space_point_group_hm']};  {ossg['conf']}, {ossg['magnetic_phase']}")
+            mine = msg_bns
+            chk = "" if mine is None else ("  ✓ = SymPhase" if str(mine) == str(ossg["msg_bns_number"])
+                                           else f"  ≠ SymPhase {mine} (check tolerances)")
+            ossg["msg_agrees"] = None if mine is None else str(mine) == str(ossg["msg_bns_number"])
+            P(f"                          MSG with SOC from FindSpinGroup: {ossg['msg_symbol']} "
+              f"(BNS {ossg['msg_bns_number']}){chk}   [findspingroup {ossg['findspingroup_version']}]")
+        elif getattr(args, "ossg", "auto") == "yes" or kind in ("coplanar", "noncoplanar"):
+            P(f"  OSSG number           : not available — {ossg.get('note')}")
     P(f"  magnet class          : {cls}")
     P(f"                          {why}")
     laue = None
@@ -799,7 +818,7 @@ def report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Qstd, which,
             seen.add(key)
             uniq.append(o)
     out = dict(kind=kind, axis=None if axis is None else list(map(float, axis)), magnet_class=cls,
-               ssg=ssg,
+               ssg=ssg, ossg=ossg,
                reason=why, spin_laue_group=laue[0] if laue else None, spin_splitting=wave,
                splitting_degree=deg, s_k=forms, nodal_planes=[list(map(float, n)) for n in planes],
                n_ops=len(sg["ops"]), n_H=nH, n_A=nA, tensors={})
@@ -928,6 +947,8 @@ def main(argv=None, quiet=False):
     ap.add_argument("--tensors", default="charge,spin,orbital",
                     help="comma list from charge,spin,orbital [all]")
     ap.add_argument("--no-ops", action="store_true", help="do not list individual operations")
+    ap.add_argument("--ossg", choices=("auto", "yes", "no"), default="auto",
+                    help="oriented spin-space-group number (Chen et al. 2024) for any order via FindSpinGroup [auto]")
     ap.add_argument("--ascii", action="store_true", help="use 's' instead of 'σ' in component names")
     ap.add_argument("--out", default=None, help="also write the report to this file")
     ap.add_argument("--json", default=None, help="write machine-readable results to this JSON file")
@@ -1296,7 +1317,8 @@ def main(argv=None, quiet=False):
     P.mute = False
     spin_res = None
     if args.analysis in ("both", "spin"):
-        spin_res = report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Q, which, results, SIG)
+        spin_res = report_spin_group(P, args, lat, frac, types, symbols, mags, ds, Q, which, results, SIG,
+                                      msg_bns=bns)
 
     if log:
         P.h2("Notes")

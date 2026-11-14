@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -444,3 +444,140 @@ def test_skyrmion_crystal_triangular(tmp_path):
     write_outputs(r, ["Mn"], np.array([[0, 0, 2.]]), str(tmp_path))
     assert read_poscar(str(tmp_path / "POSCAR"))["frac"].shape == (100, 3)
     assert len(read_exchange_file(str(tmp_path / "J_super.dat"))) == 300
+
+
+# ---------------------------------------------------------------- OSSG numbers (non-collinear) via FindSpinGroup
+@pytest.mark.parametrize("d,index", [("RuO2_Neel001_noSOC", "136.65.1.1.L"), ("MnTe_altermagnet_INCAR", "194.164.1.1.L"),
+                                     ("Mn3Sn_allin", "194.6.1.1.P"), ("Triangular_120AFM_INCAR", "191.187.3.1.P")])
+def test_ossg_numbers_and_msg_agreement(d, index):
+    pytest.importorskip("findspingroup")
+    r = analyze_tensors(f"{EX}/vasp/{d}", tensors="charge")
+    o = r["spin_group"]["ossg"]
+    assert o["available"] and o["index"] == index
+    assert o["msg_agrees"] and o["msg_bns_number"] == r["magnetic"]["bns_number"]
+
+
+# ---------------------------------------------------------------- magnon–phonon coupling
+def _mp_chain(lam=6.0, dJdr=None, J=-2.0, K=0.3, path=(("Γ", (0, 0, 0)), ("X", (0.5, 0, 0)))):
+    from symphase.magphon import analyse_mp
+    lat, fr, R, T = _chain()
+    me = None
+    if lam:
+        G = np.zeros((3, 3)); G[0, 2] = G[2, 0] = lam
+        me = {(0, 0, (1, 0, 0)): [(0, G)]}
+    return analyse_mp(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, springs=[(0, 0, [1, 0, 0], 600.0, 300.0)],
+                      magnetoelastic=me, dJdr=dJdr, J=[J], K=K, K_axis=[0, 0, 1], spin=1.0, rmax=3.1, n_per=40,
+                      path=list(path), masses=[55.845])
+
+
+def test_magnon_phonon_two_oscillator_formula():
+    from symphase.magphon import HB2_AMU
+    r = _mp_chain()
+    a, S, J, K, lam = 3.0, 1.0, -2.0, 0.3, 6.0
+    k = r["q"][:, 0]
+    wm = 2 * S * abs(J) * (1 - np.cos(k * a)) + 2 * K * S
+    kap = HB2_AMU / 55.845
+    wL, wT = np.sqrt(kap * 1200 * (1 - np.cos(k * a))), np.sqrt(kap * 600 * (1 - np.cos(k * a)))
+    g = 2 * lam * S ** 1.5 * np.abs(np.sin(k * a))
+    B, C = wm ** 2 + wL ** 2, wm ** 2 * wL ** 2 - wm * kap * g ** 2
+    ref = np.sort(np.c_[np.sqrt((B + np.sqrt(B * B - 4 * C)) / 2), np.sqrt(np.maximum((B - np.sqrt(B * B - 4 * C)) / 2, 0)),
+                        wT, wT], axis=1)
+    assert np.abs(r["omega"][1:] - ref[1:]).max() < 1e-6          # (k = 0: zero modes regularised)
+    assert r["max_gap"] > 0.1
+
+
+def test_isotropic_striction_needs_noncollinear_order():
+    r = _mp_chain(lam=0.0, dJdr=[3.0])
+    assert r["coupled_bonds"] == 1 and np.nanmax(np.abs(r["omega"] - r["omega0"])) < 1e-12
+
+
+def test_magnon_branch_equals_lswt():
+    from symphase.magnons import analyse
+    lat, fr, R, T = _chain()
+    r = _mp_chain(lam=0.0)
+    rl = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-2.0], K=0.3, K_axis=[0, 0, 1], spin=1.0,
+                 rmax=3.1, n_per=6, nmap=3)
+    for q, w in zip(rl["q"][1:], rl["omega"][1:]):
+        assert np.min(np.abs(r["model"].modes(q, coupling=False)[0] - w[0])) < 1e-6
+
+
+def test_phonopy_force_constants_equal_springs(tmp_path):
+    phonopy = pytest.importorskip("phonopy")
+    from phonopy.structure.atoms import PhonopyAtoms
+    from symphase.magphon import PhonopyFC, spring_fc, bond_springs, MagnonPhonon
+    from symphase.tensors import read_poscar
+    p = read_poscar(f"{EX}/vasp/Triangular_120AFM_INCAR/POSCAR")
+    lat, frac = p["lattice"], p["frac"]
+    ph = phonopy.Phonopy(PhonopyAtoms(symbols=["Fe"] * 3, cell=lat, scaled_positions=frac),
+                         supercell_matrix=np.diag([3, 3, 1]), primitive_matrix=np.eye(3))
+    sc = ph.supercell
+    pos, L, n = sc.scaled_positions, np.array(sc.cell), len(sc.scaled_positions)
+    fc = np.zeros((n, n, 3, 3))
+    for i in range(n):
+        for j in range(n):
+            df = pos[j] - pos[i]; df -= np.round(df); d = L.T @ df
+            if i != j and abs(np.linalg.norm(d) - 3.0) < 1e-3:
+                r_ = d / np.linalg.norm(d)
+                K = (400 * np.outer(r_, r_) + 150 * (np.eye(3) - np.outer(r_, r_))) * 1e-3
+                fc[i, j] -= K; fc[i, i] += K
+    ph.force_constants = fc
+    ph.save(str(tmp_path / "ph.yaml"), settings={"force_constants": True})
+    P = PhonopyFC(str(tmp_path / "ph.yaml"), lat, frac)
+    mp = MagnonPhonon(lat, frac, ["Fe"] * 3, [], np.zeros((0, 3)), [], [], masses=P.masses,
+                      springs=spring_fc(lat, frac, bond_springs(lat, frac, [0] * 3, 3.01, 400., 150., rmin=2.99)))
+    for kf in ([0.1, 0.05, 0], [0.31, -0.2, 0], [1 / 3, 1 / 3, 0]):
+        k = 2 * np.pi * np.linalg.inv(lat) @ np.array(kf)
+        assert np.abs(mp.hessian(k, coupling=False, magnons=False)[:9, :9] - P.phi_k(k)).max() < 1e-8
+
+
+# ---------------------------------------------------------------- quasi-harmonic and anharmonic free energies
+def test_qha_debye_gruneisen_limits():
+    from symphase.qha import QHA, EV_A3_TO_GPA
+    from symphase.thermo import KB
+    q0 = QHA.debye_gruneisen(0.0, 11.0, 180.0, 4.5, 450.0, 0.0)
+    assert np.allclose(q0.properties([10, 500, 1000])["V"], 11.0, atol=1e-6)        # γ = 0: no expansion
+    qa = QHA.debye_gruneisen(0.0, 11.0, 180.0, 4.5, 450.0, 0.0, anh_a=2e-5)
+    assert abs((qa.G(1000) - q0.G(1000)) + 1.5 * KB * 2e-5 * 1e6) < 1e-9          # F_anh = −3/2 k_B a T²
+    q = QHA.debye_gruneisen(0.0, 11.0, 180.0, 4.5, 450.0, 2.0)
+    p = q.properties([600.0])
+    gam = 2.0 * p["V"][0] / 11.0
+    ratio = p["beta"][0] * p["B_T"][0] / EV_A3_TO_GPA * p["V"][0] / (gam * 3 * KB)
+    assert 0.95 < ratio < 1.0                                                       # Grüneisen relation (C_V < 3k_B)
+
+
+def test_qha_matches_phonopy_qha(tmp_path):
+    pytest.importorskip("phonopy")
+    from phonopy import PhonopyQHA
+    from symphase.qha import QHA, birch_murnaghan, debye_theta, EV_A3_TO_GPA
+    from symphase.thermo import debye_free_energy
+    E0, V0, B0, Bp, th0, g0, nat, EVK = -5.0, 11.0, 180 / EV_A3_TO_GPA, 4.5, 450.0, 2.0, 4, 96.48533212
+    Vs, Ts = V0 * np.linspace(0.94, 1.08, 11), np.arange(0, 1001, 10.0)
+    FE = np.array([[debye_free_energy(T, debye_theta(V, V0, th0, g0)) for V in Vs] for T in Ts]) * nat * EVK
+    ph = PhonopyQHA(volumes=Vs * nat, electronic_energies=birch_murnaghan(Vs, E0, V0, B0, Bp) * nat, temperatures=Ts,
+                    free_energy=FE, cv=np.zeros_like(FE), entropy=np.zeros_like(FE), eos="birch_murnaghan", t_max=900)
+    Vph, Gph = np.array(ph.volume_temperature) / nat, np.array(ph.gibbs_temperature) / nat
+    with open(tmp_path / "e-v.dat", "w") as fh:
+        for V in Vs:
+            fh.write(f"{V * nat:.8f} {birch_murnaghan(V, E0, V0, B0, Bp) * nat:.10f}\n")
+    for k, V in enumerate(Vs):
+        with open(tmp_path / f"thermal_properties-{k + 1}.yaml", "w") as fh:
+            fh.write(f"natom: {nat}\nthermal_properties:\n")
+            for T, f in zip(Ts, FE[:, k]):
+                fh.write(f"- temperature: {T:.4f}\n  free_energy: {f:.10f}\n")
+    q = QHA.from_phonopy_dir(str(tmp_path))
+    for T in (0, 300, 600, 900):
+        V, G = q.equilibrium(T)
+        assert abs(V - Vph[int(T / 10)]) < 2e-4 and abs(G - Gph[int(T / 10)]) < 2e-6
+
+
+def test_qha_hull_shifts_stabilisation_temperature():
+    import copy
+    from symphase.thermo import FiniteTHull
+    ents = load_csv(f"{EX}/hull/NiAl_qha.csv")
+    noanh = copy.deepcopy(ents)
+    for e in noanh:
+        e.data.pop("anh_a", None)
+    Th = FiniteTHull(noanh, vib="debye", mixing=False).stabilisation_temperature("Ni3Al-D019", Tmax=3000)
+    Tq = FiniteTHull(noanh, vib="qha-debye", mixing=False).stabilisation_temperature("Ni3Al-D019", Tmax=3000)
+    Ta = FiniteTHull(ents, vib="qha-debye", mixing=False).stabilisation_temperature("Ni3Al-D019", Tmax=3000)
+    assert Ta < Tq < Th and abs(Th - 1393) < 5 and abs(Tq - 742) < 5 and abs(Ta - 667) < 5

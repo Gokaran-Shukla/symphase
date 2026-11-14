@@ -1,0 +1,246 @@
+{
+ "title": "Quiz 6 — spin-space-group numbers, magnon–phonon coupling, quasi-harmonic & anharmonic hulls",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "What does the OSSG number of Chen et al. (2024) add to SymPhase's own collinear SSG label?",
+   "options": {
+    "a": "nothing",
+    "b": "a standard number for every order, including coplanar and non-coplanar ones",
+    "c": "the magnon gap",
+    "d": "only the crystal space group"
+   },
+   "explanation": "SymPhase numbers collinear SSGs via the C2⊥→T black-and-white group; FindSpinGroup gives the four-index OSSG for any order.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: the OSSG index of Mn3Sn (all-in coplanar 120° order, examples/vasp/Mn3Sn_allin) is …",
+   "options": {
+    "a": "194.164.1.1.L",
+    "b": "194.6.1.1.P",
+    "c": "191.187.3.1.P",
+    "d": "136.65.1.1.L"
+   },
+   "explanation": "Coplanar ('P' suffix), G0 = P6_3/mmc (194), spin point group 6/mmm.",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: the OSSG index of the altermagnet MnTe is …",
+   "options": {
+    "a": "194.164.1.1.L",
+    "b": "194.6.1.1.P",
+    "c": "229.229.1.1.L",
+    "d": "191.6.1.2"
+   },
+   "explanation": "Collinear ('L'), spin point group ∞/mm; the same index appears in the FindSpinGroup documentation.",
+   "id": 3,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: which suffix does the non-coplanar skyrmion crystal of tutorial 12 get (OSSG 191.6.1.2)?",
+   "options": {
+    "a": "L",
+    "b": "P",
+    "c": "none (non-coplanar)",
+    "d": "P2"
+   },
+   "explanation": "Collinear orders end in L, coplanar in P; a non-coplanar order has a trivial spin-only group and no suffix.",
+   "id": 4,
+   "key": "ImMi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does SymPhase compare the MSG derived by FindSpinGroup with its own spglib result?",
+   "options": {
+    "a": "to pick the larger group",
+    "b": "as an independent consistency check of moments, tolerances and frames",
+    "c": "because spglib cannot find MSGs",
+    "d": "it does not"
+   },
+   "explanation": "Two independent codes must agree on the SOC magnetic group; a mismatch flags tolerance or input problems.",
+   "id": 5,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which canonical variables describe one spin in the joint magnon–phonon model?",
+   "options": {
+    "a": "S_x and S_z",
+    "b": "(X, Y) with S⊥ = √S (X x + Y y) and [X, Y] = i",
+    "c": "the angles θ and φ only",
+    "d": "u and P"
+   },
+   "explanation": "Holstein–Primakoff to linear order: transverse deviations scaled by √S are a canonical pair, like (u, P) for atoms.",
+   "id": 6,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does isotropic exchange striction (G = dJ/dr r̂ 𝟙) not hybridise magnons and phonons in a collinear magnet?",
+   "options": {
+    "a": "the phonons are too fast",
+    "b": "the linear coupling ∝ x_a·v_b vanishes when all spins are (anti)parallel",
+    "c": "dJ/dr is always zero",
+    "d": "it does"
+   },
+   "explanation": "Only non-collinear order (x_a·v_b ≠ 0) or anisotropic/DMI derivatives give terms linear in both u and the magnon.",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: FM chain of tutorial 14 (λ = 6 meV/Å): largest anticrossing gap in meV (2 decimals)?",
+   "tol": 0.02,
+   "unit": "meV",
+   "hint": "fm_chain()['max_gap']",
+   "explanation": "≈ 1.11 meV where the magnon crosses the longitudinal acoustic phonon.",
+   "id": 8,
+   "key": "MTEuMQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: how does the anticrossing gap scale with the magnetoelastic constant λ?",
+   "options": {
+    "a": "∝ λ² ",
+    "b": "linearly ∝ λ",
+    "c": "independent of λ",
+    "d": "∝ √λ"
+   },
+   "explanation": "0.37, 0.74, 1.11, 1.48 meV for λ = 2, 4, 6, 8 meV/Å: first-order level repulsion, gap ≈ 2|coupling|.",
+   "id": 9,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "In the chain example, which phonon branch hybridises with the magnon?",
+   "options": {
+    "a": "both transverse acoustic",
+    "b": "the longitudinal acoustic phonon",
+    "c": "none",
+    "d": "an optical phonon"
+   },
+   "explanation": "Only ∂J/∂d_x (along the chain) is non-zero, so only longitudinal displacements u_x couple.",
+   "id": 10,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: 120° triangular AFM with dJ/dr = 1.5 meV/Å: max |ω − ω_uncoupled| in meV (3 decimals)?",
+   "tol": 0.003,
+   "unit": "meV",
+   "hint": "triangular(1.5)",
+   "explanation": "≈ 0.033 meV: non-collinear spins make isotropic striction couple linearly.",
+   "id": 11,
+   "key": "MzMwLjA="
+  },
+  {
+   "type": "mc",
+   "question": "What must phonopy force constants satisfy to be used with --phonons phonopy_params.yaml?",
+   "options": {
+    "a": "nothing",
+    "b": "same primitive cell and atom order as the POSCAR (SymPhase checks it)",
+    "c": "a 1x1x1 supercell",
+    "d": "no magnetism"
+   },
+   "explanation": "Φ(k) is mapped atom by atom onto the magnetic model; SymPhase refuses a different cell or order.",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How is the magnon weight of a hybrid mode defined?",
+   "options": {
+    "a": "fraction of the energy in spins",
+    "b": "fraction of the symplectic (boson) norm carried by the spin pairs (X, Y)",
+    "c": "1 if ω < 5 meV",
+    "d": "random"
+   },
+   "explanation": "For each canonical pair c = −2 Im(q* p); the spin pairs' share of Σc is the magnon weight (1 = pure magnon).",
+   "id": 13,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does the quasi-harmonic approximation compute?",
+   "options": {
+    "a": "F at the static volume only",
+    "b": "G(T) = min_V [E(V) + F_vib(V, T)] with volume-dependent phonons",
+    "c": "only the zero-point energy",
+    "d": "anharmonic phonon lifetimes"
+   },
+   "explanation": "Phonon frequencies depend on V; minimising F over V gives V(T), thermal expansion and G(T).",
+   "id": 14,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: toy Ni (tutorial 15): volumetric thermal expansion β at 300 K in 10⁻⁶/K (1 decimal)?",
+   "tol": 1.0,
+   "unit": "1e-6/K",
+   "hint": "ni.properties([300])['beta'] * 1e6",
+   "explanation": "β ≈ 38 × 10⁻⁶ /K, i.e. a linear α = β/3 ≈ 12.7 × 10⁻⁶ /K — the right size for Ni.",
+   "id": 15,
+   "key": "MC44Mw=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the corresponding LINEAR thermal expansion α at 300 K in 10⁻⁶/K?",
+   "tol": 0.4,
+   "unit": "1e-6/K",
+   "hint": "ni.properties([300])['alpha_lin'] * 1e6",
+   "explanation": "α = β/3 for an isotropic solid.",
+   "id": 16,
+   "key": "Ny4yMQ=="
+  },
+  {
+   "type": "mc",
+   "question": "With a Grüneisen parameter γ0 = 0 the quasi-harmonic model gives …",
+   "options": {
+    "a": "large expansion",
+    "b": "no thermal expansion: θ_D does not depend on V",
+    "c": "negative expansion",
+    "d": "melting"
+   },
+   "explanation": "Expansion needs ∂F_vib/∂V ≠ 0, i.e. volume-dependent phonons (β B V = γ C_V).",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: NiAl_qha.csv, harmonic Debye (anh_a removed): stabilisation temperature of Ni3Al-D019 in K?",
+   "tol": 10,
+   "unit": "K",
+   "hint": "FiniteTHull(noanh, vib='debye', mixing=False).stabilisation_temperature('Ni3Al-D019', Tmax=3000)",
+   "explanation": "1393 K harmonically; QHA lowers it to 742 K.",
+   "id": 18,
+   "key": "MzkzMQ=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: with quasi-harmonic + anharmonic free energies (vib='qha-debye', anh_a kept): T* of Ni3Al-D019 in K?",
+   "tol": 10,
+   "unit": "K",
+   "explanation": "667 K: the larger Grüneisen parameter and the intrinsic anharmonicity of D019 soften it on heating.",
+   "id": 19,
+   "key": "NzY2"
+  },
+  {
+   "type": "mc",
+   "question": "In SymPhase's convention F_anh = −(3/2) k_B a T² per atom; what is the anharmonic entropy?",
+   "options": {
+    "a": "zero",
+    "b": "S_anh = 3 k_B a T",
+    "c": "S_anh = −3 k_B a T",
+    "d": "S_anh = k_B ln a"
+   },
+   "explanation": "S = −∂F/∂T = 3 k_B a T, and C_anh = T ∂S/∂T = 3 k_B a T: a > 0 raises the heat capacity linearly in T.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}
