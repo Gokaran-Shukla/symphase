@@ -1,0 +1,233 @@
+{
+ "title": "Quiz 5 — magnetic supercells: multi-Q, conical and distorted spirals",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "Which of these states can NOT be treated with the rotating frame and needs the supercell workflow?",
+   "options": {
+    "a": "a planar Heisenberg spiral",
+    "b": "a conical spiral in a field along the spiral axis",
+    "c": "a DMI helix with D ∥ n",
+    "d": "a collinear antiferromagnet"
+   },
+   "explanation": "The field adds a uniform component: the state is not a planar spiral, so the planar rotating-frame ansatz fails.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does an easy axis lying in the spiral plane force a supercell?",
+   "options": {
+    "a": "it makes the spins longer",
+    "b": "it breaks invariance under rotations about n, so R_n^T A R_n ≠ A and the spiral distorts (harmonics)",
+    "c": "it removes all magnons",
+    "d": "it does not"
+   },
+   "explanation": "Only anisotropy along n keeps the Hamiltonian rotation invariant; in-plane anisotropy bunches the spins (3q, 5q harmonics).",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does the Luttinger–Tisza (LT) scan return?",
+   "options": {
+    "a": "the exact ground state in every case",
+    "b": "the q minimising the lowest eigenvalue of J(q): the ordering vector and a lower bound of the energy",
+    "c": "the magnon gap",
+    "d": "the magnetic space group"
+   },
+   "explanation": "LT minimises the Fourier-transformed coupling matrix with the spin-length constraint relaxed: a lower bound, exact for simple cases.",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What is the 'star' of q_LT used for?",
+   "options": {
+    "a": "plotting",
+    "b": "the set of symmetry-equivalent wave vectors that a multi-Q state can combine; all must fit the supercell",
+    "c": "the k-mesh of VASP",
+    "d": "nothing"
+   },
+   "explanation": "Crystal rotations map q_LT to equivalent q's; triple-Q states use the three members of a hexagonal star.",
+   "id": 4,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does SymPhase keep n × n supercells when the star has several members (triangular lattice)?",
+   "options": {
+    "a": "it is faster",
+    "b": "a strip n1 ≠ n2 cannot contain all three Q's at 120°, so no triple-Q (skyrmion) state could form",
+    "c": "VASP requires it",
+    "d": "for nicer plots"
+   },
+   "explanation": "Without equal sizes only one star member is commensurate; the multi-Q state is excluded by construction.",
+   "id": 5,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: the J1–J2 chain with J1 = −1, J2 = 0.5 meV: how many cells does the automatic supercell have? (chain()['M'])",
+   "tol": 0.1,
+   "hint": "np.diag(chain()['M'])",
+   "explanation": "q = 1/6 exactly, so the 6-cell supercell has zero LT penalty.",
+   "id": 6,
+   "key": "Ng=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: J2 = 0.4 (q_exact = 0.14255). Which supercell length n between 4 and 13 gives the lowest energy per cell?",
+   "tol": 0.1,
+   "hint": "scan_sizes(..., [[n, 1, 1] for n in range(4, 14)], J=[-1.0, 0.4], ...)",
+   "explanation": "1/7 = 0.1429 is the closest m/n to 0.14255 for n ≤ 13; the energy is not monotonic in n.",
+   "id": 7,
+   "key": "Nw=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: energy per cell (meV) of the best J2 = 0.4 approximant (4 decimals)?",
+   "tol": 0.0002,
+   "unit": "meV",
+   "explanation": "−0.712498 meV, only 2 × 10⁻⁶ meV above the exact rotating-frame value −0.7125.",
+   "id": 8,
+   "key": "NTIxNy4wLQ=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: cone angle: cos θ of the J1–J2 chain (S = 1, g = 2) in B = 2 T along z (3 decimals)?",
+   "tol": 0.002,
+   "hint": "chain(field=[0, 0, 2])['best']['dirs'][:, 2].mean()",
+   "explanation": "cos θ = gμ_B B / (2S(J(0) − J(Q))) = 0.2315 / 0.5 = 0.46307.",
+   "id": 9,
+   "key": "MzY0LjA="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: for that cone, what is the uniform structure-factor weight w(0) (3 decimals)?",
+   "tol": 0.002,
+   "hint": "r['character']['w0']",
+   "explanation": "w(0) = cos²θ = 0.2144; the remaining 0.7856 sits at ±Q.",
+   "id": 10,
+   "key": "NDEyLjA="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many zero (Goldstone) modes at Γ does the cone have in its supercell?",
+   "tol": 0.1,
+   "hint": "chain(field=[0,0,2], spectrum=True, n_per=10, nmap=3)['lswt']['n_goldstone']",
+   "explanation": "Only rotations about the field direction remain a continuous symmetry.",
+   "id": 11,
+   "key": "MQ=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: which harmonic appears for K = 0.4 meV along x in the 6-cell J1–J2 spiral?",
+   "options": {
+    "a": "2q",
+    "b": "3q",
+    "c": "none",
+    "d": "q/2"
+   },
+   "explanation": "A uniaxial anisotropy ∝ cos²φ couples φ to 2φ, producing odd harmonics; 3q is the first (weight ≈ 0.015).",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Why does SymPhase relax from many seeds (LT single-Q, conical, multi-Q, random)?",
+   "options": {
+    "a": "to use more cores",
+    "b": "the energy landscape has several local minima; the lowest of many starts is the ground-state candidate",
+    "c": "to make the plots smoother",
+    "d": "seeds change the Hamiltonian"
+   },
+   "explanation": "Different phases (cycloid, cone, skyrmion crystal, FM) are separate minima; reaching the lowest from several seeds is the check.",
+   "id": 13,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many skyrmions does the 10 × 10 triangular supercell contain at B = 14 T (|N_sk|)?",
+   "tol": 0.1,
+   "hint": "abs(skx(14)['Q_top'])",
+   "explanation": "N_sk = −3: the skyrmion-lattice cell is one third of the supercell, fixed by |Q|.",
+   "id": 14,
+   "key": "Mw=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: how many members has the star of q_LT for the triangular skyrmion model (±q identified)?",
+   "tol": 0.1,
+   "hint": "len(skx(14)['star'])",
+   "explanation": "Three wave vectors at 120°: the triple-Q skyrmion crystal combines all of them.",
+   "id": 15,
+   "key": "Mw=="
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: sequence of ground states of the skyrmion model with increasing field (10×10 cell)?",
+   "options": {
+    "a": "FM → skyrmion crystal → cycloid",
+    "b": "cycloid (distorted) → skyrmion crystal → field-polarised FM",
+    "c": "skyrmion crystal at all fields",
+    "d": "cycloid → FM → skyrmion crystal"
+   },
+   "explanation": "0–6 T: (distorted) cycloid; ≈ 8–20 T: skyrmion crystal (N_sk = −3); ≥ 24 T: ferromagnet.",
+   "id": 16,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: the magnetic space group of the skyrmion crystal (symphase tensors on supercell/POSCAR + INCAR)?",
+   "options": {
+    "a": "P6/mmm1'",
+    "b": "P6m'm' (BNS 183.189)",
+    "c": "P-1",
+    "d": "P6_3/mmc"
+   },
+   "explanation": "Polar 6m'm': no T, no PT; a T-odd antisymmetric σ_xy (Hall response) is allowed.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How is the lattice topological charge computed?",
+   "options": {
+    "a": "from the net moment",
+    "b": "sum of solid angles Ω of the spin triangles of every lattice triangle, divided by 4π (Berg–Lüscher)",
+    "c": "from the magnon gap",
+    "d": "from the space group number"
+   },
+   "explanation": "Ω = 2 atan2(e1·(e2×e3), 1 + e1·e2 + e2·e3 + e3·e1); the sum is an integer for a smooth texture.",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "A supercell of N primitive cells with one magnetic atom per cell gives how many magnon bands?",
+   "options": {
+    "a": "1",
+    "b": "N (folded into the smaller supercell Brillouin zone)",
+    "c": "2N",
+    "d": "depends on the field"
+   },
+   "explanation": "Bands are folded: N sites → N bosonic modes per k of the supercell zone.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which VASP setup checks a predicted non-collinear supercell texture?",
+   "options": {
+    "a": "vasp_std with ISPIN = 2 and collinear MAGMOM",
+    "b": "vasp_ncl with LNONCOLLINEAR, MAGMOM from supercell/INCAR, constrained moments, LSORBIT if DMI matters",
+    "c": "vasp_gam with ISPIN = 1",
+    "d": "no DFT check is possible"
+   },
+   "explanation": "Then compare total energies with competing states (seeds.dat) in the same supercell.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

@@ -32,6 +32,7 @@ import numpy as np
 from .parallel import pmap, get_shared
 
 KB_MEV = 0.08617333262   # meV/K
+MUB_MEV = 0.05788381806  # Bohr magneton, meV/T
 
 
 # ----------------------------------------------------------------------------
@@ -153,8 +154,9 @@ def _pairs_from(bonds, Jcls=None, Jexplicit=None):
     return pairs
 
 
-def hamiltonian(q, sites, U, V, S, pairs, Asite):
-    """bosonic BdG matrix H(q) (2N x 2N, meV) for H = Σ S_i^T J_ij S_j + Σ S_i^T A_i S_i"""
+def hamiltonian(q, sites, U, V, S, pairs, Asite, hfield=None):
+    """bosonic BdG matrix H(q) (2N x 2N, meV) for H = Σ S_i^T J_ij S_j + Σ S_i^T A_i S_i + Σ h_i·S_i
+    (Zeeman: h_i = −g μ_B B)"""
     N = len(sites)
     loc = {s: n for n, s in enumerate(sites)}
 
@@ -180,6 +182,9 @@ def hamiltonian(q, sites, U, V, S, pairs, Asite):
                 continue
             A[a, a] += S[a] * (np.real(U[a] @ Am @ np.conj(U[a])) - 2 * V[a] @ Am @ V[a])
             B[a, a] += S[a] * (U[a] @ Am @ U[a])
+        if hfield is not None:
+            for a in range(N):
+                A[a, a] += -float(hfield[a] @ V[a])          # h·S = h·v (S − n) + ...
         return A, B
     A, B = block(q)
     Am, _ = block(-q)
@@ -212,9 +217,10 @@ def colpa(H, eps=1e-9):
 
 
 def _w_modes(q):
-    sites, U, V, S, pairs, Asite, axis = (get_shared(k) for k in ("sites", "U", "V", "S", "pairs", "Asite", "axis"))
+    sites, U, V, S, pairs, Asite, axis, hf = (get_shared(k) for k in ("sites", "U", "V", "S", "pairs", "Asite",
+                                                                       "axis", "hfield"))
     N = len(sites)
-    om, T = colpa(hamiltonian(q, sites, U, V, S, pairs, Asite))
+    om, T = colpa(hamiltonian(q, sites, U, V, S, pairs, Asite, hf))
     if om is None:
         return np.full(N, np.nan), np.zeros(N), np.zeros((N, 3))
     o = np.argsort(om)
@@ -236,10 +242,10 @@ def _w_modes(q):
     return om, proj, dS
 
 
-def spectrum(qs, sites, U, V, S, pairs, Asite, axis, nproc=None):
+def spectrum(qs, sites, U, V, S, pairs, Asite, axis, nproc=None, hfield=None):
     res = pmap(_w_modes, list(qs), nproc=nproc, backend="process",
                shared=dict(sites=sites, U=U, V=V, S=np.asarray(S, float), pairs=pairs, Asite=Asite,
-                           axis=np.asarray(axis, float)), min_items=64)
+                           axis=np.asarray(axis, float), hfield=hfield), min_items=64)
     return (np.array([r[0] for r in res]), np.array([r[1] for r in res]), np.array([r[2] for r in res]))
 
 
@@ -257,9 +263,11 @@ def chirality_split(om, proj, thr=0.1):
 # ----------------------------------------------------------------------------
 #  classical ground state
 # ----------------------------------------------------------------------------
-def classical_energy(dirs, S, sites, pairs, Asite):
+def classical_energy(dirs, S, sites, pairs, Asite, hfield=None):
     loc = {s: n for n, s in enumerate(sites)}
     E = 0.0
+    if hfield is not None:
+        E += float(np.sum(np.asarray(S)[:, None] * np.asarray(hfield) * np.asarray(dirs)))
     for i, j, d, J in pairs:
         a, b = loc[i], loc[j]
         E += S[a] * S[b] * dirs[a] @ J @ dirs[b]
@@ -269,15 +277,15 @@ def classical_energy(dirs, S, sites, pairs, Asite):
     return E
 
 
-def relax_spins(dirs, S, sites, pairs, Asite, steps=20000, tol=1e-10, lr=0.05):
+def relax_spins(dirs, S, sites, pairs, Asite, steps=20000, tol=1e-10, lr=0.05, hfield=None):
     """projected steepest descent of the classical energy on unit vectors (fixed magnetic cell)"""
     loc = {s: n for n, s in enumerate(sites)}
     e = np.array(dirs, float)
     e /= np.linalg.norm(e, axis=1)[:, None]
-    E_old = classical_energy(e, S, sites, pairs, Asite)
+    E_old = classical_energy(e, S, sites, pairs, Asite, hfield)
     scale = max(1e-9, max(np.abs(J).max() for *_, J in pairs) if pairs else 1.0) * max(S) ** 2
     for it in range(steps):
-        g = np.zeros_like(e)
+        g = np.zeros_like(e) if hfield is None else np.asarray(S)[:, None] * np.asarray(hfield, float)
         for i, j, d, J in pairs:
             a, b = loc[i], loc[j]
             g[a] += S[a] * S[b] * (J @ e[b])
@@ -289,11 +297,11 @@ def relax_spins(dirs, S, sites, pairs, Asite, steps=20000, tol=1e-10, lr=0.05):
         e = e - lr / scale * g
         e /= np.linalg.norm(e, axis=1)[:, None]
         if it % 50 == 0:
-            E = classical_energy(e, S, sites, pairs, Asite)
+            E = classical_energy(e, S, sites, pairs, Asite, hfield)
             if abs(E_old - E) < tol * max(1.0, abs(E)) and np.abs(g).max() < 1e-7 * scale:
                 break
             E_old = E
-    return e, classical_energy(e, S, sites, pairs, Asite), it
+    return e, classical_energy(e, S, sites, pairs, Asite, hfield), it
 
 
 # ----------------------------------------------------------------------------
@@ -441,7 +449,8 @@ def make_path(lat, points, n_per=60):
 # ----------------------------------------------------------------------------
 def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, exchange=None,
             K=0.0, spin=None, rmax=6.5, mmin=0.05, nproc=None, n_per=60, nmap=41, sg=None,
-            K_axis=None, K_local=False, relax=False, axis=None, spiral=None, spiral_axis=None, qdims=None):
+            K_axis=None, K_local=False, relax=False, axis=None, spiral=None, spiral_axis=None, qdims=None,
+            field=None, g=2.0, return_model=False):
     """bond classes and (if J or exchange given) the LSWT spectrum for any magnetic order.
 
     J        : list of scalar J per bond class (meV, J > 0 AFM)
@@ -457,7 +466,13 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
                requires a Hamiltonian invariant under rotations about spiral_axis n
                (Heisenberg, DMI ∥ n, anisotropy along n).
     qdims    : reciprocal directions searched for q (default: those spanned by the bonds)
+    field    : magnetic field B (Tesla, 3-vector); Zeeman term −g μ_B B·S
+    return_model : return the model (pairs, anisotropy, field, ...) before any spin-wave step;
+               used by the supercell workflow (symphase.supercell)
+    States the rotating frame cannot describe (multi-Q, conical, spirals distorted by
+    anisotropy in the spiral plane) are handled by symphase.supercell (--supercell).
     """
+    gfac = float(g)
     norms = np.linalg.norm(mags, axis=1)
     magnetic = [i for i in range(len(frac)) if norms[i] > mmin * max(norms.max(), 1e-9)]
     if not magnetic:
@@ -520,8 +535,18 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
             n_ = dirs0[a] if K_local else (np.asarray(K_axis, float) / np.linalg.norm(K_axis) if K_axis is not None
                                            else (axis if kind == "collinear" else np.array([0.0, 0.0, 1.0])))
             Asite[a] = -K * np.outer(n_, n_)
+    hfield = None
+    if field is not None and np.linalg.norm(field) > 0:
+        hfield = np.tile(-gfac * MUB_MEV * np.asarray(field, float), (len(magnetic), 1))
+    if return_model:
+        out.update(pairs=pairs, Asite=Asite, hfield=hfield, magnetic=magnetic, S_arr=S, dirs0=dirs0,
+                   J_classes=Jcls)
+        return out
     dirs = dirs0.copy()
-    E0 = classical_energy(dirs, S, magnetic, pairs, Asite)
+    E0 = classical_energy(dirs, S, magnetic, pairs, Asite, hfield)
+    if spiral is not None and hfield is not None:
+        raise ValueError("a field makes the spiral conical, which the planar rotating-frame ansatz does not "
+                         "describe -> use the supercell workflow (--supercell auto)")
     if spiral is not None:
         cart = np.array([lat.T @ frac[m] for m in magnetic])
         n_sp = np.asarray(spiral_axis, float) if spiral_axis is not None else spiral_axis_guess(pairs)
@@ -530,7 +555,8 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
         bad += [f"A{k}" for k, A_ in enumerate(Asite) if not rotation_invariant(A_, n_sp)]
         if bad:
             raise ValueError(f"spiral mode needs a Hamiltonian invariant under rotations about n = {n_sp}; "
-                             f"{len(bad)} terms are not (choose --spiral-axis along the DM vectors / anisotropy)")
+                             f"{len(bad)} terms are not (choose --spiral-axis along the DM vectors / anisotropy, "
+                             f"or use the supercell workflow: --supercell auto)")
         if qdims is None:
             span = np.array([np.linalg.solve(lat.T, d) for *_, d, _J in [(p[0], p[1], p[2], p[3]) for p in pairs]])
             qdims = tuple(k for k in range(3) if span.size and np.abs(span[:, k]).max() > 1e-6) or (0, 1, 2)
@@ -549,12 +575,12 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
         out.update(relaxed=False, E_classical=float(Esp))
         relax = False
     if relax:
-        dirs, E1, nit = relax_spins(dirs, S, magnetic, pairs, Asite)
+        dirs, E1, nit = relax_spins(dirs, S, magnetic, pairs, Asite, hfield=hfield)
         out.update(relaxed=True, E_classical_start=E0, E_classical=E1, relax_iterations=nit)
         # does an incommensurate single-Q spiral beat the best state that fits this cell?
         try:
             n_sp = spiral_axis_guess(pairs)
-            if all(rotation_invariant(J_, n_sp) for *_, J_ in pairs) and \
+            if hfield is None and all(rotation_invariant(J_, n_sp) for *_, J_ in pairs) and \
                     all(rotation_invariant(A_, n_sp) for A_ in Asite):
                 cart = np.array([lat.T @ frac[m] for m in magnetic])
                 span = np.array([np.linalg.solve(lat.T, p_[2]) for p_ in pairs])
@@ -565,6 +591,15 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
                                            lower=bool(Esp < E1 - 1e-6 * max(1.0, abs(E1))))
         except Exception:  # noqa: BLE001
             pass
+        if "spiral_check" not in out:                     # non-invariant H: Luttinger–Tisza hint
+            try:
+                from .supercell import lt_scan
+                cart = np.array([lat.T @ frac[m] for m in magnetic])
+                lt = lt_scan(lat, cart, magnetic, pairs, Asite, S, ngrid=24)
+                out["lt_check"] = dict(q_rlu=lt["q"].tolist(),
+                                       incommensurate=bool(np.linalg.norm(lt["q"]) > 1e-6))
+            except Exception:  # noqa: BLE001
+                pass
         if K_local:
             Asite = [-K * np.outer(e, e) if K else None for e in dirs]
     elif spiral is None:
@@ -573,26 +608,33 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
     out["net_moment"] = (dirs * (2 * S)[:, None]).sum(0).tolist()
     if spiral is not None and np.linalg.norm(out["spiral"]["q_rlu"]) > 1e-9:
         out["net_moment"] = [0.0, 0.0, 0.0]          # averages to zero over the spiral
+    out.update(lswt(lat, magnetic, dirs, S, pairs, Asite, axis, nproc=nproc, n_per=n_per, nmap=nmap,
+                    hfield=hfield))
+    out["J_classes"] = Jcls
+    if sg is not None:
+        from .spingroup import spin_polarisation_form
+        out["sym_degree"], out["sym_form"] = spin_polarisation_form(sg)
+    return out
+
+
+def lswt(lat, sites, dirs, S, pairs, Asite, axis, nproc=None, n_per=60, nmap=41, hfield=None, path=None):
+    """spin-wave spectrum on the default path + Δω map for a given (relaxed) state"""
     Uf, Vf = local_frames(dirs)
-    qs, xs, ticks = make_path(lat, DEFAULT_PATH, n_per)
-    om, proj, dS = spectrum(qs, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
-    omm, _, _ = spectrum(-qs, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
+    qs, xs, ticks = make_path(lat, path or DEFAULT_PATH, n_per)
+    om, proj, dS = spectrum(qs, sites, Uf, Vf, S, pairs, Asite, axis, nproc, hfield)
+    omm, _, _ = spectrum(-qs, sites, Uf, Vf, S, pairs, Asite, axis, nproc, hfield)
     dw = chirality_split(om, proj)
     Bm = 2 * np.pi * np.linalg.inv(lat).T
     f = np.linspace(-0.5, 0.5, nmap)
     F1, F2 = np.meshgrid(f, f, indexing="ij")
     Q = (F1.ravel()[:, None] * Bm[0][None, :] + F2.ravel()[:, None] * Bm[1][None, :])
-    om2, pr2, _ = spectrum(Q, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
+    om2, pr2, _ = spectrum(Q, sites, Uf, Vf, S, pairs, Asite, axis, nproc, hfield)
     dwm = chirality_split(om2, pr2).reshape(F1.shape)
     nonrec = float(np.nanmax(np.abs(om - omm))) if np.isfinite(om).any() else float("nan")
-    out.update(J_classes=Jcls, n_pairs=len(pairs), q=qs, x=xs, ticks=ticks, omega=om, dSz=proj, magnon_spin=dS,
-               split=dw, map_q=Q.reshape(nmap, nmap, 3), map_split=dwm, nonreciprocity=nonrec,
-               unstable=bool(np.isnan(om).any()), max_split=float(np.nanmax(np.abs(dwm))) if np.isfinite(dwm).any()
-               else 0.0, n_goldstone=int(np.sum(np.abs(om[0]) < 1e-3)) if np.isfinite(om[0]).all() else None)
-    if sg is not None:
-        from .spingroup import spin_polarisation_form
-        out["sym_degree"], out["sym_form"] = spin_polarisation_form(sg)
-    return out
+    return dict(n_pairs=len(pairs), q=qs, x=xs, ticks=ticks, omega=om, dSz=proj, magnon_spin=dS,
+                split=dw, map_q=Q.reshape(nmap, nmap, 3), map_split=dwm, nonreciprocity=nonrec,
+                unstable=bool(np.isnan(om).any()), max_split=float(np.nanmax(np.abs(dwm))) if np.isfinite(dwm).any()
+                else 0.0, n_goldstone=int(np.sum(np.abs(om[0]) < 1e-3)) if np.isfinite(om[0]).all() else None)
 
 
 # ----------------------------------------------------------------------------
@@ -726,6 +768,17 @@ def main(argv=None):
     ap.add_argument("--spiral-axis", type=float, nargs=3, default=None,
                     help="spiral rotation axis n (default: along the DM vectors, else z)")
     ap.add_argument("--qdims", type=int, nargs="+", default=None, help="reciprocal directions (0 1 2) searched for q")
+    ap.add_argument("--field", type=float, nargs=3, default=None, metavar=("Bx", "By", "Bz"),
+                    help="magnetic field (Tesla); Zeeman term −g μ_B B·S")
+    ap.add_argument("--g", type=float, default=2.0, help="g factor for --field [2]")
+    ap.add_argument("--supercell", nargs="+", default=None, metavar="auto|n1 n2 n3|M11..M33",
+                    help="supercell workflow for multi-Q / conical / anisotropy-distorted states: "
+                         "'auto' (size from the Luttinger–Tisza q), 3 sizes or a 3x3 integer matrix")
+    ap.add_argument("--restarts", type=int, default=8, help="random seeds in the supercell relaxation [8]")
+    ap.add_argument("--max-cells", type=int, default=400, help="largest supercell for 'auto' [400 cells]")
+    ap.add_argument("--scan", type=int, nargs=2, default=None, metavar=("NMIN", "NMAX"),
+                    help="scan supercell sizes n = NMIN..NMAX along the ordering directions (E per cell)")
+    ap.add_argument("--sc-out", default="supercell", help="output folder of the supercell workflow")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -756,13 +809,16 @@ def main(argv=None):
     print(f"  symmetry   : magnon chirality splitting has the form of the NR spin splitting -> "
           f"{sgm.wave_label(deg, sg['kind'])}" + (f";  {forms[0]}" if forms else ""))
     exch = read_exchange_file(args.exchange) if args.exchange else None
+    if args.supercell is not None or args.scan is not None:
+        return _supercell_cli(args, lat, frac, types, symbols, mags, rots, trs, exch)
     res = analyse(lat, frac, types, symbols, mags, rots, trs, J=args.J, exchange=exch, K=args.K,
                   spin=args.spin, rmax=args.rmax, mmin=args.mmin, nproc=args.nproc, n_per=args.nq,
                   nmap=args.nmap, sg=sg, K_axis=args.K_axis, K_local=args.K_local, relax=args.relax,
                   axis=args.axis,
                   spiral=(None if args.spiral is None else ("auto" if args.spiral[0].lower() == "auto"
                                                              else [float(x) for x in args.spiral[:3]])),
-                  spiral_axis=args.spiral_axis, qdims=tuple(args.qdims) if args.qdims else None)
+                  spiral_axis=args.spiral_axis, qdims=tuple(args.qdims) if args.qdims else None,
+                  field=args.field, g=args.g)
     print(f"\n  order: {res['kind']}   magnetic sites: {res['sites']}   S = {[round(x, 3) for x in res['S']]}   "
           f"projection axis = {fmt_vec(res['axis'], 3)}")
     if res["kind"] == "collinear":
@@ -783,6 +839,10 @@ def main(argv=None):
         if sc and sc["lower"]:
             print(f"  NOTE: an incommensurate single-Q spiral q = {np.round(sc['q_rlu'], 5)} r.l.u. has lower energy "
                   f"({sc['E_spiral']:.5f} meV/cell) than any state of this cell -> rerun with --spiral auto")
+        lc = res.get("lt_check")
+        if lc and lc["incommensurate"]:
+            print(f"  NOTE: the Luttinger–Tisza minimum is at q = {np.round(lc['q_rlu'], 5)} r.l.u., not q = 0 of this "
+                  f"cell; the true ground state may need a supercell -> rerun with --supercell auto")
     if res.get("spiral"):
         sp = res["spiral"]
         print(f"\n  single-Q spiral (rotating frame, magnetic cell kept):  q = {np.round(sp['q_rlu'], 6)} r.l.u.,"
@@ -817,6 +877,53 @@ def main(argv=None):
                    header="x(1/Å)  omega_1..N (meV)  dSz_1..N  split(meV)")
         print(f"\n  written: {args.plot}" + (f", {stem}_split_map{ext}" if np.isfinite(res["map_split"]).any() else "")
               + f", {stem}_bands.dat")
+    return res
+
+
+def _supercell_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
+    from . import supercell as scm
+    kw = dict(J=args.J, exchange=exch, K=args.K, spin=args.spin, rmax=args.rmax, mmin=args.mmin,
+              K_axis=args.K_axis, K_local=args.K_local, field=args.field, g=args.g)
+    if args.scan:
+        prim = analyse(lat, frac, types, symbols, mags, rots, trs, return_model=True, **kw)
+        cart = np.array([lat.T @ frac[m] for m in prim["magnetic"]])
+        lt = scm.lt_scan(lat, cart, prim["magnetic"], prim["pairs"], prim["Asite"], prim["S_arr"])
+        dims = args.qdims or lt["qdims"]
+        sizes = []
+        for n in range(args.scan[0], args.scan[1] + 1):
+            sz = [1, 1, 1]
+            for k in dims:
+                sz[k] = n
+            sizes.append(sz)
+        print(f"\n  supercell scan along r.l.u. directions {list(dims)}  (q_LT = {np.round(lt['q'], 5)})")
+        print("    size          cells   E (meV / primitive cell)   state")
+        rows = scm.scan_sizes(lat, frac, types, symbols, mags, rots, trs, sizes, restarts=max(2, args.restarts // 2),
+                              **kw)
+        Emin = min(r["E_cell"] for r in rows)
+        tolE = 1e-6 * max(1.0, abs(Emin))
+        for r in rows:
+            mark = "  <- lowest" if abs(r["E_cell"] - Emin) < tolE else ""
+            qt = "" if r["Q_top"] is None else f"  Q_top = {r['Q_top']:+.2f}"
+            print(f"    {str(r['size']):<13s} {r['n_cells']:5d}   {r['E_cell']:18.6f}       {r['cls']}{qt}{mark}")
+        best = min((r for r in rows if r["E_cell"] < Emin + tolE), key=lambda r: r["n_cells"])
+        print(f"\n  best supercell: {best['size']}  -> rerun with --supercell {' '.join(map(str, best['size']))}")
+        if args.supercell is None:
+            return rows
+    size = "auto" if args.supercell[0].lower() == "auto" else [int(x) for x in args.supercell]
+    res = scm.run_supercell(lat, frac, types, symbols, mags, rots, trs, size=size, restarts=args.restarts,
+                            max_cells=args.max_cells, nproc=args.nproc, n_per=max(20, args.nq // 2),
+                            nmap=min(args.nmap, 21), **kw)
+    scm.report(res, symbols)
+    out = scm.write_outputs(res, symbols, mags, args.sc_out)
+    print(f"\n  written to {out}/: POSCAR, INCAR (non-collinear MAGMOM), J_super.dat, spins.dat, seeds.dat")
+    if args.plot and args.plot.lower() != "none":
+        stem, ext = os.path.splitext(args.plot)
+        scm.plot_state(res, save=os.path.join(out, f"state{ext}"))
+        L = res["lswt"]
+        plot_bands(dict(L, spiral=None), save=os.path.join(out, f"bands{ext}"),
+                   title=f"supercell {np.diag(res['M']).tolist()}: folded magnon bands")
+        print(f"  plots: {out}/state{ext}, {out}/bands{ext}")
+    print(f"  next: symphase tensors -p {out}/POSCAR -i {out}/INCAR   (magnetic symmetry / allowed tensors of this state)")
     return res
 
 

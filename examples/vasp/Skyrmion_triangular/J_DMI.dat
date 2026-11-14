@@ -1,0 +1,5 @@
+# FM nearest-neighbour exchange J = -1.0 meV + interfacial (Neel-type) DMI D_ij = D (z x r_ij), |D| = 1.8 meV
+# i j n1 n2 n3   J   Dx Dy Dz      (H = sum J S_i.S_j + D_ij.(S_i x S_j))
+1 1  1  0  0  -1.000   0.000000  1.800000  0.000000
+1 1  0  1  0  -1.000  -1.558846 -0.900000  0.000000
+1 1  1  1  0  -1.000  -1.558846  0.900000  0.000000

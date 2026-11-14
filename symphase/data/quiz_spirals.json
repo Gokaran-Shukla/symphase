@@ -230,7 +230,7 @@
     "c": "no DMI allowed",
     "d": "only 1D chains"
    },
-   "explanation": "The rotating frame handles one q with a rotation-invariant Hamiltonian; everything else uses the general fixed-cell LSWT.",
+   "explanation": "The rotating frame handles one q with a rotation-invariant Hamiltonian; everything else uses the supercell workflow (--supercell auto, tutorial 12).",
    "id": 20,
    "key": "ImIi"
   }

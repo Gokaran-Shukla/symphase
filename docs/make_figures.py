@@ -94,3 +94,51 @@ ax2.legend(fontsize=8.5); ax2.set_title("magnons, q = 1/6 (1-atom cell)", fontsi
 fig.tight_layout()
 fig.savefig(os.path.join(F, "spiral.pdf")); fig.savefig(os.path.join(F, "spiral.png"), dpi=160); plt.close(fig)
 print("figure spiral")
+
+# ---------------------------------------------------------------- supercell workflow: cone, distorted spiral, skyrmion crystal
+from symphase.supercell import run_supercell, scan_sizes
+from symphase.magnons import read_exchange_file
+from symphase.tensors import read_poscar
+MUB = 0.05788381806
+def chain_sc(size="auto", **kw):
+    base = dict(J=[-1.0, 0.5], spin=1.0, rmax=6.1, restarts=3, spectrum=False); base.update(kw)
+    return run_supercell(latc, frc, [0], ["Fe"], m0, dsc.rotations, dsc.translations, size=size, **base)
+sk = os.path.join(H, "..", "examples", "vasp", "Skyrmion_triangular")
+ps = read_poscar(f"{sk}/POSCAR"); dss = spglib.get_symmetry_dataset((ps["lattice"], ps["frac"], [0]))
+exs = read_exchange_file(f"{sk}/J_DMI.dat")
+def skx(B):
+    return run_supercell(ps["lattice"], ps["frac"], [0], ["Mn"], np.array([[0, 0, 2.0]]), dss.rotations, dss.translations,
+                         size=[10, 10, 1], restarts=2, spectrum=False, exchange=exs, spin=1.0, rmax=3.1, field=[0, 0, B])
+r14 = skx(14)
+Bs = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28]
+scan = [skx(B) for B in Bs]
+Bc = [0.5, 1, 2, 3, 4]
+cs = [chain_sc(field=[0, 0, B])["best"]["dirs"][:, 2].mean() for B in Bc]
+fig = plt.figure(figsize=(12.4, 3.8))
+gs = fig.add_gridspec(1, 3, width_ratios=[1.3, 1, 1], wspace=0.32)
+ax = fig.add_subplot(gs[0])
+sc_, slat, sfrac = r14["model"], r14["slat"], r14["sfrac"]
+e = r14["best"]["dirs"]; r0 = np.array([slat.T @ sfrac[I] for I in sc_["sites"]])
+P = np.concatenate([r0 + u * slat[0] + v * slat[1] for u in range(2) for v in range(2)]); EE = np.tile(e, (4, 1))
+sct = ax.scatter(P[:, 0], P[:, 1], c=EE[:, 2], cmap="coolwarm", vmin=-1, vmax=1, s=9, marker="h", lw=0)
+ax.quiver(P[:, 0], P[:, 1], EE[:, 0], EE[:, 1], color="k", pivot="mid", scale=1.25 / 3.0, scale_units="xy",
+          angles="xy", width=0.0028, headwidth=3.5)
+cell = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]) @ slat[:2, :2]
+ax.plot(cell[:, 0], cell[:, 1], "--", color="0.2", lw=1)
+ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
+ax.set_title("skyrmion crystal, 14 T (10×10 cell, N$_{sk}$ = −3)", fontsize=10)
+cb = fig.colorbar(sct, ax=ax, fraction=0.035, pad=0.01, location="left"); cb.ax.set_title("s$_z$", fontsize=9)
+ax = fig.add_subplot(gs[1])
+ax.plot(Bs, [abs(x["Q_top"]) for x in scan], "o-", color="#c0392b", label="|N$_{sk}$| / supercell")
+ax.plot(Bs, [3 * x["character"]["w0"] for x in scan], "s-", color="#16325c", ms=4, label="3 × uniform weight w(0)")
+ax.axvspan(7, 22, color="#c0392b", alpha=0.08)
+ax.set_xlabel("B (T)"); ax.set_ylim(-0.2, 4.4); ax.legend(fontsize=8, loc="upper left", frameon=False, ncol=1)
+ax.set_title("field scan: cycloid → SkX → FM", fontsize=10)
+ax = fig.add_subplot(gs[2])
+ax.plot(Bc, [2 * MUB * B / 0.5 for B in Bc], color="0.65", lw=3, label="analytic")
+ax.plot(Bc, cs, "o", color="#16325c", label="supercell (6 cells)")
+ax.set_xlabel("B (T)"); ax.set_ylabel("cos θ"); ax.legend(fontsize=8.5)
+ax.set_title("conical spiral, J$_1$–J$_2$ chain", fontsize=10)
+fig.subplots_adjust(left=0.04, right=0.98, bottom=0.15, top=0.9)
+fig.savefig(os.path.join(F, "supercell.pdf")); fig.savefig(os.path.join(F, "supercell.png"), dpi=160); plt.close(fig)
+print("figure supercell")

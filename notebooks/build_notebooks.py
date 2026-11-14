@@ -594,7 +594,8 @@ symphase magnons ... --spiral 0.25 0 0 --spiral-axis 0 0 1      # fixed q (r.l.u
 symphase magnons ... --spiral auto --qdims 0 1                   # search q in the a*-b* plane only
 ```
 Limits: single-Q planar spirals; anisotropy or DM vectors not parallel to $\\hat{\\mathbf n}$ break the rotating-frame symmetry —
-SymPhase then refuses and a (commensurate) supercell with `--relax` is required. Continue with **11_quiz_noncollinear_spirals.ipynb**."""),
+SymPhase then refuses; those states (multi-Q, conical, distorted spirals) are handled by the supercell workflow of
+**12_tutorial_magnetic_supercells.ipynb**. Continue with **11_quiz_noncollinear_spirals.ipynb**."""),
 ], "10_tutorial_incommensurate_spirals.ipynb")
 
 # =============================================================================
@@ -883,7 +884,7 @@ SP = [
     dict(type="mc", question="Which limitation remains?",
          options={"a": "only collinear magnets", "b": "single-Q planar spirals; multi-Q, conical or anisotropy-distorted spirals need a supercell",
                   "c": "no DMI allowed", "d": "only 1D chains"},
-         answer="b", explanation="The rotating frame handles one q with a rotation-invariant Hamiltonian; everything else uses the general fixed-cell LSWT."),
+         answer="b", explanation="The rotating frame handles one q with a rotation-invariant Hamiltonian; everything else uses the supercell workflow (--supercell auto, tutorial 12)."),
 ]
 build_bank(os.path.join(DATA, "quiz_spirals.json"), "Quiz 4 — non-collinear magnets and incommensurate spirals", SP)
 
@@ -958,3 +959,229 @@ def helix(D):
     return analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, exchange=ex, spin=1.0, rmax=3.1,
                    spiral="auto", n_per=6, nmap=3)["spiral"]
 # e.g.  spiral(-1.0, 0.5),  helix(0.2)['period_A'] / a""")
+
+
+# =============================================================================
+# 12  magnetic supercells: multi-Q, conical, distorted spirals
+# =============================================================================
+SC_HELPER = """import numpy as np, spglib, math
+import matplotlib.pyplot as plt
+from symphase.magnons import analyse, read_exchange_file, plot_bands
+from symphase.tensors import read_poscar
+from symphase.supercell import run_supercell, scan_sizes, report, plot_state, write_outputs
+a = 3.0
+lat, fr = np.diag([a, 12, 12]), np.zeros((1, 3))          # 1D chain, one Fe per cell
+ds = spglib.get_symmetry_dataset((lat, fr, [0])); m0 = np.array([[0, 0, 2.0]])
+def chain(size="auto", J=(-1.0, 0.5), **kw):
+    base = dict(J=list(J), spin=1.0, rmax=6.1, restarts=3, spectrum=False); base.update(kw)
+    return run_supercell(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, size=size, **base)
+sk = f"{EX}/vasp/Skyrmion_triangular"
+ps = read_poscar(f"{sk}/POSCAR"); dss = spglib.get_symmetry_dataset((ps["lattice"], ps["frac"], [0]))
+exs = read_exchange_file(f"{sk}/J_DMI.dat")
+def skx(B, size=(10, 10, 1), **kw):
+    base = dict(restarts=2, spectrum=False); base.update(kw)
+    return run_supercell(ps["lattice"], ps["frac"], [0], ["Mn"], np.array([[0, 0, 2.0]]), dss.rotations,
+                         dss.translations, size=list(size) if size != "auto" else "auto", exchange=exs, spin=1.0,
+                         rmax=3.1, field=[0, 0, B], **base)"""
+
+save([
+    md(r"""# SymPhase tutorial 12 — magnetic supercells: multi-Q, conical and distorted spirals
+
+The rotating frame (tutorial 10) treats **one planar spiral** in a Hamiltonian invariant about the spiral axis, without a supercell.
+Everything else needs an explicit magnetic supercell:
+
+| state | breaks the rotating frame because … | example |
+|---|---|---|
+| conical spiral | uniform component along the axis (field) | `Conical_J1J2_field` |
+| distorted spiral | in-plane anisotropy → harmonics 3q, 5q | `Distorted_spiral_K` |
+| multi-Q / skyrmion crystal | several Q at once, DM vectors in several directions | `Skyrmion_triangular` |
+
+`symphase magnons ... --supercell auto` runs the complete workflow (full step-by-step guide: `docs/SUPERCELL_WORKFLOW.md`):
+
+1. **Luttinger–Tisza** scan → ordering vector $q_{LT}$ and its star;
+2. **supercell size** from commensurate approximants of all star members;
+3. exact **mapping** of exchange, anisotropy and field onto the supercell;
+4. **classical relaxation** (L-BFGS) from many seeds: input state, ferromagnet, single-Q / conical / multi-Q seeds built from the LT eigenvectors, random states;
+5. **identification**: structure factor, harmonics, uniform weight, topological charge;
+6. **spin waves** in the supercell (stability, Goldstone modes, folded bands);
+7. **files** for DFT and for the symmetry analysis of the new state."""),
+    SETUP,
+    code(SC_HELPER),
+    md(r"""## 1. Sanity check: the J₁–J₂ chain needs 6 cells
+
+$J_1=-1$, $J_2=0.5$ meV: $q=1/6$ exactly. The automatic size search must find 6 cells and the rotating-frame energy −0.75 meV."""),
+    code("""r = chain()
+report(r, ["Fe"])
+print("\\nsupercell:", np.diag(r["M"]), "  E/cell =", round(r["E_cell"], 8))"""),
+    md(r"""## 2. Incommensurate $q$: converge the supercell size
+
+For $J_2=0.4$ the exact $q=\arccos(1/1.6)/2\pi=0.14255$ is not a simple fraction. A supercell of $n$ cells allows only $q=m/n$;
+the energy per cell is **not monotonic** in $n$ — it is lowest when $m/n$ is closest to $q$."""),
+    code("""exact = analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, J=[-1.0, 0.4], spin=1.0, rmax=6.1,
+                spiral="auto", spiral_axis=[0, 0, 1], n_per=4, nmap=3)["spiral"]
+rows = scan_sizes(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, [[n, 1, 1] for n in range(4, 16)],
+                  restarts=3, J=[-1.0, 0.4], spin=1.0, rmax=6.1)
+ns = [r_["size"][0] for r_ in rows]; Es = [r_["E_cell"] for r_ in rows]
+fig, ax = plt.subplots(figsize=(6.4, 3.6))
+ax.plot(ns, Es, "o-", color="#16325c", label="supercell n × 1 × 1")
+ax.axhline(exact["E_spiral"], color="#e67e22", ls="--", label=f"rotating frame (q = {abs(exact['q_rlu'][0]):.5f})")
+ax.set_xlabel("supercell length n"); ax.set_ylabel("E (meV / cell)"); ax.legend()
+best = min(rows, key=lambda r_: (round(r_["E_cell"], 9), r_["n_cells"]))
+print("best n =", best["size"][0], " E =", round(best["E_cell"], 6), " exact", exact["E_spiral"])"""),
+    md(r"""## 3. Conical spiral in a magnetic field
+
+A field $\mathbf B\parallel\hat z$ cants the spins out of the spiral plane. Classically $\cos\theta = g\mu_B B / \bigl(2S(J(0)-J(Q))\bigr)$
+— SymPhase reproduces it exactly, and identifies the state from the structure factor (uniform weight $w(0)=\cos^2\theta$)."""),
+    code("""MUB = 0.05788381806
+Bs = [0.5, 1, 2, 3, 4]
+cs = [chain(field=[0, 0, B])["best"]["dirs"][:, 2].mean() for B in Bs]
+fig, ax = plt.subplots(figsize=(5.6, 3.4))
+ax.plot(Bs, [2 * MUB * B / 0.5 for B in Bs], color="0.6", lw=3, label="analytic")
+ax.plot(Bs, cs, "o", color="#16325c", label="SymPhase supercell")
+ax.set_xlabel("B (T)"); ax.set_ylabel("cos θ"); ax.legend()
+rc = chain(field=[0, 0, 2.0], spectrum=True, n_per=30, nmap=5)
+print(rc["character"]["cls"], "  w(0) =", round(rc["character"]["w0"], 4), "  Goldstone modes:", rc["lswt"]["n_goldstone"])
+plot_state(rc);"""),
+    md(r"""Spin waves of the cone in the 6-cell supercell (bands are **folded**: 6 cells × 1 atom = 6 bands; one Goldstone mode = rotation about $\mathbf B$):"""),
+    code("""plot_bands(dict(rc["lswt"], spiral=None), title="conical spiral, B = 2 T (folded bands)");"""),
+    md(r"""## 4. Spiral distorted by an in-plane easy axis
+
+An easy axis $K$ along $x$ (inside the spiral plane) breaks the rotation symmetry: the spins bunch near $\pm x$, the energy drops below the
+undistorted spiral ($-0.75-KS^2/2$), and odd harmonics appear in the structure factor."""),
+    code("""Ks = [0.1, 0.2, 0.4, 0.6]
+res = [chain(size=[6, 1, 1], K=K, K_axis=[1, 0, 0]) for K in Ks]
+for K, r_ in zip(Ks, res):
+    h3 = sum(w for _, w, n in r_["character"]["harmonics"] if abs(n) == 3)
+    print(f"K = {K}:  E = {r_['E_cell']:.6f}  (undistorted {-0.75 - K / 2:.6f})   3q weight = {h3:.4f}   {r_['character']['cls']}")
+plot_state(res[2]);"""),
+    md(r"""Should the period change? Scan the size — for $K=0.4$ the 6-cell period stays lowest (lock-in):"""),
+    code("""for r_ in scan_sizes(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, [[n, 1, 1] for n in range(4, 10)],
+                    restarts=3, J=[-1.0, 0.5], spin=1.0, rmax=6.1, K=0.4, K_axis=[1, 0, 0]):
+    print(r_["size"], round(r_["E_cell"], 6), r_["cls"])"""),
+    md(r"""## 5. Multi-Q: a skyrmion crystal on the triangular lattice
+
+Ferromagnetic $J=-1$ meV, interfacial DMI $\mathbf D_{ij}=D\,\hat z\times\hat r_{ij}$ with $D=1.8$ meV, field along $z$.
+The LT star has **three** members at 120°, so the supercell must be $n\times n$ (a strip cannot hold a triple-Q state)."""),
+    code("""r14 = skx(14, size="auto")
+report(r14, ["Mn"])
+plot_state(r14);"""),
+    md(r"""The topological charge $N_{sk}=-3$ per 10×10 cell agrees with the geometry: $|Q|$ fixes a skyrmion lattice whose cell is 1/3 of the supercell.
+
+### Field scan: cycloid → skyrmion crystal → ferromagnet"""),
+    code("""Bs = [0, 4, 8, 12, 16, 20, 24, 28]
+scan = [skx(B) for B in Bs]
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 3.6))
+a1.plot(Bs, [abs(r_["Q_top"]) for r_ in scan], "o-", color="#c0392b"); a1.set_xlabel("B (T)"); a1.set_ylabel("|N$_{sk}$| per supercell")
+a2.plot(Bs, [r_["character"]["w0"] for r_ in scan], "s-", color="#16325c"); a2.set_xlabel("B (T)"); a2.set_ylabel("uniform weight w(0)")
+for B, r_ in zip(Bs, scan):
+    print(f"B = {B:4.0f} T   E = {r_['E_cell']:9.5f} meV/cell   {r_['character']['cls']}")"""),
+    md(r"""Near the upper boundary a 10×10 cell may show a state with fewer skyrmions — a **finite-cell effect**. Always compare the energy
+per cell in other sizes before claiming a new phase (step 6 of the guide).
+
+### Competing states and stability"""),
+    code("""for s_ in r14["seeds"][::8]:
+    print(f"{s_['E_cell']:10.5f} meV/cell   {s_['seed']}")
+r14s = skx(14, spectrum=True, n_per=8, nmap=5)
+print("\\nspin waves:", "UNSTABLE" if r14s["lswt"]["unstable"] else "stable", "; bands:", r14s["lswt"]["omega"].shape[1])"""),
+    md(r"""## 6. Files for DFT and the symmetry of the new state
+
+`write_outputs` (CLI: automatic, folder `supercell/`) writes `POSCAR`, a non-collinear `INCAR` (MAGMOM of the ground state),
+`J_super.dat`, `spins.dat`, `seeds.dat`. The supercell state can then go through the full symmetry analysis:"""),
+    code("""import tempfile
+from symphase import analyze_tensors
+out = write_outputs(r14, ["Mn"], np.array([[0, 0, 2.0]]), tempfile.mkdtemp())
+print(sorted(os.listdir(out)))
+t = analyze_tensors(out, tensors="charge", quiet=True)
+mg = t["magnetic"]
+print("magnetic space group:", mg["bns_symbol"], "(BNS", mg["bns_number"] + ")  MPG", mg["magnetic_point_group"],
+      "  T:", mg["time_reversal"], "  PT:", mg["PT"])"""),
+    md("""The T-odd antisymmetric conductivity (σ_xy, the Hall response of the skyrmion crystal) is symmetry-allowed in P6m'm'.
+
+## 7. Command line
+
+```bash
+cd examples/vasp/Conical_J1J2_field  && symphase magnons --J -1.0 0.5 --rmax 6.1 --spin 1 --field 0 0 2 --supercell auto
+cd examples/vasp/Distorted_spiral_K  && symphase magnons --J -1.0 0.5 --rmax 6.1 --spin 1 --K 0.4 --K-axis 1 0 0 --scan 4 13 --supercell auto
+cd examples/vasp/Skyrmion_triangular && symphase magnons --exchange J_DMI.dat --rmax 3.1 --spin 1 --field 0 0 14 --supercell auto
+symphase tensors -p supercell/POSCAR -i supercell/INCAR
+symphase magnons ... --supercell 7 1 1          # fixed size;  --supercell 2 1 0 -1 1 0 0 0 1  (matrix)
+symphase magnons ... --restarts 30 --max-cells 600
+```
+Continue with **13_quiz_magnetic_supercells.ipynb**."""),
+], "12_tutorial_magnetic_supercells.ipynb")
+
+SC = [
+    dict(type="mc", question="Which of these states can NOT be treated with the rotating frame and needs the supercell workflow?",
+         options={"a": "a planar Heisenberg spiral", "b": "a conical spiral in a field along the spiral axis",
+                  "c": "a DMI helix with D ∥ n", "d": "a collinear antiferromagnet"},
+         answer="b", explanation="The field adds a uniform component: the state is not a planar spiral, so the planar rotating-frame ansatz fails."),
+    dict(type="mc", question="Why does an easy axis lying in the spiral plane force a supercell?",
+         options={"a": "it makes the spins longer", "b": "it breaks invariance under rotations about n, so R_n^T A R_n ≠ A and the spiral distorts (harmonics)",
+                  "c": "it removes all magnons", "d": "it does not"},
+         answer="b", explanation="Only anisotropy along n keeps the Hamiltonian rotation invariant; in-plane anisotropy bunches the spins (3q, 5q harmonics)."),
+    dict(type="mc", question="What does the Luttinger–Tisza (LT) scan return?",
+         options={"a": "the exact ground state in every case", "b": "the q minimising the lowest eigenvalue of J(q): the ordering vector and a lower bound of the energy",
+                  "c": "the magnon gap", "d": "the magnetic space group"},
+         answer="b", explanation="LT minimises the Fourier-transformed coupling matrix with the spin-length constraint relaxed: a lower bound, exact for simple cases."),
+    dict(type="mc", question="What is the 'star' of q_LT used for?",
+         options={"a": "plotting", "b": "the set of symmetry-equivalent wave vectors that a multi-Q state can combine; all must fit the supercell",
+                  "c": "the k-mesh of VASP", "d": "nothing"},
+         answer="b", explanation="Crystal rotations map q_LT to equivalent q's; triple-Q states use the three members of a hexagonal star."),
+    dict(type="mc", question="Why does SymPhase keep n × n supercells when the star has several members (triangular lattice)?",
+         options={"a": "it is faster", "b": "a strip n1 ≠ n2 cannot contain all three Q's at 120°, so no triple-Q (skyrmion) state could form",
+                  "c": "VASP requires it", "d": "for nicer plots"},
+         answer="b", explanation="Without equal sizes only one star member is commensurate; the multi-Q state is excluded by construction."),
+    dict(type="num", question="Hands-on: the J1–J2 chain with J1 = −1, J2 = 0.5 meV: how many cells does the automatic supercell have? (chain()['M'])",
+         answer=6, tol=0.1, hint="np.diag(chain()['M'])",
+         explanation="q = 1/6 exactly, so the 6-cell supercell has zero LT penalty."),
+    dict(type="num", question="Hands-on: J2 = 0.4 (q_exact = 0.14255). Which supercell length n between 4 and 13 gives the lowest energy per cell?",
+         answer=7, tol=0.1, hint="scan_sizes(..., [[n, 1, 1] for n in range(4, 14)], J=[-1.0, 0.4], ...)",
+         explanation="1/7 = 0.1429 is the closest m/n to 0.14255 for n ≤ 13; the energy is not monotonic in n."),
+    dict(type="num", question="Hands-on: energy per cell (meV) of the best J2 = 0.4 approximant (4 decimals)?",
+         answer=-0.7125, tol=2e-4, unit="meV",
+         explanation="−0.712498 meV, only 2 × 10⁻⁶ meV above the exact rotating-frame value −0.7125."),
+    dict(type="num", question="Hands-on: cone angle: cos θ of the J1–J2 chain (S = 1, g = 2) in B = 2 T along z (3 decimals)?",
+         answer=0.463, tol=2e-3, hint="chain(field=[0, 0, 2])['best']['dirs'][:, 2].mean()",
+         explanation="cos θ = gμ_B B / (2S(J(0) − J(Q))) = 0.2315 / 0.5 = 0.46307."),
+    dict(type="num", question="Hands-on: for that cone, what is the uniform structure-factor weight w(0) (3 decimals)?",
+         answer=0.214, tol=2e-3, hint="r['character']['w0']",
+         explanation="w(0) = cos²θ = 0.2144; the remaining 0.7856 sits at ±Q."),
+    dict(type="num", question="Hands-on: how many zero (Goldstone) modes at Γ does the cone have in its supercell?",
+         answer=1, tol=0.1, hint="chain(field=[0,0,2], spectrum=True, n_per=10, nmap=3)['lswt']['n_goldstone']",
+         explanation="Only rotations about the field direction remain a continuous symmetry."),
+    dict(type="mc", question="Hands-on: which harmonic appears for K = 0.4 meV along x in the 6-cell J1–J2 spiral?",
+         options={"a": "2q", "b": "3q", "c": "none", "d": "q/2"},
+         answer="b", explanation="A uniaxial anisotropy ∝ cos²φ couples φ to 2φ, producing odd harmonics; 3q is the first (weight ≈ 0.015)."),
+    dict(type="mc", question="Why does SymPhase relax from many seeds (LT single-Q, conical, multi-Q, random)?",
+         options={"a": "to use more cores", "b": "the energy landscape has several local minima; the lowest of many starts is the ground-state candidate",
+                  "c": "to make the plots smoother", "d": "seeds change the Hamiltonian"},
+         answer="b", explanation="Different phases (cycloid, cone, skyrmion crystal, FM) are separate minima; reaching the lowest from several seeds is the check."),
+    dict(type="num", question="Hands-on: how many skyrmions does the 10 × 10 triangular supercell contain at B = 14 T (|N_sk|)?",
+         answer=3, tol=0.1, hint="abs(skx(14)['Q_top'])",
+         explanation="N_sk = −3: the skyrmion-lattice cell is one third of the supercell, fixed by |Q|."),
+    dict(type="num", question="Hands-on: how many members has the star of q_LT for the triangular skyrmion model (±q identified)?",
+         answer=3, tol=0.1, hint="len(skx(14)['star'])",
+         explanation="Three wave vectors at 120°: the triple-Q skyrmion crystal combines all of them."),
+    dict(type="mc", question="Hands-on: sequence of ground states of the skyrmion model with increasing field (10×10 cell)?",
+         options={"a": "FM → skyrmion crystal → cycloid", "b": "cycloid (distorted) → skyrmion crystal → field-polarised FM",
+                  "c": "skyrmion crystal at all fields", "d": "cycloid → FM → skyrmion crystal"},
+         answer="b", explanation="0–6 T: (distorted) cycloid; ≈ 8–20 T: skyrmion crystal (N_sk = −3); ≥ 24 T: ferromagnet."),
+    dict(type="mc", question="Hands-on: the magnetic space group of the skyrmion crystal (symphase tensors on supercell/POSCAR + INCAR)?",
+         options={"a": "P6/mmm1'", "b": "P6m'm' (BNS 183.189)", "c": "P-1", "d": "P6_3/mmc"},
+         answer="b", explanation="Polar 6m'm': no T, no PT; a T-odd antisymmetric σ_xy (Hall response) is allowed."),
+    dict(type="mc", question="How is the lattice topological charge computed?",
+         options={"a": "from the net moment", "b": "sum of solid angles Ω of the spin triangles of every lattice triangle, divided by 4π (Berg–Lüscher)",
+                  "c": "from the magnon gap", "d": "from the space group number"},
+         answer="b", explanation="Ω = 2 atan2(e1·(e2×e3), 1 + e1·e2 + e2·e3 + e3·e1); the sum is an integer for a smooth texture."),
+    dict(type="mc", question="A supercell of N primitive cells with one magnetic atom per cell gives how many magnon bands?",
+         options={"a": "1", "b": "N (folded into the smaller supercell Brillouin zone)", "c": "2N", "d": "depends on the field"},
+         answer="b", explanation="Bands are folded: N sites → N bosonic modes per k of the supercell zone."),
+    dict(type="mc", question="Which VASP setup checks a predicted non-collinear supercell texture?",
+         options={"a": "vasp_std with ISPIN = 2 and collinear MAGMOM", "b": "vasp_ncl with LNONCOLLINEAR, MAGMOM from supercell/INCAR, constrained moments, LSORBIT if DMI matters",
+                  "c": "vasp_gam with ISPIN = 1", "d": "no DFT check is possible"},
+         answer="b", explanation="Then compare total energies with competing states (seeds.dat) in the same supercell."),
+]
+build_bank(os.path.join(DATA, "quiz_supercells.json"), "Quiz 5 — magnetic supercells: multi-Q, conical and distorted spirals", SC)
+quiz_nb("13_quiz_magnetic_supercells.ipynb", "Quiz 5 — magnetic supercells: multi-Q, conical and distorted spirals (20 questions)",
+        SC, "supercells", "Work through **12_tutorial_magnetic_supercells.ipynb** and `docs/SUPERCELL_WORKFLOW.md` first. "
+        "Questions 6–11 and 12–17 are hands-on.", SC_HELPER)

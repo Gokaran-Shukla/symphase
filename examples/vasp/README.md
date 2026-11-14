@@ -18,3 +18,6 @@ contain only POSCAR + INCAR (moments from `MAGMOM`).
 | `CantedChain_DMI_INCAR` | AFM chain + staggered DMI (`J_DM.dat`), canted | — | non-collinear weak FM |
 | `Spiral_J1J2_chain` | frustrated J₁–J₂ chain, 1 atom/cell | — | spiral q = 1/6 (`--spiral auto`) |
 | `Helix_DMI_chain` | FM chain + uniform DMI (`J_DMI.dat`) | — | incommensurate helix, 95.5 Å |
+| `Conical_J1J2_field` | J₁–J₂ chain in B = 2 T | — | conical spiral via `--supercell auto` (analytic cone angle) |
+| `Distorted_spiral_K` | J₁–J₂ chain + in-plane easy axis | — | distorted spiral (3q harmonic), `--scan` |
+| `Skyrmion_triangular` | triangular FM + interfacial DMI + field | — | 3Q skyrmion crystal, N_sk = −3 per 10×10 cell |

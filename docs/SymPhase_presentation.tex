@@ -595,6 +595,51 @@ DMI helix, $D/|J|=0.2$ & $q=\arctan(D/|J|)/2\pi=0.0314$: period 95.5 Å $=31.8\,
 \end{tabular}}
 \end{frame}
 
+\begin{frame}{Beyond the rotating frame: magnetic supercells}
+\begin{columns}[T]
+\column{0.53\textwidth}
+\footnotesize
+\textbf{Needs a supercell:} multi-Q (skyrmion crystals), conical spirals (field $\parallel\hat{\mathbf n}$),
+spirals distorted by in-plane anisotropy (3$q$, 5$q$), non-invariant $J$ tensors.
+\texttt{--spiral} refuses these and points to \texttt{--supercell auto}:
+\begin{enumerate}\setlength\itemsep{0.12em}
+  \item \textbf{Luttinger–Tisza}: $\min_{\mathbf q}\lambda_{\min}[J(\mathbf q)]$ $\to$ $\mathbf q_{LT}$ + star
+  \item \textbf{size}: smallest $n_1\!\times\! n_2\!\times\! n_3$ fitting every star member ($n\times n$ for hexagonal)
+  \item exact \textbf{mapping} of $J$, $A$, $\mathbf B$ (Zeeman $-g\mu_B\mathbf B\cdot\Sv$)
+  \item \textbf{L-BFGS} from many seeds: LT single-Q, conical, multi-Q, random
+  \item \textbf{identify}: structure factor, harmonics, $w(0)$, $N_{sk}$
+  \item \textbf{LSWT} in the supercell (stability, folded bands)
+  \item \texttt{POSCAR}/\texttt{INCAR}/\texttt{J\_super.dat} $\to$ VASP \& \texttt{symphase tensors}
+\end{enumerate}
+\column{0.43\textwidth}
+\begin{tcolorbox}[sp,title=Commands]
+\raggedright\scriptsize\ttfamily
+symphase magnons ... --supercell auto\\
+\quad --field 0 0 14\\
+\quad --K 0.4 --K-axis 1 0 0\\
+\quad --scan 4 15 {\rmfamily (size convergence)}\\
+\quad --supercell 7 1 1 {\rmfamily (fixed size)}
+\end{tcolorbox}
+\begin{tcolorbox}[hl,title=Size scan: incommensurate $q$]
+\raggedright\scriptsize $J_2=0.4$, $q=0.14255$: $E(n)$ lowest at $n=7$ (and 14),
+$-0.712498$ vs.\ exact $-0.712500$ meV.\\[0.2em]
+Guide: \texttt{docs/SUPERCELL\_WORKFLOW.md}
+\end{tcolorbox}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Supercell results: skyrmion crystal, cone, distorted spiral}
+\centering\includegraphics[width=0.98\textwidth]{figures/supercell.pdf}
+
+{\scriptsize\renewcommand{\arraystretch}{1.0}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.52\textwidth}>{\raggedright\arraybackslash}p{0.17\textwidth}@{}}
+\toprule
+triangular FM + DMI, field & 10$\times$10 cell, 3$Q$ + $w(0)$, $N_{sk}=-3$ (8–20 T); $P6m'm'$ & $\sigma_{xy}$ allowed \\
+J$_1$–J$_2$ chain, $B=2$ T & cone: $\cos\theta=0.46307$ = analytic & 1 Goldstone mode \\
+J$_1$–J$_2$ + easy axis $K=0.4$ & distorted spiral, 3$q$ weight 0.015, locked at 6$a$ & below planar spiral \\ \bottomrule
+\end{tabular}}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -813,7 +858,8 @@ notebook & content\\ \midrule
 07 & finite-$T$ hulls: mixing entropy, phonons\\
 08 & non-collinear FM/AFM: triangular, canted DMI\\
 10 & incommensurate spirals (rotating frame)\\
-04, 05, 09, 11 & \textbf{4 quizzes $\times$ 20 questions}\\ \bottomrule
+12 & supercells: multi-Q, conical, distorted\\
+04, 05, 09, 11, 13 & \textbf{5 quizzes $\times$ 20 questions}\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -847,11 +893,12 @@ magnons: FM, AFM chain, RuO$_2$ & analytic $\omega(\mathbf q)$; d-wave $\Delta\o
 finite-$T$ hull & $T^*=251$ K (analytic), Debye limits & \textcolor{spinc}{\checkmark} \\
 non-collinear LSWT & FM[111], 120° triangular, canted DMI & \textcolor{spinc}{\checkmark} \\
 incommensurate spirals & J$_1$–J$_2$, DMI helix, 6-site supercell & \textcolor{spinc}{\checkmark} \\
-quiz keys & 80 / 80 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+supercells & cone angle (analytic), SkX $N_{sk}=-3$, exact mapping & \textcolor{spinc}{\checkmark} \\
+quiz keys & 100 / 100 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (46); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (53); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -861,7 +908,7 @@ quiz keys & 80 / 80 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomru
 \begin{itemize}\setlength\itemsep{0.35em}
   \item SSG numbers only for collinear order (non-collinear: structured description)
   \item symmetry gives the \emph{shape}, not the magnitude, of tensors
-  \item LSWT harmonic; spirals single-Q \& planar; exchange constants supplied by the user
+  \item LSWT harmonic; incommensurate multi-Q only as commensurate supercell approximants; exchange constants supplied by the user
   \item mixing energy sources requires identical DFT settings
 \end{itemize}
 \column{0.46\textwidth}

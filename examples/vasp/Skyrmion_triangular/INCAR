@@ -1,0 +1,4 @@
+SYSTEM = Mn triangular monolayer, ferromagnetic start
+ISPIN = 2
+MAGMOM = 0 0 4
+LNONCOLLINEAR = .TRUE.

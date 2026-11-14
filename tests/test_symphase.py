@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -369,3 +369,78 @@ def test_spiral_rejects_non_invariant_hamiltonian():
     with pytest.raises(ValueError):
         analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, exchange=ex, spin=1.0, rmax=3.1,
                 spiral="auto", spiral_axis=[0, 0, 1], n_per=4, nmap=3)
+
+
+# ---------------------------------------------------------------- supercell workflow (multi-Q / conical / distorted)
+MUB = 0.05788381806
+
+
+def _sc(size="auto", **kw):
+    from symphase.supercell import run_supercell
+    lat, fr, R, T = _chain()
+    base = dict(J=[-1.0, 0.5], spin=1.0, rmax=6.1, restarts=3, spectrum=False)
+    base.update(kw)
+    return run_supercell(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, size=size, **base)
+
+
+def test_supercell_auto_size_j1j2():
+    r = _sc()
+    assert np.diag(r["M"]).tolist() == [6, 1, 1]
+    assert abs(r["E_cell"] + 0.75) < 1e-7 and r["character"]["cls"] == "single-Q spiral"
+
+
+def test_supercell_model_mapping_is_exact():
+    from symphase.supercell import ClassicalModel
+    r = _sc(size=[5, 1, 1])
+    m = r["model"]
+    cm = ClassicalModel(m["sites"], m["pairs"], m["Asite"], m["S"], m["hfield"])
+    assert abs(cm.energy(np.tile([0, 0, 1.0], (5, 1))) / 5 - (-1.0 + 0.5)) < 1e-12
+
+
+def test_conical_spiral_in_field_analytic():
+    B = 2.0
+    r = _sc(field=[0, 0, B])
+    c = 2 * MUB * B / (2 * 1.0 * (-0.5 + 0.75))                # gμB B / (2S(J(0) − J(Q)))
+    ez = r["best"]["dirs"][:, 2]
+    assert np.allclose(ez, c, atol=1e-5)
+    assert abs(r["E_cell"] - (c * c * -0.5 + (1 - c * c) * -0.75 - 2 * MUB * B * c)) < 1e-8
+    assert r["character"]["cls"].startswith("conical") and abs(r["character"]["w0"] - c * c) < 1e-5
+
+
+def test_ferromagnet_zeeman_gap():
+    from symphase.magnons import analyse
+    lat, fr, R, T = _chain()
+    r = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-1.0], spin=1.0, rmax=3.1,
+                field=[0, 0, 1.5], n_per=4, nmap=3)
+    assert abs(np.nanmin(r["omega"]) - 2 * MUB * 1.5) < 1e-6
+
+
+def test_spiral_mode_refuses_field():
+    from symphase.magnons import analyse
+    lat, fr, R, T = _chain()
+    with pytest.raises(ValueError, match="supercell"):
+        analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-1.0, 0.5], spin=1.0, rmax=6.1,
+                spiral="auto", field=[0, 0, 1], n_per=4, nmap=3)
+
+
+def test_distorted_spiral_has_harmonics():
+    r = _sc(size=[6, 1, 1], K=0.4, K_axis=[1, 0, 0])
+    assert r["E_cell"] < -0.75 - 0.4 / 2 - 1e-3               # below the undistorted planar spiral
+    assert "distorted" in r["character"]["cls"]
+    assert any(abs(n) == 3 and w > 1e-3 for _, w, n in r["character"]["harmonics"])
+
+
+def test_skyrmion_crystal_triangular(tmp_path):
+    from symphase.magnons import read_exchange_file
+    from symphase.supercell import run_supercell, write_outputs
+    from symphase.tensors import read_poscar
+    p = read_poscar(f"{EX}/vasp/Skyrmion_triangular/POSCAR")
+    R, T = _sym(p["lattice"], p["frac"], [0])
+    ex = read_exchange_file(f"{EX}/vasp/Skyrmion_triangular/J_DMI.dat")
+    r = run_supercell(p["lattice"], p["frac"], [0], ["Mn"], np.array([[0, 0, 2.]]), R, T, size="auto",
+                      restarts=2, spectrum=False, exchange=ex, spin=1.0, rmax=3.1, field=[0, 0, 14])
+    assert len(r["star"]) == 3 and np.diag(r["M"]).tolist() == [10, 10, 1]
+    assert abs(r["Q_top"] + 3) < 1e-3 and r["character"]["cls"].startswith("skyrmion crystal")
+    write_outputs(r, ["Mn"], np.array([[0, 0, 2.]]), str(tmp_path))
+    assert read_poscar(str(tmp_path / "POSCAR"))["frac"].shape == (100, 3)
+    assert len(read_exchange_file(str(tmp_path / "J_super.dat"))) == 300
