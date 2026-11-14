@@ -297,6 +297,120 @@ def relax_spins(dirs, S, sites, pairs, Asite, steps=20000, tol=1e-10, lr=0.05):
 
 
 # ----------------------------------------------------------------------------
+#  incommensurate single-Q spirals (rotating frame, no supercell)
+# ----------------------------------------------------------------------------
+def rot_n(n, ang):
+    """rotation matrix by angle ang about unit vector n"""
+    n = np.asarray(n, float) / np.linalg.norm(n)
+    Kx = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
+    return np.eye(3) + math.sin(ang) * Kx + (1 - math.cos(ang)) * Kx @ Kx
+
+
+def rotation_invariant(M, n, tol=1e-8):
+    """True if R_n(φ)^T M R_n(φ) = M for all φ (tested at a generic angle)"""
+    if M is None:
+        return True
+    R = rot_n(n, 1.0)
+    return np.allclose(R.T @ M @ R, M, atol=tol * max(1.0, np.abs(M).max()))
+
+
+def spiral_axis_guess(pairs):
+    """common direction of the DM vectors (antisymmetric parts), else z"""
+    ds = []
+    for *_, J in pairs:
+        A = 0.5 * (J - J.T)
+        d = np.array([A[1, 2], A[2, 0], A[0, 1]])
+        if np.linalg.norm(d) > 1e-10:
+            ds.append(d / np.linalg.norm(d))
+    if ds and all(abs(abs(d @ ds[0]) - 1) < 1e-6 for d in ds):
+        return ds[0] * (1 if ds[0][np.argmax(np.abs(ds[0]))] > 0 else -1)
+    return np.array([0.0, 0.0, 1.0])
+
+
+def _bond_R(lat, d, ri, rj):
+    """integer lattice vector R of a bond from its Cartesian vector d = r_j + R − r_i"""
+    return np.round(np.linalg.solve(lat.T, d - (rj - ri))).astype(int)
+
+
+def spiral_pairs(pairs, lat, cart, sites, qfrac, n):
+    """bond matrices in the rotating frame: J -> J R_n(2π q·R)"""
+    loc = {s: k for k, s in enumerate(sites)}
+    out = []
+    for i, j, d, J in pairs:
+        R = _bond_R(lat, d, cart[loc[i]], cart[loc[j]])
+        out.append((i, j, d, J @ rot_n(n, 2 * np.pi * float(np.dot(qfrac, R)))))
+    return out
+
+
+def _plane_basis(n):
+    n = np.asarray(n, float) / np.linalg.norm(n)
+    t = np.array([1.0, 0, 0]) if abs(n[0]) < 0.9 else np.array([0, 1.0, 0])
+    x = np.cross(n, t)
+    x /= np.linalg.norm(x)
+    return x, np.cross(n, x)
+
+
+def spiral_energy(qfrac, psi, S, sites, pairs, Asite, lat, cart, n):
+    """classical energy per magnetic cell of the planar spiral (phases psi in the plane ⊥ n)"""
+    ex, ey = _plane_basis(n)
+    dirs = np.array([math.cos(p) * ex + math.sin(p) * ey for p in psi])
+    return classical_energy(dirs, S, sites, spiral_pairs(pairs, lat, cart, sites, qfrac, n), Asite), dirs
+
+
+def find_spiral(S, sites, pairs, Asite, lat, cart, n, qdims=(0, 1, 2), ngrid=None, qfrac=None, seed=0):
+    """optimal single-Q planar spiral: (q in r.l.u., phases, directions, E)"""
+    from scipy.optimize import minimize
+    N = len(sites)
+    rng = np.random.default_rng(seed)
+
+    def E_of(x, q=None):
+        q_ = np.zeros(3)
+        if q is None:
+            q_[list(qdims)] = x[:len(qdims)]
+            ps = np.r_[0.0, x[len(qdims):]]
+        else:
+            q_ = np.asarray(q, float)
+            ps = np.r_[0.0, x]
+        return spiral_energy(q_, ps, S, sites, pairs, Asite, lat, cart, n)[0]
+
+    def best_phases(q):
+        if N == 1:
+            return np.zeros(0), E_of(np.zeros(0), q)
+        best = None
+        for t in range(6):
+            x0 = rng.uniform(0, 2 * np.pi, N - 1)
+            r = minimize(lambda x: E_of(x, q), x0, method="BFGS")
+            if best is None or r.fun < best[1]:
+                best = (r.x, r.fun)
+        return best
+    if qfrac is not None:
+        ph, E = best_phases(qfrac)
+        q = np.asarray(qfrac, float)
+    else:
+        nd = len(qdims)
+        ngrid = ngrid or (41 if nd == 1 else (25 if nd == 2 else 13))
+        grid = np.linspace(-0.5, 0.5, ngrid)
+        best = None
+        for g in np.array(np.meshgrid(*[grid] * nd, indexing="ij")).reshape(nd, -1).T:
+            qq = np.zeros(3)
+            qq[list(qdims)] = g
+            ph, E = best_phases(qq)
+            if best is None or E < best[2] - 1e-12:
+                best = (qq, ph, E)
+        x0 = np.r_[best[0][list(qdims)], best[1]]
+        r = minimize(E_of, x0, method="Nelder-Mead", options=dict(xatol=1e-10, fatol=1e-13, maxiter=20000))
+        q = np.zeros(3)
+        q[list(qdims)] = r.x[:nd]
+        ph, E = r.x[nd:], r.fun
+        if E > best[2]:
+            q, ph, E = best
+    q = (q + 0.5) % 1.0 - 0.5
+    psi = np.r_[0.0, ph]
+    E, dirs = spiral_energy(q, psi, S, sites, pairs, Asite, lat, cart, n)
+    return q, psi, dirs, E
+
+
+# ----------------------------------------------------------------------------
 #  paths and maps
 # ----------------------------------------------------------------------------
 DEFAULT_PATH = [("Γ", (0, 0, 0)), ("(½,0,0)", (0.5, 0, 0)), ("(½,½,0)", (0.5, 0.5, 0)), ("Γ", (0, 0, 0)),
@@ -327,7 +441,7 @@ def make_path(lat, points, n_per=60):
 # ----------------------------------------------------------------------------
 def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, exchange=None,
             K=0.0, spin=None, rmax=6.5, mmin=0.05, nproc=None, n_per=60, nmap=41, sg=None,
-            K_axis=None, K_local=False, relax=False, axis=None):
+            K_axis=None, K_local=False, relax=False, axis=None, spiral=None, spiral_axis=None, qdims=None):
     """bond classes and (if J or exchange given) the LSWT spectrum for any magnetic order.
 
     J        : list of scalar J per bond class (meV, J > 0 AFM)
@@ -337,6 +451,12 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
     relax    : minimise the classical energy before LSWT (non-collinear ground states)
     axis     : projection axis for magnon spin / chirality (default: collinear axis, plane
                normal of coplanar orders, net moment of ferromagnets, else z)
+    spiral   : None (commensurate, the given cell), "auto" (find the optimal single-Q planar
+               spiral) or a q vector in reciprocal-lattice units.  The spiral is treated in the
+               rotating frame (J -> J R_n(2π q·R)), so incommensurate q needs NO supercell;
+               requires a Hamiltonian invariant under rotations about spiral_axis n
+               (Heisenberg, DMI ∥ n, anisotropy along n).
+    qdims    : reciprocal directions searched for q (default: those spanned by the bonds)
     """
     norms = np.linalg.norm(mags, axis=1)
     magnetic = [i for i in range(len(frac)) if norms[i] > mmin * max(norms.max(), 1e-9)]
@@ -402,15 +522,57 @@ def analyse(lat, frac, types, symbols, mags, rotations, translations, J=None, ex
             Asite[a] = -K * np.outer(n_, n_)
     dirs = dirs0.copy()
     E0 = classical_energy(dirs, S, magnetic, pairs, Asite)
+    if spiral is not None:
+        cart = np.array([lat.T @ frac[m] for m in magnetic])
+        n_sp = np.asarray(spiral_axis, float) if spiral_axis is not None else spiral_axis_guess(pairs)
+        n_sp = n_sp / np.linalg.norm(n_sp)
+        bad = [k for k, (*_, J) in enumerate(pairs) if not rotation_invariant(J, n_sp)]
+        bad += [f"A{k}" for k, A_ in enumerate(Asite) if not rotation_invariant(A_, n_sp)]
+        if bad:
+            raise ValueError(f"spiral mode needs a Hamiltonian invariant under rotations about n = {n_sp}; "
+                             f"{len(bad)} terms are not (choose --spiral-axis along the DM vectors / anisotropy)")
+        if qdims is None:
+            span = np.array([np.linalg.solve(lat.T, d) for *_, d, _J in [(p[0], p[1], p[2], p[3]) for p in pairs]])
+            qdims = tuple(k for k in range(3) if span.size and np.abs(span[:, k]).max() > 1e-6) or (0, 1, 2)
+        if isinstance(spiral, str):
+            qf, psi, dirs, Esp = find_spiral(S, magnetic, pairs, Asite, lat, cart, n_sp, qdims=qdims)
+        else:
+            qf, psi, dirs, Esp = find_spiral(S, magnetic, pairs, Asite, lat, cart, n_sp, qfrac=spiral)
+        qcart = qf @ (2 * np.pi * np.linalg.inv(lat).T)
+        out.update(spiral=dict(q_rlu=qf.tolist(), q_cart=qcart.tolist(), axis=n_sp.tolist(),
+                               period_A=float(2 * np.pi / np.linalg.norm(qcart)) if np.linalg.norm(qcart) > 1e-9
+                               else float("inf"), E_spiral=float(Esp), E_start=float(E0),
+                               phases_deg=np.degrees(psi).tolist()))
+        pairs = spiral_pairs(pairs, lat, cart, magnetic, qf, n_sp)
+        axis = n_sp
+        out["axis"] = axis.tolist()
+        out.update(relaxed=False, E_classical=float(Esp))
+        relax = False
     if relax:
         dirs, E1, nit = relax_spins(dirs, S, magnetic, pairs, Asite)
         out.update(relaxed=True, E_classical_start=E0, E_classical=E1, relax_iterations=nit)
+        # does an incommensurate single-Q spiral beat the best state that fits this cell?
+        try:
+            n_sp = spiral_axis_guess(pairs)
+            if all(rotation_invariant(J_, n_sp) for *_, J_ in pairs) and \
+                    all(rotation_invariant(A_, n_sp) for A_ in Asite):
+                cart = np.array([lat.T @ frac[m] for m in magnetic])
+                span = np.array([np.linalg.solve(lat.T, p_[2]) for p_ in pairs])
+                qd = tuple(k for k in range(3) if span.size and np.abs(span[:, k]).max() > 1e-6) or (0,)
+                qf, _, _, Esp = find_spiral(S, magnetic, pairs, Asite, lat, cart, n_sp, qdims=qd,
+                                            ngrid=21 if len(qd) == 1 else 11)
+                out["spiral_check"] = dict(q_rlu=qf.tolist(), E_spiral=float(Esp), axis=n_sp.tolist(),
+                                           lower=bool(Esp < E1 - 1e-6 * max(1.0, abs(E1))))
+        except Exception:  # noqa: BLE001
+            pass
         if K_local:
             Asite = [-K * np.outer(e, e) if K else None for e in dirs]
-    else:
+    elif spiral is None:
         out.update(relaxed=False, E_classical=E0)
     out["directions"] = dirs.tolist()
     out["net_moment"] = (dirs * (2 * S)[:, None]).sum(0).tolist()
+    if spiral is not None and np.linalg.norm(out["spiral"]["q_rlu"]) > 1e-9:
+        out["net_moment"] = [0.0, 0.0, 0.0]          # averages to zero over the spiral
     Uf, Vf = local_frames(dirs)
     qs, xs, ticks = make_path(lat, DEFAULT_PATH, n_per)
     om, proj, dS = spectrum(qs, magnetic, Uf, Vf, S, pairs, Asite, axis, nproc)
@@ -461,6 +623,9 @@ def plot_bands(res, save=None, title=None, figsize=(7.4, 6.2)):
     ax.plot([], [], color=cmap(1.0), lw=2.2, label="β  (ΔS·n = +1)")
     ax.legend(loc="upper right", fontsize=9)
     ax.set_title(title or "magnon bands coloured by chirality")
+    if res.get("spiral"):
+        ax2.text(0.5, 0.5, "single-Q spiral: modes in the rotating frame", transform=ax2.transAxes,
+                 ha="center", va="center", fontsize=9, color="0.4")
     ax2.axhline(0, color="0.5", lw=0.8)
     ax2.fill_between(x, res["split"], 0, color="#c0392b", alpha=0.35, lw=0)
     ax2.plot(x, res["split"], color="#c0392b", lw=1.8)
@@ -555,6 +720,12 @@ def main(argv=None):
     ap.add_argument("--K-local", action="store_true", help="easy axis along each site's spin direction")
     ap.add_argument("--relax", action="store_true", help="minimise the classical energy before LSWT")
     ap.add_argument("--axis", type=float, nargs=3, default=None, help="projection axis for magnon spin")
+    ap.add_argument("--spiral", nargs="+", default=None, metavar="auto|q1 q2 q3",
+                    help="single-Q spiral in the rotating frame (no supercell): 'auto' finds the optimal q, "
+                         "or give q in reciprocal-lattice units")
+    ap.add_argument("--spiral-axis", type=float, nargs=3, default=None,
+                    help="spiral rotation axis n (default: along the DM vectors, else z)")
+    ap.add_argument("--qdims", type=int, nargs="+", default=None, help="reciprocal directions (0 1 2) searched for q")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -588,7 +759,10 @@ def main(argv=None):
     res = analyse(lat, frac, types, symbols, mags, rots, trs, J=args.J, exchange=exch, K=args.K,
                   spin=args.spin, rmax=args.rmax, mmin=args.mmin, nproc=args.nproc, n_per=args.nq,
                   nmap=args.nmap, sg=sg, K_axis=args.K_axis, K_local=args.K_local, relax=args.relax,
-                  axis=args.axis)
+                  axis=args.axis,
+                  spiral=(None if args.spiral is None else ("auto" if args.spiral[0].lower() == "auto"
+                                                             else [float(x) for x in args.spiral[:3]])),
+                  spiral_axis=args.spiral_axis, qdims=tuple(args.qdims) if args.qdims else None)
     print(f"\n  order: {res['kind']}   magnetic sites: {res['sites']}   S = {[round(x, 3) for x in res['S']]}   "
           f"projection axis = {fmt_vec(res['axis'], 3)}")
     if res["kind"] == "collinear":
@@ -605,7 +779,18 @@ def main(argv=None):
     if res.get("relaxed"):
         print(f"\n  classical relaxation: E = {res['E_classical_start']:.5f} -> {res['E_classical']:.5f} meV/cell "
               f"({res['relax_iterations']} steps)")
-    print("  spin directions used:")
+        sc = res.get("spiral_check")
+        if sc and sc["lower"]:
+            print(f"  NOTE: an incommensurate single-Q spiral q = {np.round(sc['q_rlu'], 5)} r.l.u. has lower energy "
+                  f"({sc['E_spiral']:.5f} meV/cell) than any state of this cell -> rerun with --spiral auto")
+    if res.get("spiral"):
+        sp = res["spiral"]
+        print(f"\n  single-Q spiral (rotating frame, magnetic cell kept):  q = {np.round(sp['q_rlu'], 6)} r.l.u.,"
+              f"  axis n = {fmt_vec(sp['axis'], 3)}")
+        print(f"    period 2π/|q| = {sp['period_A']:.3f} Å;  E_spiral = {sp['E_spiral']:.6f} meV/cell "
+              f"(starting configuration {sp['E_start']:.6f});  phases {np.round(sp['phases_deg'], 2)}°")
+        print("    magnon energies are given in the rotating frame (neutron intensity at k, k ± q)")
+    print("  spin directions used" + (" (cell 0 of the spiral)" if res.get("spiral") else "") + ":")
     for k, (sidx, e) in enumerate(zip(res["sites"], res["directions"])):
         print(f"    {symbols[sidx-1]}{sidx}: {fmt_vec(e, 4)}")
     print(f"  net moment: {fmt_vec(res['net_moment'], 3)} muB/cell")
@@ -613,19 +798,25 @@ def main(argv=None):
         print("\n  WARNING: H(q) not positive definite somewhere: the order is not a (local) LSWT ground state"
               " -> try --relax or anisotropy")
     print(f"\n  {res['n_pairs']} bonds used;  zero modes at Γ: {res['n_goldstone']};  "
-          f"max |Δω| (q3 = 0 plane) = {res['max_split']:.4f} meV;  non-reciprocity max|ω(q)−ω(−q)| = "
+          f"max |Δω| (q3 = 0 plane) = {res["max_split"]:.4f} meV;  non-reciprocity max|ω(q)−ω(−q)| = "
           f"{res['nonreciprocity']:.4f} meV")
     for (xt, lab) in res["ticks"]:
         k = int(np.argmin(np.abs(res["x"] - xt)))
-        print(f"    {lab:<10s} ω = {np.round(res['omega'][k], 3)}  ΔS·n = {np.round(res['dSz'][k], 2)}  "
-              f"Δω = {res['split'][k]:+.4f}")
+        dws = "n/a" if not np.isfinite(res["split"][k]) else f"{res['split'][k]:+.4f}"
+        print(f"    {lab:<10s} ω = {np.round(res['omega'][k], 3)}  ΔS·n = {np.round(res['dSz'][k], 2)}  Δω = {dws}")
     if args.plot and args.plot.lower() != "none":
         stem, ext = os.path.splitext(args.plot)
-        plot_bands(res, save=args.plot, title=f"{cls.lower()}: magnon chirality")
-        plot_split_map(res, save=f"{stem}_split_map{ext}")
+        ttl = (f"spiral q = {np.round(res['spiral']['q_rlu'], 4).tolist()} (rotating frame)" if res.get("spiral")
+               else f"{cls.lower()}: magnon chirality")
+        plot_bands(res, save=args.plot, title=ttl)
+        if np.isfinite(res["map_split"]).any():
+            plot_split_map(res, save=f"{stem}_split_map{ext}")
+        else:
+            print("  (no chirality splitting map: fewer than two modes of opposite magnon spin)")
         np.savetxt(f"{stem}_bands.dat", np.column_stack([res["x"], res["omega"], res["dSz"], res["split"]]),
                    header="x(1/Å)  omega_1..N (meV)  dSz_1..N  split(meV)")
-        print(f"\n  written: {args.plot}, {stem}_split_map{ext}, {stem}_bands.dat")
+        print(f"\n  written: {args.plot}" + (f", {stem}_split_map{ext}" if np.isfinite(res["map_split"]).any() else "")
+              + f", {stem}_bands.dat")
     return res
 
 

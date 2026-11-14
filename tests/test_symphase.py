@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -305,3 +305,67 @@ def test_noncollinear_spin_group_classes(d, cls, wave):
     sg = analyze_tensors(f"{EX}/vasp/{d}", tensors="charge")["spin_group"]
     assert sg["magnet_class"].startswith(cls) and sg["spin_splitting"].startswith(wave)
     assert sg["n_H"] >= 1
+
+
+# ---------------------------------------------------------------- incommensurate spirals (rotating frame)
+def _chain(a=3.0):
+    lat, fr = np.diag([a, 12, 12]), np.zeros((1, 3))
+    R, T = _sym(lat, fr, [0])
+    return lat, fr, R, T
+
+
+def test_spiral_j1j2_wavevector_and_dispersion():
+    from symphase.magnons import analyse
+    a = 3.0
+    lat, fr, R, T = _chain(a)
+    r = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-1.0, 0.5], spin=1.0, rmax=6.1,
+                spiral="auto", spiral_axis=[0, 0, 1], n_per=12, nmap=3)
+    q = abs(r["spiral"]["q_rlu"][0])
+    assert abs(q - 1 / 6) < 1e-5 and abs(r["spiral"]["E_spiral"] + 0.75) < 1e-8
+    Jk = lambda k: -2 * np.cos(k * a) + np.cos(2 * k * a)
+    Q = 2 * np.pi * q / a
+    for qq, om in zip(r["q"], r["omega"]):
+        k = qq[0]
+        ex = np.sqrt(max((Jk(k) - Jk(Q)) * ((Jk(k + Q) + Jk(k - Q)) / 2 - Jk(Q)), 0))
+        assert abs(om[0] - ex) < 1e-3
+
+
+def test_spiral_dmi_helix_period():
+    from symphase.magnons import analyse, read_exchange_file
+    lat, fr, R, T = _chain()
+    r = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T,
+                exchange=read_exchange_file(f"{EX}/vasp/Helix_DMI_chain/J_DMI.dat"), spin=1.0, rmax=3.1,
+                spiral="auto", n_per=6, nmap=3)
+    assert abs(abs(r["spiral"]["q_rlu"][0]) - math.atan(0.2) / (2 * np.pi)) < 1e-6
+    assert np.allclose(np.abs(r["spiral"]["axis"]), [1, 0, 0]) and not r["unstable"]
+
+
+def test_spiral_equals_commensurate_supercell():
+    from symphase.magnons import analyse
+    a = 3.0
+    lat, fr, R, T = _chain(a)
+    rs = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-1.0, 0.5], spin=1.0, rmax=6.1,
+                 spiral=[1 / 6, 0, 0], spiral_axis=[0, 0, 1], n_per=6, nmap=3)
+    L6, fr6 = np.diag([6 * a, 12, 12]), np.array([[k / 6, 0, 0] for k in range(6)])
+    R6, T6 = _sym(L6, fr6, [0] * 6)
+    m6 = np.array([[2 * np.cos(2 * np.pi * k / 6), 2 * np.sin(2 * np.pi * k / 6), 0] for k in range(6)])
+    r6 = analyse(L6, fr6, [0] * 6, ["Fe"] * 6, m6, R6, T6, J=[-1.0, 0.5], spin=1.0, rmax=6.1, n_per=6, nmap=3)
+    assert abs(r6["E_classical"] / 6 - rs["spiral"]["E_spiral"]) < 1e-9
+    assert np.isclose(r6["omega"].max(), np.nanmax(rs["omega"]), atol=1e-3)
+
+
+def test_relax_warns_about_incommensurate_spiral():
+    from symphase.magnons import analyse
+    lat, fr, R, T = _chain()
+    r = analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, J=[-1.0, 0.5], spin=1.0, rmax=6.1,
+                relax=True, n_per=4, nmap=3)
+    assert r["spiral_check"]["lower"] and abs(abs(r["spiral_check"]["q_rlu"][0]) - 1 / 6) < 1e-4
+
+
+def test_spiral_rejects_non_invariant_hamiltonian():
+    from symphase.magnons import analyse, dm_matrix
+    lat, fr, R, T = _chain()
+    ex = [(1, 1, [1, 0, 0], -1.0 * np.eye(3) + dm_matrix([0.2, 0, 0]))]
+    with pytest.raises(ValueError):
+        analyse(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, exchange=ex, spin=1.0, rmax=3.1,
+                spiral="auto", spiral_axis=[0, 0, 1], n_per=4, nmap=3)

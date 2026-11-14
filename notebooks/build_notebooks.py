@@ -515,6 +515,89 @@ Continue with **09_quiz_spin_groups_magnons_finiteT.ipynb**."""),
 ], "08_tutorial_noncollinear_magnets.ipynb")
 
 # =============================================================================
+# 10  incommensurate spirals
+# =============================================================================
+save([
+    md(r"""# SymPhase tutorial 7 — incommensurate spirals without supercells
+
+A single-Q planar spiral $\mathbf S_j(\mathbf R)=R_{\hat{\mathbf n}}(\mathbf Q\cdot\mathbf R)\,\mathbf S_j(\mathbf 0)$ is **not periodic** in the
+crystal cell, and an incommensurate $\mathbf Q$ fits no finite supercell. If the Hamiltonian is invariant under rotations about
+$\hat{\mathbf n}$ (Heisenberg exchange, DM vectors $\parallel\hat{\mathbf n}$, anisotropy along $\hat{\mathbf n}$), the order becomes periodic in the
+**rotating frame**: every bond matrix is replaced by
+$$J_{ij}(\mathbf R)\;\longrightarrow\;J_{ij}(\mathbf R)\,R_{\hat{\mathbf n}}(2\pi\,\mathbf q\cdot\mathbf R),$$
+and the general non-collinear LSWT runs on the original (small) magnetic cell. SymPhase
+
+1. finds the optimal $\mathbf q$ by minimising the classical spiral energy $E(\mathbf q,\{\psi_i\})$ (grid + Nelder–Mead), or uses a given $\mathbf q$,
+2. checks that the Hamiltonian is rotation-invariant about $\hat{\mathbf n}$ (otherwise it refuses: a supercell is needed),
+3. computes the magnons in the rotating frame (neutron intensity appears at $\mathbf k$ and $\mathbf k\pm\mathbf q$),
+4. with `--relax` (fixed cell) it warns when an incommensurate spiral would be lower in energy.
+
+Validated against the analytic $J_1$–$J_2$ chain, the DMI helix and an explicit 6-site supercell (tests)."""),
+    SETUP,
+    md(r"""## 1. Frustrated $J_1$–$J_2$ chain (one atom per cell)
+
+Classically $\cos(2\pi q)=-J_1/(4J_2)$ when $J_2>|J_1|/4$; for $J_1=-1$, $J_2=0.5$ meV: $q=1/6$."""),
+    code("""import numpy as np, spglib, math
+import matplotlib.pyplot as plt
+from symphase.magnons import analyse, read_exchange_file, plot_bands
+a = 3.0
+lat, fr = np.diag([a, 12, 12]), np.zeros((1, 3))
+ds = spglib.get_symmetry_dataset((lat, fr, [0]))
+m0 = np.array([[0, 0, 2.0]])
+r = analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, J=[-1.0, 0.5], spin=1.0, rmax=6.1,
+            spiral="auto", spiral_axis=[0, 0, 1], n_per=60, nmap=3)
+sp = r["spiral"]
+print("q =", np.round(sp["q_rlu"], 6), "r.l.u.;  period", round(sp["period_A"], 3), "Å;  E =", sp["E_spiral"],
+      "meV/site (ferromagnet:", sp["E_start"], ")")"""),
+    code("""Jk = lambda k: -2 * np.cos(k * a) + np.cos(2 * k * a)
+Q = 2 * np.pi * abs(sp["q_rlu"][0]) / a
+ana = [np.sqrt(max((Jk(k) - Jk(Q)) * ((Jk(k + Q) + Jk(k - Q)) / 2 - Jk(Q)), 0)) for k in r["q"][:, 0]]
+fig, ax = plt.subplots(figsize=(7, 3.8))
+ax.plot(r["x"], r["omega"][:, 0], color="#16325c", lw=2.2, label="SymPhase (rotating frame)")
+ax.plot(r["x"][::6], ana[::6], "o", color="#e67e22", mfc="none", label="analytic")
+ax.set_xticks([t for t, _ in r["ticks"]]); ax.set_xticklabels([l for _, l in r["ticks"]]); ax.set_ylabel("ω (meV)")
+ax.legend(); ax.set_title("J1–J2 spiral: zeros at k = 0 and k = ±q")
+print("max |error| =", np.max(np.abs(r["omega"][:, 0] - ana)), "meV")"""),
+    md(r"""## 2. Phase diagram: when is the spiral stable?"""),
+    code("""J2s = np.linspace(0.0, 1.2, 25)
+qs = [abs(analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, J=[-1.0, j2], spin=1.0, rmax=6.1,
+                  spiral="auto", spiral_axis=[0, 0, 1], n_per=4, nmap=3)["spiral"]["q_rlu"][0]) for j2 in J2s]
+exact = [math.acos(min(1, 1 / (4 * j2))) / (2 * np.pi) if j2 > 0.25 else 0 for j2 in J2s]
+fig, ax = plt.subplots(figsize=(6, 3.6))
+ax.plot(J2s, exact, color="0.6", lw=3, label="arccos(|J1|/4J2)/2π")
+ax.plot(J2s, qs, "o", color="#16325c", label="SymPhase")
+ax.axvline(0.25, ls=":", color="k"); ax.set_xlabel("J2 / |J1|"); ax.set_ylabel("q (r.l.u.)"); ax.legend()"""),
+    md(r"""## 3. Helix from a uniform Dzyaloshinskii–Moriya interaction
+
+Ferromagnetic chain with $\mathbf D\parallel\hat{\mathbf x}$ along the chain: a **Bloch helix** in the plane ⊥ x with
+$\tan(2\pi q)=D/|J|$ — here $q=0.0314$ r.l.u., a period of 95.5 Å (31.8 lattice constants): impossible to fit in a small supercell,
+trivial in the rotating frame. The sign of $q$ (handedness) is fixed by the sign of $D$."""),
+    code("""d = f"{EX}/vasp/Helix_DMI_chain"
+print(open(f"{d}/J_DMI.dat").read())
+r = analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, exchange=read_exchange_file(f"{d}/J_DMI.dat"),
+            spin=1.0, rmax=3.1, spiral="auto", n_per=60, nmap=3)
+sp = r["spiral"]
+print("q =", round(sp["q_rlu"][0], 6), " expected ±", round(math.atan(0.2) / (2 * np.pi), 6), "; axis", sp["axis"],
+      "; period", round(sp["period_A"], 2), "Å =", round(sp["period_A"] / a, 2), "a")"""),
+    md(r"""## 4. The fixed-cell trap, now detected
+
+With `relax=True` in the 1-atom cell the best commensurate state is the ferromagnet; SymPhase reports that a spiral is lower:"""),
+    code("""r = analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, J=[-1.0, 0.5], spin=1.0, rmax=6.1,
+            relax=True, n_per=4, nmap=3)
+print("relaxed (fixed cell):", r["E_classical"], "meV;  spiral check:", r["spiral_check"])"""),
+    md("""## 5. Command line
+
+```bash
+cd examples/vasp/Spiral_J1J2_chain && symphase magnons --J -1.0 0.5 --rmax 6.1 --spin 1 --spiral auto
+cd examples/vasp/Helix_DMI_chain   && symphase magnons --exchange J_DMI.dat --rmax 3.1 --spin 1 --spiral auto
+symphase magnons ... --spiral 0.25 0 0 --spiral-axis 0 0 1      # fixed q (r.l.u.) and rotation axis
+symphase magnons ... --spiral auto --qdims 0 1                   # search q in the a*-b* plane only
+```
+Limits: single-Q planar spirals; anisotropy or DM vectors not parallel to $\\hat{\\mathbf n}$ break the rotating-frame symmetry —
+SymPhase then refuses and a (commensurate) supercell with `--relax` is required. Continue with **11_quiz_noncollinear_spirals.ipynb**."""),
+], "10_tutorial_incommensurate_spirals.ipynb")
+
+# =============================================================================
 # quizzes
 # =============================================================================
 S = [
@@ -737,6 +820,74 @@ M = [
 ]
 build_bank(os.path.join(DATA, "quiz_magnons.json"), "Quiz 3 — spin groups, magnons (collinear and non-collinear) & finite-T hulls", M)
 
+SP = [
+    dict(type="mc", question="Why can an incommensurate spiral not be simulated exactly with an ordinary supercell?",
+         options={"a": "supercells are too slow", "b": "an incommensurate q is not a rational fraction of a reciprocal-lattice vector, so no finite supercell is periodic",
+                  "c": "spirals have no magnons", "d": "it can, any supercell works"},
+         answer="b", explanation="Only commensurate q = m/N fit an N-cell supercell; incommensurate q never repeats."),
+    dict(type="mc", question="What does the rotating-frame method do to every bond matrix?",
+         options={"a": "J → J R_n(2π q·R)", "b": "J → J + q", "c": "J → J cos(q·R)", "d": "nothing"},
+         answer="a", explanation="Spins of cell R are R_n(2π q·R) times those of cell 0, so the bond coupling seen by the cell-0 frames is J R_n(2π q·R): periodic again."),
+    dict(type="mc", question="Which condition must the Hamiltonian satisfy for the rotating-frame treatment?",
+         options={"a": "only ferromagnetic J", "b": "invariance under rotations about the spiral axis n (Heisenberg, D ∥ n, anisotropy along n)",
+                  "c": "inversion symmetry", "d": "no condition"},
+         answer="b", explanation="Then R_n^T J R_n = J for every bond and the transformed Hamiltonian is translation invariant; SymPhase checks this and refuses otherwise."),
+    dict(type="mc", question="In the rotating frame, where does neutron scattering see the magnon ω(k)?",
+         options={"a": "only at k", "b": "at k and k ± q", "c": "only at q", "d": "nowhere"},
+         answer="b", explanation="The lab-frame spin correlations mix k with k ± q because the frame rotates with wavevector q."),
+    dict(type="mc", question="For the J1–J2 chain with J1 < 0 (FM) and J2 > 0 (AFM), a spiral appears when …",
+         options={"a": "J2 > |J1|/4", "b": "J2 > |J1|", "c": "J2 < |J1|/4", "d": "always"},
+         answer="a", explanation="J(q) = 2J1 cos(2πq) + 2J2 cos(4πq) has its minimum away from q = 0 only for J2 > |J1|/4; then cos(2πq) = −J1/(4J2)."),
+    dict(type="num", question="Hands-on: J1 = −1 meV, J2 = 0.5 meV (examples/vasp/Spiral_J1J2_chain). Spiral wavevector |q| in r.l.u.?",
+         answer=0.16667, tol=0.0005, hint="analyse(..., spiral='auto')['spiral']['q_rlu']",
+         explanation="cos(2πq) = 1/2 → q = 1/6 (period 6a = 18 Å)."),
+    dict(type="num", question="Hands-on: classical energy gain of that spiral relative to the ferromagnet (meV per site, S = 1)?",
+         answer=0.25, tol=0.005, unit="meV/site",
+         explanation="FM: J1 + J2 = −0.5; spiral: J1 cos60° + J2 cos120° = −0.75 → gain 0.25 meV/site."),
+    dict(type="num", question="Hands-on: for J1 = −1 meV, J2 = 0.2 meV, what is |q| (r.l.u.)?",
+         answer=0.0, tol=0.002, explanation="J2 < |J1|/4: the ferromagnet (q = 0) is the ground state."),
+    dict(type="num", question="Hands-on: J2 = |J1| = 1 meV (J1 FM). |q| in r.l.u.?",
+         answer=0.20978, tol=0.0005, explanation="arccos(1/4)/(2π) = 0.2098 r.l.u."),
+    dict(type="mc", question="Besides k = 0, where does the rotating-frame magnon ω(k) of a Heisenberg spiral vanish?",
+         options={"a": "nowhere", "b": "at k = ±q", "c": "at the zone boundary", "d": "at k = q/2"},
+         answer="b", explanation="ω(k) ∝ √[(J(k) − J(q))(...)]: J(k) = J(q) at k = ±q (rotations of the spiral plane, Goldstone modes)."),
+    dict(type="num", question="Hands-on: FM chain with uniform DMI, J = −1 meV, D = 0.2 meV (examples/vasp/Helix_DMI_chain). Helix period in lattice constants?",
+         answer=31.83, tol=0.1, hint="res['spiral']['period_A'] / a",
+         explanation="tan(2πq) = D/|J| → q = 0.03142 r.l.u. → period 1/q = 31.8 a (95.5 Å)."),
+    dict(type="num", question="Same chain with D = 0.4 meV: |q| in r.l.u.?",
+         answer=0.06056, tol=0.0003, explanation="arctan(0.4)/(2π) = 0.0606 r.l.u."),
+    dict(type="mc", question="A uniform DM vector D ∥ chain direction produces …",
+         options={"a": "a Bloch helix rotating in the plane ⊥ chain", "b": "a cycloid in the plane containing the chain",
+                  "c": "a canted ferromagnet", "d": "a collinear antiferromagnet"},
+         answer="a", explanation="The spins rotate about n = D (the chain axis): a helix; D ⊥ chain (interfacial DMI) gives cycloids."),
+    dict(type="mc", question="What decides the handedness (sign of q) of a DMI spiral?",
+         options={"a": "the sign of J", "b": "the sign (direction) of D relative to the bond", "c": "the spin length", "d": "nothing, both are degenerate"},
+         answer="b", explanation="D·(S_i × S_j) favours one sense of rotation; reversing D reverses q. Without DMI ±q are degenerate."),
+    dict(type="mc", question="What does SymPhase do when you use --relax in a fixed cell but an incommensurate spiral would be lower in energy?",
+         options={"a": "nothing", "b": "it reports the spiral q and energy and suggests --spiral auto", "c": "it enlarges the cell automatically", "d": "it crashes"},
+         answer="b", explanation="'spiral_check' compares the relaxed fixed-cell energy with the optimal single-Q spiral."),
+    dict(type="mc", question="Hands-on (concept check): for q = 1/6 the spiral is commensurate. What does the explicit 6-site supercell give?",
+         options={"a": "a different energy", "b": "the same energy per site and the folded rotating-frame spectrum", "c": "an unstable state", "d": "no magnons"},
+         answer="b", explanation="Tested in SymPhase: E/site = −0.75 meV in both, and the 6 supercell branches equal ω_rot(k + m·2π/6a)."),
+    dict(type="mc", question="Single-ion anisotropy −K (S·x)² with the spiral axis n = z is …",
+         options={"a": "allowed in the rotating frame", "b": "not rotation-invariant about z: single-Q fails, SymPhase refuses — use a supercell",
+                  "c": "irrelevant", "d": "equivalent to DMI"},
+         answer="b", explanation="Anisotropy within the spiral plane bunches the spiral (higher harmonics); only anisotropy along n keeps the rotating-frame symmetry."),
+    dict(type="mc", question="How does SymPhase find the optimal spiral?",
+         options={"a": "Luttinger–Tisza only", "b": "minimising the classical energy over q (grid + Nelder–Mead) and the sublattice phases ψ_i (BFGS)",
+                  "c": "from DFT", "d": "it guesses q = 0"},
+         answer="b", explanation="E(q, ψ) is evaluated with the rotating-frame bond matrices; the global minimum gives q and the phases."),
+    dict(type="mc", question="What is the net magnetic moment of an incommensurate planar spiral?",
+         options={"a": "S per site", "b": "zero (it averages out over the spiral)", "c": "S/2", "d": "it depends on the cell"},
+         answer="b", explanation="The moments rotate through all in-plane directions; SymPhase reports net moment 0 for q ≠ 0."),
+    dict(type="mc", question="Which limitation remains?",
+         options={"a": "only collinear magnets", "b": "single-Q planar spirals; multi-Q, conical or anisotropy-distorted spirals need a supercell",
+                  "c": "no DMI allowed", "d": "only 1D chains"},
+         answer="b", explanation="The rotating frame handles one q with a rotation-invariant Hamiltonian; everything else uses the general fixed-cell LSWT."),
+]
+build_bank(os.path.join(DATA, "quiz_spirals.json"), "Quiz 4 — non-collinear magnets and incommensurate spirals", SP)
+
+
 
 
 def quiz_nb(name, title, qs, bank, intro, helper):
@@ -791,3 +942,19 @@ ruo2 = analyse(p["lattice"], p["frac"], [0, 0, 1, 1, 1, 1], ["Ru"] * 2 + ["O"] *
 mnte = analyze_tensors(f"{EX}/vasp/MnTe_altermagnet_INCAR", tensors="charge")
 tri  = analyze_tensors(f"{EX}/vasp/Triangular_120AFM_INCAR", tensors="charge")
 # explore e.g.  len(ruo2['classes']),  mnte['spin_group']['ssg'],  tri['spin_group']['spin_splitting']""")
+
+quiz_nb("11_quiz_noncollinear_spirals.ipynb", "Quiz 4 — non-collinear magnets and incommensurate spirals (20 questions)",
+        SP, "spirals", "Work through tutorials **08** and **10** first. Questions 6–9, 11, 12 and 16 are hands-on.",
+        """import numpy as np, spglib, math
+from symphase.magnons import analyse, read_exchange_file, dm_matrix
+a = 3.0
+lat, fr = np.diag([a, 12, 12]), np.zeros((1, 3))
+ds = spglib.get_symmetry_dataset((lat, fr, [0])); m0 = np.array([[0, 0, 2.0]])
+def spiral(J1, J2):
+    return analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, J=[J1, J2], spin=1.0, rmax=6.1,
+                   spiral="auto", spiral_axis=[0, 0, 1], n_per=6, nmap=3)["spiral"]
+def helix(D):
+    ex = [(1, 1, [1, 0, 0], -1.0 * np.eye(3) + dm_matrix([D, 0, 0]))]
+    return analyse(lat, fr, [0], ["Fe"], m0, ds.rotations, ds.translations, exchange=ex, spin=1.0, rmax=3.1,
+                   spiral="auto", n_per=6, nmap=3)["spiral"]
+# e.g.  spiral(-1.0, 0.5),  helix(0.2)['period_A'] / a""")

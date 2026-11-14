@@ -1,0 +1,238 @@
+{
+ "title": "Quiz 4 — non-collinear magnets and incommensurate spirals",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "Why can an incommensurate spiral not be simulated exactly with an ordinary supercell?",
+   "options": {
+    "a": "supercells are too slow",
+    "b": "an incommensurate q is not a rational fraction of a reciprocal-lattice vector, so no finite supercell is periodic",
+    "c": "spirals have no magnons",
+    "d": "it can, any supercell works"
+   },
+   "explanation": "Only commensurate q = m/N fit an N-cell supercell; incommensurate q never repeats.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does the rotating-frame method do to every bond matrix?",
+   "options": {
+    "a": "J → J R_n(2π q·R)",
+    "b": "J → J + q",
+    "c": "J → J cos(q·R)",
+    "d": "nothing"
+   },
+   "explanation": "Spins of cell R are R_n(2π q·R) times those of cell 0, so the bond coupling seen by the cell-0 frames is J R_n(2π q·R): periodic again.",
+   "id": 2,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "Which condition must the Hamiltonian satisfy for the rotating-frame treatment?",
+   "options": {
+    "a": "only ferromagnetic J",
+    "b": "invariance under rotations about the spiral axis n (Heisenberg, D ∥ n, anisotropy along n)",
+    "c": "inversion symmetry",
+    "d": "no condition"
+   },
+   "explanation": "Then R_n^T J R_n = J for every bond and the transformed Hamiltonian is translation invariant; SymPhase checks this and refuses otherwise.",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "In the rotating frame, where does neutron scattering see the magnon ω(k)?",
+   "options": {
+    "a": "only at k",
+    "b": "at k and k ± q",
+    "c": "only at q",
+    "d": "nowhere"
+   },
+   "explanation": "The lab-frame spin correlations mix k with k ± q because the frame rotates with wavevector q.",
+   "id": 4,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "For the J1–J2 chain with J1 < 0 (FM) and J2 > 0 (AFM), a spiral appears when …",
+   "options": {
+    "a": "J2 > |J1|/4",
+    "b": "J2 > |J1|",
+    "c": "J2 < |J1|/4",
+    "d": "always"
+   },
+   "explanation": "J(q) = 2J1 cos(2πq) + 2J2 cos(4πq) has its minimum away from q = 0 only for J2 > |J1|/4; then cos(2πq) = −J1/(4J2).",
+   "id": 5,
+   "key": "ImEi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: J1 = −1 meV, J2 = 0.5 meV (examples/vasp/Spiral_J1J2_chain). Spiral wavevector |q| in r.l.u.?",
+   "tol": 0.0005,
+   "hint": "analyse(..., spiral='auto')['spiral']['q_rlu']",
+   "explanation": "cos(2πq) = 1/2 → q = 1/6 (period 6a = 18 Å).",
+   "id": 6,
+   "key": "NzY2NjEuMA=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: classical energy gain of that spiral relative to the ferromagnet (meV per site, S = 1)?",
+   "tol": 0.005,
+   "unit": "meV/site",
+   "explanation": "FM: J1 + J2 = −0.5; spiral: J1 cos60° + J2 cos120° = −0.75 → gain 0.25 meV/site.",
+   "id": 7,
+   "key": "NTIuMA=="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: for J1 = −1 meV, J2 = 0.2 meV, what is |q| (r.l.u.)?",
+   "tol": 0.002,
+   "explanation": "J2 < |J1|/4: the ferromagnet (q = 0) is the ground state.",
+   "id": 8,
+   "key": "MC4w"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: J2 = |J1| = 1 meV (J1 FM). |q| in r.l.u.?",
+   "tol": 0.0005,
+   "explanation": "arccos(1/4)/(2π) = 0.2098 r.l.u.",
+   "id": 9,
+   "key": "ODc5MDIuMA=="
+  },
+  {
+   "type": "mc",
+   "question": "Besides k = 0, where does the rotating-frame magnon ω(k) of a Heisenberg spiral vanish?",
+   "options": {
+    "a": "nowhere",
+    "b": "at k = ±q",
+    "c": "at the zone boundary",
+    "d": "at k = q/2"
+   },
+   "explanation": "ω(k) ∝ √[(J(k) − J(q))(...)]: J(k) = J(q) at k = ±q (rotations of the spiral plane, Goldstone modes).",
+   "id": 10,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: FM chain with uniform DMI, J = −1 meV, D = 0.2 meV (examples/vasp/Helix_DMI_chain). Helix period in lattice constants?",
+   "tol": 0.1,
+   "hint": "res['spiral']['period_A'] / a",
+   "explanation": "tan(2πq) = D/|J| → q = 0.03142 r.l.u. → period 1/q = 31.8 a (95.5 Å).",
+   "id": 11,
+   "key": "MzguMTM="
+  },
+  {
+   "type": "num",
+   "question": "Same chain with D = 0.4 meV: |q| in r.l.u.?",
+   "tol": 0.0003,
+   "explanation": "arctan(0.4)/(2π) = 0.0606 r.l.u.",
+   "id": 12,
+   "key": "NjUwNjAuMA=="
+  },
+  {
+   "type": "mc",
+   "question": "A uniform DM vector D ∥ chain direction produces …",
+   "options": {
+    "a": "a Bloch helix rotating in the plane ⊥ chain",
+    "b": "a cycloid in the plane containing the chain",
+    "c": "a canted ferromagnet",
+    "d": "a collinear antiferromagnet"
+   },
+   "explanation": "The spins rotate about n = D (the chain axis): a helix; D ⊥ chain (interfacial DMI) gives cycloids.",
+   "id": 13,
+   "key": "ImEi"
+  },
+  {
+   "type": "mc",
+   "question": "What decides the handedness (sign of q) of a DMI spiral?",
+   "options": {
+    "a": "the sign of J",
+    "b": "the sign (direction) of D relative to the bond",
+    "c": "the spin length",
+    "d": "nothing, both are degenerate"
+   },
+   "explanation": "D·(S_i × S_j) favours one sense of rotation; reversing D reverses q. Without DMI ±q are degenerate.",
+   "id": 14,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does SymPhase do when you use --relax in a fixed cell but an incommensurate spiral would be lower in energy?",
+   "options": {
+    "a": "nothing",
+    "b": "it reports the spiral q and energy and suggests --spiral auto",
+    "c": "it enlarges the cell automatically",
+    "d": "it crashes"
+   },
+   "explanation": "'spiral_check' compares the relaxed fixed-cell energy with the optimal single-Q spiral.",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on (concept check): for q = 1/6 the spiral is commensurate. What does the explicit 6-site supercell give?",
+   "options": {
+    "a": "a different energy",
+    "b": "the same energy per site and the folded rotating-frame spectrum",
+    "c": "an unstable state",
+    "d": "no magnons"
+   },
+   "explanation": "Tested in SymPhase: E/site = −0.75 meV in both, and the 6 supercell branches equal ω_rot(k + m·2π/6a).",
+   "id": 16,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Single-ion anisotropy −K (S·x)² with the spiral axis n = z is …",
+   "options": {
+    "a": "allowed in the rotating frame",
+    "b": "not rotation-invariant about z: single-Q fails, SymPhase refuses — use a supercell",
+    "c": "irrelevant",
+    "d": "equivalent to DMI"
+   },
+   "explanation": "Anisotropy within the spiral plane bunches the spiral (higher harmonics); only anisotropy along n keeps the rotating-frame symmetry.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How does SymPhase find the optimal spiral?",
+   "options": {
+    "a": "Luttinger–Tisza only",
+    "b": "minimising the classical energy over q (grid + Nelder–Mead) and the sublattice phases ψ_i (BFGS)",
+    "c": "from DFT",
+    "d": "it guesses q = 0"
+   },
+   "explanation": "E(q, ψ) is evaluated with the rotating-frame bond matrices; the global minimum gives q and the phases.",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What is the net magnetic moment of an incommensurate planar spiral?",
+   "options": {
+    "a": "S per site",
+    "b": "zero (it averages out over the spiral)",
+    "c": "S/2",
+    "d": "it depends on the cell"
+   },
+   "explanation": "The moments rotate through all in-plane directions; SymPhase reports net moment 0 for q ≠ 0.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which limitation remains?",
+   "options": {
+    "a": "only collinear magnets",
+    "b": "single-Q planar spirals; multi-Q, conical or anisotropy-distorted spirals need a supercell",
+    "c": "no DMI allowed",
+    "d": "only 1D chains"
+   },
+   "explanation": "The rotating frame handles one q with a rotation-invariant Hamiltonian; everything else uses the general fixed-cell LSWT.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}

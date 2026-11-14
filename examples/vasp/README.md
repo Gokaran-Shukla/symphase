@@ -16,3 +16,5 @@ contain only POSCAR + INCAR (moments from `MAGMOM`).
 | `MoO2_monoclinic` | MoO₂, P2₁/c, non-magnetic (POSCAR + INCAR; AMCSD 0011769), unique axis b ∥ y | P2₁/c1' (14.76) | non-magnetic; 13 SHE/OHE components |
 | `Triangular_120AFM_INCAR` | 120° triangular AFM (toy Cr layer), non-collinear MAGMOM | — | non-collinear AFM (coplanar), f-wave |
 | `CantedChain_DMI_INCAR` | AFM chain + staggered DMI (`J_DM.dat`), canted | — | non-collinear weak FM |
+| `Spiral_J1J2_chain` | frustrated J₁–J₂ chain, 1 atom/cell | — | spiral q = 1/6 (`--spiral auto`) |
+| `Helix_DMI_chain` | FM chain + uniform DMI (`J_DMI.dat`) | — | incommensurate helix, 95.5 Å |

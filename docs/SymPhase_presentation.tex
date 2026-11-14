@@ -578,6 +578,23 @@ DMI chain & $\arctan(D/J)=11.31^\circ$ canting, weak FM \\ \bottomrule
 \end{columns}
 \end{frame}
 
+\begin{frame}{Incommensurate spirals without supercells}
+\noindent{\footnotesize Single-Q planar spiral $\Sv_j(\mathbf R)=R_{\hat{\mathbf n}}(\mathbf q\cdot\mathbf R)\,\Sv_j(\mathbf 0)$. If $H$ is invariant under
+rotations about $\hat{\mathbf n}$ (Heisenberg, $\mathbf D\parallel\hat{\mathbf n}$, anisotropy along $\hat{\mathbf n}$), the order is periodic in the
+\textbf{rotating frame}:\quad $J_{ij}(\mathbf R)\to J_{ij}(\mathbf R)\,R_{\hat{\mathbf n}}(2\pi\,\mathbf q\cdot\mathbf R)$, and LSWT runs on the original cell.
+$\mathbf q$ from minimising the classical $E(\mathbf q,\psi_i)$; \texttt{--relax} warns when a spiral beats the fixed cell.}
+\vspace{0.3em}
+
+\centering\includegraphics[width=0.70\textwidth]{figures/spiral.pdf}
+
+{\scriptsize\renewcommand{\arraystretch}{1.0}
+\begin{tabular}{@{}p{0.2\textwidth}p{0.48\textwidth}p{0.24\textwidth}@{}}
+\toprule
+J$_1$–J$_2$ chain & $q=1/6$, $E=-0.75$ meV; $\omega(k)$ = analytic ($4\times10^{-5}$) & = 6-site supercell \\
+DMI helix, $D/|J|=0.2$ & $q=\arctan(D/|J|)/2\pi=0.0314$: period 95.5 Å $=31.8\,a$ & sense set by sign of $D$ \\ \bottomrule
+\end{tabular}}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -786,7 +803,7 @@ sbatch jobs/ibex_symphase_mpi.slurm
 \begin{columns}[T]
 \column{0.5\textwidth}
 \renewcommand{\arraystretch}{1.25}
-{\footnotesize\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.6cm}@{}}
+{\scriptsize\renewcommand{\arraystretch}{1.08}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
 \toprule
 notebook & content\\ \midrule
 01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
@@ -795,7 +812,8 @@ notebook & content\\ \midrule
 06 & SSG numbers, magnon chirality (RuO$_2$)\\
 07 & finite-$T$ hulls: mixing entropy, phonons\\
 08 & non-collinear FM/AFM: triangular, canted DMI\\
-04, 05, 09 & \textbf{3 quizzes $\times$ 20 questions}\\ \bottomrule
+10 & incommensurate spirals (rotating frame)\\
+04, 05, 09, 11 & \textbf{4 quizzes $\times$ 20 questions}\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -828,11 +846,12 @@ SSG numbers (5 examples) & BNS of C$_{2\perp}\!\to\!\Top$ group, \texttt{spinspg
 magnons: FM, AFM chain, RuO$_2$ & analytic $\omega(\mathbf q)$; d-wave $\Delta\omega$ & \textcolor{spinc}{\checkmark} \\
 finite-$T$ hull & $T^*=251$ K (analytic), Debye limits & \textcolor{spinc}{\checkmark} \\
 non-collinear LSWT & FM[111], 120° triangular, canted DMI & \textcolor{spinc}{\checkmark} \\
-quiz keys & 60 / 60 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+incommensurate spirals & J$_1$–J$_2$, DMI helix, 6-site supercell & \textcolor{spinc}{\checkmark} \\
+quiz keys & 80 / 80 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\footnotesize Automated tests: \texttt{pytest tests/} (40 tests). OQMD/MP download checked against the documented API with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (46); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -842,7 +861,7 @@ quiz keys & 60 / 60 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomru
 \begin{itemize}\setlength\itemsep{0.35em}
   \item SSG numbers only for collinear order (non-collinear: structured description)
   \item symmetry gives the \emph{shape}, not the magnitude, of tensors
-  \item LSWT is harmonic, magnetic cell fixed; exchange constants must be supplied
+  \item LSWT harmonic; spirals single-Q \& planar; exchange constants supplied by the user
   \item mixing energy sources requires identical DFT settings
 \end{itemize}
 \column{0.46\textwidth}
