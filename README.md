@@ -13,11 +13,11 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 | `symphase tensors` | `POSCAR`, `INCAR`, `OUTCAR`, `OSZICAR` of a VASP run (POSCAR + INCAR is enough) | space group, **magnetic space group** (BNS/OG, type I–IV), magnetic point group, presence of **P, T, PT, T·τ**, mirrors, M·T, C<sub>n</sub>·T, all operations; allowed **σ<sub>ij</sub>**, **σ<sup>k</sup><sub>ij</sub>(spin)**, **σ<sup>k</sup><sub>ij</sub>(orbital)**, T-even / T-odd, anomalous Hall vector, unconventional spin polarisations; **spin group** (no SOC): **oriented spin-space-group number for any order** (collinear, coplanar, non-coplanar; Chen et al. 2024 via FindSpinGroup), altermagnet / AFM / FM class, spin Laue group, d/g/i-wave spin splitting, NR tensors, SOC-only components |
 | `symphase hull` | VASP runs, CSV, Materials Project | formation energy, **E<sub>hull</sub>**, decomposition, stability margin, figures for **any number of elements**, high-throughput screening, **finite-T hulls** (mixing entropy, harmonic, **quasi-harmonic** and **anharmonic** free energies); parallel (all cores or MPI) |
 | `symphase kubo` | POSCAR + INCAR/OUTCAR; postw90 `*-ahc/shc-fermiscan.dat`, any component table, or Wannier90 `seedname_hr.dat` | **magnitudes** of charge / spin / orbital conductivities constrained by symmetry: minimal component set + postw90 input, import and symmetry fit (full tensor, violation check), built-in Kubo solver (AHC, SHC) |
-| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames), **incommensurate single-Q spirals without supercells** (rotating frame, optimal q), a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) and **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
+| `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames), **incommensurate single-Q spirals without supercells** (rotating frame, optimal q), a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors) and **two-magnon striction + damping** (thermal magnon/phonon linewidths, Gilbert and lattice damping): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (46 slides, Beamer source included)
-📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 12 tutorials, 7 quizzes × 20 self-checking questions
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (47 slides, Beamer source included)
+📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 13 tutorials, 8 quizzes × 20 self-checking questions
 🧭 **Supercell guide:** [`docs/SUPERCELL_WORKFLOW.md`](docs/SUPERCELL_WORKFLOW.md) — every step from exchange constants to DFT checks for multi-Q / conical / distorted states
 
 ---
@@ -173,6 +173,21 @@ symphase magnons ... --phonons phonopy_params.yaml --magnetoelastic dJ.dat      
 Exact against the two-oscillator formula (3×10⁻¹⁴ meV); phonopy Φ(k) equals the spring model to 10⁻¹²; isotropic
 exchange striction couples only non-collinear spins (zero effect on a collinear magnet, as it must).
 
+### Two-magnon striction and damping (`symphase.magdamp`)
+At second order the bond-length dependence of J enters the **bilinear** magnon Hamiltonian:
+H₃ = N<sup>−½</sup> Σ (b<sub>q</sub> + b†<sub>−q</sub>) Ψ†<sub>k+q</sub> M(k, q) Ψ<sub>k</sub> — magnons scatter by absorbing/emitting phonons and phonons decay into two
+magnons, also in collinear magnets where the linear hybridisation vanishes. Fermi's golden rule gives temperature-dependent
+**phonon linewidths** (magnon scattering, two-magnon decay) and **magnon linewidths** (phonon emission, absorption, fusion);
+the linearised **Landau–Lifshitz–Gilbert** equations with lattice friction give the Gilbert widths of the coupled modes exactly.
+```bash
+cd examples/vasp/MagnonPhonon_FM_chain
+symphase magnons --J -5 --K 0.3 --K-axis 0 0 1 --spin 1 --rmax 3.1 --phonons springs.dat --dJdr 3 \
+                 --linewidth 300 --lw-grid 300 --alpha 0.01 --phonon-damping 0.05
+```
+Checks: the vertex equals the first-order change of a frozen-phonon supercell Hamiltonian (all blocks, 10⁻¹¹); the 1D BZ sum equals
+the semi-analytic root formula (10⁻⁵); FM γ = 2αω/(1+α²) exactly; AFM LLG = energy-dissipation formula and is exchange-enhanced,
+γ = 2α(2J+2K)S; an AFM optical phonon decays into two magnons at T = 0.
+
 ### Finite-temperature hulls
 G<sub>i</sub>(T) = E<sub>i</sub> + F<sup>vib</sup><sub>i</sub>(T) − T S<sup>conf</sup><sub>i</sub>
 ```bash
@@ -292,6 +307,8 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 | `17_tutorial_kubo_magnitudes.ipynb` | plan / import / fit / compute: Pt SHC from one postw90 number, Fe AHC check, Haldane, Kane–Mele |
 | `18_tutorial_selfconsistent_phonons.ipynb` | exact vs SCHA vs harmonic oscillator, TDEP folders, anharmonic QHA, hull with `--vib scph` |
 | `19_quiz_kubo_anharmonic_phonons.ipynb` | **20 questions**: Kubo magnitudes with symmetry, TDEP / SSCHA free energies |
+| `20_tutorial_two_magnon_damping.ipynb` | two-magnon striction, thermal phonon/magnon linewidths, T = 0 two-magnon decay, Gilbert (FM vs AFM) |
+| `21_quiz_two_magnon_damping.ipynb` | **20 questions**: two-magnon striction and damping |
 | `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on, incl. MoO₂) |
 | `05_quiz_convex_hull.ipynb` | **20 questions** (conceptual + hands-on) |
 

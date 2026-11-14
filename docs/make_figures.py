@@ -209,3 +209,44 @@ a2.legend(fontsize=8); a2.set_title("anharmonic hardening delays the transition"
 fig.tight_layout()
 fig.savefig(os.path.join(F, "kubo_scph.pdf")); fig.savefig(os.path.join(F, "kubo_scph.png"), dpi=160); plt.close(fig)
 print("figure kubo_scph")
+
+# ---------------------------------------------------------------- outlook 1: two-magnon striction and damping
+import spglib as _sg
+from symphase.magphon import analyse_mp
+from symphase.magdamp import MagnonPhononVertex, linewidths_along_path
+_a = 3.0
+_lat, _fr = np.diag([_a, 12, 12]), np.zeros((1, 3)); _ds = _sg.get_symmetry_dataset((_lat, _fr, [0]))
+_GX = [("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))]
+_r = analyse_mp(_lat, _fr, [0], ["Fe"], np.array([[0, 0, 2.0]]), _ds.rotations, _ds.translations,
+                springs=[(0, 0, [1, 0, 0], 600.0, 300.0)], dJdr=[3.0], J=[-5.0], K=0.3, K_axis=[0, 0, 1], spin=1.0,
+                rmax=3.1, n_per=60, path=_GX, masses=[55.845])
+_lw = linewidths_along_path(_r["model"], _r["q"], _r["x"], T=300.0, grid=(300, 1, 1), sigma=0.2, every=2)
+_lat2, _fr2 = np.diag([2 * _a, 12, 12]), np.array([[0, 0, 0], [0.5, 0, 0]])
+_ds2 = _sg.get_symmetry_dataset((_lat2, _fr2, [0, 0]))
+_ra = analyse_mp(_lat2, _fr2, [0, 0], ["Fe", "Fe"], np.array([[0, 0, 3.0], [0, 0, -3.0]]), _ds2.rotations, _ds2.translations,
+                 springs=[(0, 1, [0, 0, 0], 900.0, 400.0), (1, 0, [1, 0, 0], 900.0, 400.0)], dJdr=[3.0], J=[4.0], K=0.15,
+                 K_axis=[0, 0, 1], spin=1.5, rmax=3.1, n_per=4, path=_GX, masses=[55.845, 55.845])
+_va = MagnonPhononVertex(_ra["model"])
+_ks = np.linspace(0, np.pi / (2 * _a), 25)
+_om, _ga = [], []
+for _k in _ks:
+    o, g, wm = _va.damped_modes(np.array([_k, 0, 0]), alpha=1e-3, coupling=False)
+    _m = [(x, y) for x, y, w in zip(o, g, wm) if w > 0.5]
+    _om.append(_m[0][0]); _ga.append(_m[0][1])
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.5), gridspec_kw=dict(width_ratios=[1.3, 1]))
+x = _lw["x"] * _a / np.pi
+for n in range(_lw["phonon_omega"].shape[1]):
+    w, g = _lw["phonon_omega"][:, n], 3 * _lw["phonon_gamma"][:, n] / 2
+    a1.fill_between(x, w - g, w + g, color="#2c5d8f", alpha=0.35, lw=0); a1.plot(x, w, color="#2c5d8f", lw=1.3)
+w, g = _lw["magnon_eps"][:, 0], _lw["magnon_gamma"][:, 0] / 2
+a1.fill_between(x, w - g, w + g, color="#c0392b", alpha=0.35, lw=0); a1.plot(x, w, color="#c0392b", lw=1.5)
+a1.set_xlim(0, 1); a1.set_ylim(0, 23); a1.set_xlabel("k (π/a)"); a1.set_ylabel("ω (meV)")
+a1.plot([], [], color="#2c5d8f", lw=6, alpha=0.4, label="phonons ± 3γ/2"); a1.plot([], [], color="#c0392b", lw=6, alpha=0.4, label="magnons ± γ/2")
+a1.legend(fontsize=8, loc="upper left"); a1.set_title("FM chain, isotropic striction, 300 K (no linear coupling)", fontsize=9.5)
+a2.plot(np.array(_ks) * 2 * _a / np.pi, _ga, color="#c0392b", lw=2.2, label="LLG, AFM (exchange-enhanced)")
+a2.plot(np.array(_ks) * 2 * _a / np.pi, 2e-3 * np.array(_om), "--", color="0.5", lw=2, label="2αω")
+a2.set_xlabel("k (π/2a)"); a2.set_ylabel("Gilbert FWHM (meV), α = 10⁻³"); a2.legend(fontsize=8)
+a2.set_title("AFM chain: Gilbert damping", fontsize=9.5); a2.set_ylim(0, 0.03)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "damping.pdf")); fig.savefig(os.path.join(F, "damping.png"), dpi=160); plt.close(fig)
+print("figure damping")

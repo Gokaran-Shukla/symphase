@@ -787,6 +787,12 @@ def main(argv=None):
                     help="∂J/∂d per bond: 'i j n1 n2 n3 dJdr' or 'i j n1 n2 n3 x|y|z G11..G33' (meV/Å)")
     ap.add_argument("--dJdr", type=float, nargs="+", default=None,
                     help="isotropic exchange striction dJ/dr per bond class (meV/Å), in --J order")
+    ap.add_argument("--linewidth", type=float, default=None, metavar="T",
+                    help="magnon & phonon linewidths from two-magnon striction at temperature T (K) (with --phonons)")
+    ap.add_argument("--lw-grid", type=int, nargs="+", default=[200], help="k grid of the linewidth BZ sums [200]")
+    ap.add_argument("--lw-sigma", type=float, default=0.2, help="Gaussian width of the energy δ (meV) [0.2]")
+    ap.add_argument("--alpha", type=float, default=0.0, help="Gilbert damping α of the spins (linearised LLG)")
+    ap.add_argument("--phonon-damping", type=float, default=0.0, help="phonon friction η = phonon FWHM (meV)")
     ap.add_argument("--spin", type=float, default=None, help="spin length S (default |m|/2)")
     ap.add_argument("--nq", type=int, default=60, help="q points per path segment [60]")
     ap.add_argument("--nmap", type=int, default=41, help="grid size of the Δω map [41]")
@@ -922,6 +928,28 @@ def _magphon_cli(args, lat, frac, types, symbols, mags, rots, trs, exch):
         np.savetxt(f"{stem}_magphon.dat", np.column_stack([res["x"], res["omega"], res["w_magnon"]]),
                    header="x(1/Å)  omega_1..M (meV)  magnon_weight_1..M")
         print(f"\n  written: {stem}_magphon{ext}, {stem}_magphon.dat")
+    if args.linewidth is not None or args.alpha or args.phonon_damping:
+        from .magdamp import linewidths_along_path, plot_linewidths
+        T = args.linewidth if args.linewidth is not None else 0.0
+        lw = linewidths_along_path(res["model"], res["q"], res["x"], T=T, grid=tuple(args.lw_grid),
+                                   sigma=args.lw_sigma, every=max(1, len(res["q"]) // 24), alpha=args.alpha,
+                                   eta=args.phonon_damping)
+        res["linewidths"] = lw
+        if args.linewidth is not None:
+            print(f"\n  two-magnon striction linewidths at T = {T:g} K (FWHM, meV; BZ grid {args.lw_grid}, σ = {args.lw_sigma}):")
+            print(f"    phonons: max γ = {np.nanmax(lw['phonon_gamma']):.4f} meV   magnons: max γ = "
+                  f"{np.nanmax(lw['magnon_gamma']):.4f} meV")
+        if args.alpha or args.phonon_damping:
+            g = lw["damped_gamma"]
+            print(f"  Gilbert α = {args.alpha:g}, phonon friction η = {args.phonon_damping:g} meV: coupled-mode FWHM "
+                  f"{max(0.0, np.nanmin(g)):.4f} … {np.nanmax(g):.4f} meV")
+        if args.plot and args.plot.lower() != "none":
+            stem, ext = os.path.splitext(args.plot)
+            plot_linewidths(lw, res, save=f"{stem}_linewidths{ext}")
+            np.savetxt(f"{stem}_linewidths.dat", np.column_stack([lw["x"], lw["phonon_omega"], lw["phonon_gamma"],
+                                                                   lw["magnon_eps"], lw["magnon_gamma"]]),
+                       header="x  phonon ω (3n)  phonon γ (3n)  magnon ε (N)  magnon γ (N)   [meV, FWHM]")
+            print(f"  written: {stem}_linewidths{ext}, {stem}_linewidths.dat")
     return res
 
 

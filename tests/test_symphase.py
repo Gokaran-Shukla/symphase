@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -672,3 +672,110 @@ def test_scph_hull_tdep_folders():
     from symphase.thermo import FiniteTHull
     ft = FiniteTHull(load_csv(f"{EX}/hull/NiAl_scph.csv"), vib="scph", mixing=False)
     assert abs(ft.stabilisation_temperature("Ni3Al-D019", Tmax=1600) - 790) < 10
+
+
+# ---------------------------------------------------------------- two-magnon striction and damping
+def _chain_mp(ncell, nsub, J, dJ, lamxz, dirs_sub, K, deform=None, spin=1.0):
+    from symphase.magphon import MagnonPhonon, _G_of_bond
+    a, nat = 3.0, ncell * nsub
+    lat = np.diag([a * nat, 12.0, 12.0])
+    frac = np.array([[t / nat, 0, 0] for t in range(nat)])
+    dirs = np.array([dirs_sub[t % nsub] for t in range(nat)], float)
+    pairs, me = [], {}
+    for t in range(nat):
+        j, R, d = (t + 1) % nat, (1 if t == nat - 1 else 0, 0, 0), np.array([a, 0, 0])
+        spec = [("iso", dJ)] + ([(0, np.array([[0, 0, lamxz], [0, 0, 0], [lamxz, 0, 0]]))] if lamxz else [])
+        Jb = J * np.eye(3)
+        if deform is not None:
+            G = _G_of_bond(spec, d)
+            Jb = Jb + sum(G[g] * (deform(j) - deform(t))[g] for g in range(3))
+        pairs.append((t, j, d, Jb))
+        me[(t, j, R)] = spec
+    As = [(-K * np.outer(e, e) if K else None) for e in dirs]
+    return MagnonPhonon(lat, frac, ["Fe"] * nat, list(range(nat)), dirs, [spin] * nat, pairs, As, None, me,
+                        springs=[], masses=[55.845] * nat)
+
+
+def test_two_magnon_vertex_equals_frozen_phonon_supercell():
+    from symphase.magdamp import MagnonPhononVertex
+    from symphase.magnons import local_frames, hamiltonian
+    a, nsub, ncell = 3.0, 2, 5
+    dirs, J, dJ, lam, K = [[0, 0, 1], [0, 0, -1]], 2.0, 1.3, 0.7, 0.2
+    vx = MagnonPhononVertex(_chain_mp(1, nsub, J, dJ, lam, dirs, K))
+    f = np.array([[0.3 + 0.1j, 0.2, -0.1j], [-0.25, 0.15j, 0.05]])
+    q = np.array([2 * np.pi * (2 / ncell) / (a * nsub), 0, 0])
+
+    def deform(l):
+        return lambda t: l * 2 * np.real(f[t % nsub] * np.exp(1j * q[0] * t * a))
+    Hs = []
+    for s in (1, -1):
+        m = _chain_mp(ncell, nsub, J, dJ, lam, dirs, K, deform=deform(s * 1e-5))
+        U, V = local_frames(m.v)
+        Hs.append(hamiltonian(np.zeros(3), m.sites, U, V, m.S, m.pairs, m.Asite, None))
+    dH = (Hs[0] - Hs[1]) / 2e-5
+    nat = nsub * ncell
+    pos = np.arange(nat) * a
+    for kin in [2 * np.pi * m / (a * nat) for m in range(ncell)]:
+        kout = kin + q[0]
+        M, M2 = vx.M(np.array([kin, 0, 0]), q, f), vx.M(np.array([-kout, 0, 0]), q, f)
+        for sa in range(nsub):
+            for sb in range(nsub):
+                ia, ib = range(sa, nat, nsub), range(sb, nat, nsub)
+                ph = lambda i, j: np.exp(-1j * kout * pos[i] + 1j * kin * pos[j]) / ncell   # noqa: E731
+                assert abs(sum(dH[i, j] * ph(i, j) for i in ia for j in ib) - M[sa, sb]) < 1e-8
+                assert abs(sum(dH[i, nat + j] * ph(i, j) for i in ia for j in ib)
+                           - (M[sa, nsub + sb] + M2[sb, nsub + sa])) < 1e-8
+                assert abs(sum(dH[nat + i, j] * ph(i, j) for i in ia for j in ib)
+                           - (M[nsub + sa, sb] + M2[nsub + sb, sa])) < 1e-8
+
+
+def test_two_magnon_phonon_linewidth_semianalytic_1d():
+    import math
+    from symphase.magphon import analyse_mp
+    from symphase.magdamp import MagnonPhononVertex, bose
+    lat, fr, R, T = _chain()
+    r = analyse_mp(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.]]), R, T, springs=[(0, 0, [1, 0, 0], 600., 300.)],
+                   dJdr=[3.0], J=[-5.0], K=0.3, K_axis=[0, 0, 1], spin=1.0, rmax=3.1, n_per=4,
+                   path=[("G", (0, 0, 0)), ("X", (0.5, 0, 0))], masses=[55.845])
+    assert np.nanmax(np.abs(r["omega"] - r["omega0"])) < 1e-12           # no linear hybridisation (collinear)
+    vx = MagnonPhononVertex(r["model"])
+    q = np.array([0.9, 0, 0])
+    om, fs = vx.phonons(q)
+    nu = int(np.argmax([abs(x[0, 0]) if x is not None else 0 for x in fs]))
+    g = vx.phonon_linewidth(q, T=300.0, grid=(4000, 1, 1), sigma=0.02, modes=[nu])
+    a, S, J, K = 3.0, 1.0, 5.0, 0.3
+    eps = lambda k: 2 * S * J * (1 - np.cos(k * a)) + 2 * K * S                     # noqa: E731
+    s = om[nu] / (4 * S * J * np.sin(q[0] * a / 2))
+    ref = 0.0
+    for base in (math.asin(s), math.pi - math.asin(s)):
+        k = (base - q[0] * a / 2) / a
+        Sm = vx.scattering(np.array([k, 0, 0]), q, fs[nu])[0, 0]
+        ref += a * abs(Sm) ** 2 * (bose(eps(k), 300.0) - bose(eps(k + q[0]), 300.0)) / (
+            4 * S * J * a * np.sin(q[0] * a / 2) * abs(math.cos(k * a + q[0] * a / 2)))
+    assert ref > 0.05 and abs(g["gamma"][nu] - ref) < 1e-3 * ref and g["gamma_pair"][nu] == 0.0
+
+
+def test_gilbert_damping_fm_exact_and_afm_exchange_enhanced():
+    from symphase.magdamp import MagnonPhononVertex, gilbert_first_order
+    from symphase.magphon import MagnonPhonon
+    vx = MagnonPhononVertex(_chain_mp(1, 1, -5.0, 0.0, 0.0, [[0, 0, 1]], 0.3))
+    al = 0.05
+    o, g, wm = vx.damped_modes(np.array([0.7, 0, 0]), alpha=al, coupling=False)
+    eps = 2 * 5.0 * (1 - np.cos(2.1)) + 0.6
+    assert abs(o[0] - eps / (1 + al ** 2)) < 1e-9 and abs(g[0] - 2 * al * eps / (1 + al ** 2)) < 1e-9
+    a = 3.0
+    K3 = np.array([[500., 0, 0], [0, 200, 0], [0, 0, 200]])
+    mp = MagnonPhonon(np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [0.5, 0, 0]]), ["Fe"] * 2, [0, 1],
+                      np.array([[0, 0, 1.], [0, 0, -1.]]), [1.5, 1.5],
+                      [(0, 1, np.array([a, 0, 0]), 4.0 * np.eye(3)), (1, 0, np.array([a, 0, 0]), 4.0 * np.eye(3))],
+                      [-0.15 * np.diag([0, 0, 1.])] * 2, None, {},
+                      springs=[(0, 1, np.array([a, 0, 0]), K3), (1, 0, np.array([a, 0, 0]), K3)], masses=[55.845] * 2)
+    vx = MagnonPhononVertex(mp)
+    for kx in (0.0, 0.4):
+        o, g, wm = vx.damped_modes(np.array([kx, 0, 0]), alpha=1e-3, coupling=False)
+        ex = sorted(gg for oo, gg, w in zip(o, g, wm) if w > 0.5)
+        fo = sorted(gg for oo, gg in gilbert_first_order(mp, np.array([kx, 0, 0]), 1e-3))
+        assert np.allclose(ex, fo, rtol=1e-3)
+        assert abs(ex[0] - 2e-3 * (2 * 4.0 + 2 * 0.15) * 1.5) < 1e-5            # exchange-enhanced, k-independent
+    o, g, wm = vx.damped_modes(np.array([0.5, 0, 0]), alpha=0.0, eta=0.3, coupling=False)
+    assert np.allclose([gg for gg, w in zip(g, wm) if w < 0.5], 0.3)

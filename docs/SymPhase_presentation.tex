@@ -721,6 +721,18 @@ anharmonic QHA over volumes; hull \cmd{--vib scph} (\texttt{e\_static} when $F$ 
 {\tiny Quartic oscillator at 1000 K: SCHA $-$ exact $=+0.22$ meV ($\ge0$, Gibbs–Bogoliubov), harmonic $-5.07$ meV. Toy Ni$_3$Al-D0$_{19}$: $T^*$ 556 K (harmonic) $\to$ 790 K (SCHA).}
 \end{frame}
 
+\begin{frame}{Two-magnon striction and damping of magnons and phonons}
+\noindent{\footnotesize $\partial J/\partial d$ in the \emph{bilinear} magnon Hamiltonian: $H_3=N^{-1/2}\sum(b_{\mathbf q}+b^\dagger_{-\mathbf q})\,\Psi^\dagger_{\mathbf k+\mathbf q}M(\mathbf k,\mathbf q)\Psi_{\mathbf k}$
+— magnon scattering, phonon $\to$ two magnons; also for collinear spins. Golden-rule linewidths at $T$; Gilbert $\alpha$ + lattice friction $\eta$ via
+exact linearised LLG. \cmd{--linewidth T --alpha --phonon-damping}.}
+\vspace{0.25em}
+
+\centering\includegraphics[width=0.80\textwidth]{figures/damping.pdf}
+
+{\tiny Vertex = frozen-phonon supercell to $10^{-11}$ (all blocks); 1D BZ sum = semi-analytic root formula ($10^{-5}$); FM: $\gamma=2\alpha\omega/(1+\alpha^2)$ exactly;
+AFM: LLG = energy-dissipation formula, $\gamma=2\alpha(2J+2K)S$; AFM optical phonon decays into two magnons at $T=0$.}
+\end{frame}
+
 \begin{frame}[fragile]{Spin–orbit-torque geometry: unconventional polarisations}
 \begin{columns}[T]
 \column{0.5\textwidth}
@@ -944,7 +956,8 @@ notebook & content\\ \midrule
 15 & quasi-harmonic \& anharmonic hulls\\
 17 & Kubo magnitudes with symmetry\\
 18 & TDEP / SSCHA anharmonic phonons\\
-04, 05, 09, 11, 13, 16, 19 & \textbf{7 quizzes $\times$ 20 questions}\\ \bottomrule
+20 & two-magnon striction, damping\\
+04, 05, 09, 11, 13, 16, 19, 21 & \textbf{8 quizzes $\times$ 20 questions}\\ \bottomrule
 \end{tabular}}
 \column{0.46\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
@@ -984,11 +997,12 @@ magnon–phonon & two-oscillator formula, phonopy $\Phi$ = springs & \textcolor{
 QHA & \texttt{PhonopyQHA}; $\gamma=0$, Grüneisen relation & \textcolor{spinc}{\checkmark} \\
 Kubo & Haldane, Kane–Mele quantised; 3D units & \textcolor{spinc}{\checkmark} \\
 TDEP / SSCHA & exact oscillator, Gibbs–Bogoliubov bound & \textcolor{spinc}{\checkmark} \\
-quiz keys & 140 / 140 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+two-magnon / damping & frozen-phonon supercell, 1D roots, FM/AFM LLG & \textcolor{spinc}{\checkmark} \\
+quiz keys & 160 / 160 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (75); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (79); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}
@@ -1004,7 +1018,7 @@ quiz keys & 140 / 140 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottom
 \column{0.46\textwidth}
 \textbf{Outlook}
 \begin{itemize}\setlength\itemsep{0.35em}
-  \item magnon–phonon: second-order (two-magnon) striction terms, damping
+  \item magnon–magnon (four-magnon) interactions, magnon–phonon self-energies beyond the golden rule
   \item Edelstein, nonlinear Hall, torkance tensors
   \item Fermi-surface (1/$\Gamma$) Kubo terms and orbital Hall from \texttt{hr.dat} + $L$ matrices
   \item direct TDEP force-constant input (phonon dispersions at $T$)

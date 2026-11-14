@@ -1675,3 +1675,167 @@ quiz_nb("19_quiz_kubo_anharmonic_phonons.ipynb",
         KQ, "kubo_scph", "Work through tutorials **17** and **18** first. Questions 2, 4–6, 8–11, 16, 18 and 19 are hands-on.",
         KS_HELPER + "\nst = SymTensor.from_analysis(analyze_tensors(f'{KB}/Pt_postw90', tensors='spin', ossg='no'), 'spin')\n"
         "scan = read_postw90_shc(f'{KB}/Pt_postw90/Pt-shc-fermiscan.dat', win=f'{KB}/Pt_postw90/Pt.win')")
+
+
+# =============================================================================
+# 20  two-magnon striction and damping;  21 quiz
+# =============================================================================
+DM_HELPER = 'import numpy as np, spglib, math, warnings\nimport matplotlib.pyplot as plt\nwarnings.simplefilter("ignore")\nfrom symphase.magphon import analyse_mp, MagnonPhonon, plot_mp\nfrom symphase.magdamp import MagnonPhononVertex, gilbert_first_order, linewidths_along_path, plot_linewidths, bose\na = 3.0\nlat, fr = np.diag([a, 12, 12]), np.zeros((1, 3))\nds = spglib.get_symmetry_dataset((lat, fr, [0]))\nGX = [("Γ", (0, 0, 0)), ("X", (0.5, 0, 0))]\ndef fm_chain(dJdr=3.0, J=-5.0, K=0.3, n_per=60):\n    return analyse_mp(lat, fr, [0], ["Fe"], np.array([[0, 0, 2.0]]), ds.rotations, ds.translations,\n                      springs=[(0, 0, [1, 0, 0], 600.0, 300.0)], dJdr=[dJdr], J=[J], K=K, K_axis=[0, 0, 1], spin=1.0,\n                      rmax=3.1, n_per=n_per, path=GX, masses=[55.845])\nlat2, fr2 = np.diag([2 * a, 12, 12]), np.array([[0, 0, 0], [0.5, 0, 0]])\nds2 = spglib.get_symmetry_dataset((lat2, fr2, [0, 0]))\ndef afm_chain(J=4.0, K=0.15, dJdr=3.0, kL=900.0, kT=400.0, n_per=60):\n    return analyse_mp(lat2, fr2, [0, 0], ["Fe", "Fe"], np.array([[0, 0, 3.0], [0, 0, -3.0]]), ds2.rotations,\n                      ds2.translations, springs=[(0, 1, [0, 0, 0], kL, kT), (1, 0, [1, 0, 0], kL, kT)], dJdr=[dJdr],\n                      J=[J], K=K, K_axis=[0, 0, 1], spin=1.5, rmax=3.1, n_per=n_per, path=GX, masses=[55.845, 55.845])\n'
+
+save([
+    md(r"""# SymPhase tutorial 20 — two-magnon (second-order) striction and damping of magnons and phonons
+
+Tutorial 14 used the **linear** spin–lattice term ($\partial^2E/\partial X\,\partial u$, one magnon + one phonon): it hybridises bands, but
+isotropic exchange striction gives **nothing** for collinear spins. Here the next order:
+
+* **two-magnon striction** — $J(\mathbf d_0+\delta\mathbf d)=J+\sum_\gamma G^\gamma\delta d_\gamma$ inserted into the *bilinear* magnon Hamiltonian:
+  $H_3=N^{-1/2}\sum_{\mathbf k,\mathbf q,\nu}(b_{\mathbf q\nu}+b^\dagger_{-\mathbf q\nu})\,\Psi^\dagger_{\mathbf k+\mathbf q}M_\nu(\mathbf k,\mathbf q)\Psi_{\mathbf k}$ — magnon scattering by phonons and
+  phonon decay into two magnons, present also for collinear magnets;
+* **thermal linewidths** (Fermi's golden rule, FWHM): phonons from magnon scattering and two-magnon decay; magnons from phonon
+  emission, absorption and fusion;
+* **phenomenological damping**: linearised Landau–Lifshitz–Gilbert equations (Gilbert $\alpha$) + lattice friction $\eta$, solved exactly for
+  the coupled magnon–phonon modes.
+
+The vertex is checked entry by entry against the first-order change of a frozen-phonon **supercell** Hamiltonian (`tests/`)."""),
+    SETUP,
+    code(DM_HELPER),
+    md(r"""## 1. FM chain: no linear coupling, but finite phonon linewidths
+
+Isotropic exchange striction $\mathrm dJ/\mathrm dr=3$ meV/Å. The linear hybridisation is exactly zero; the two-magnon process (a phonon absorbed by
+scattering a thermal magnon $k\to k+q$) gives a finite width:"""),
+    code("""r = fm_chain()
+vx = MagnonPhononVertex(r["model"])
+print("linear hybridisation max |ω − ω0| =", np.nanmax(np.abs(r["omega"] - r["omega0"])), "meV")
+q = np.array([0.9, 0, 0]); om, fs = vx.phonons(q)
+nu = int(np.argmax([abs(x[0, 0]) if x is not None else 0 for x in fs]))
+Ts = [10, 50, 100, 200, 300, 450, 600]
+gs = [vx.phonon_linewidth(q, T=T, grid=(4000, 1, 1), sigma=0.02, modes=[nu])["gamma"][nu] for T in Ts]
+for T, g in zip(Ts, gs):
+    print(f"T = {T:4d} K   longitudinal phonon ω = {om[nu]:.3f} meV   γ = {g:.5f} meV")
+fig, ax = plt.subplots(figsize=(4.8, 3.2)); ax.plot(Ts, gs, "o-", color="#2c5d8f")
+ax.set_xlabel("T (K)"); ax.set_ylabel("phonon FWHM (meV)"); ax.set_title("scattering of thermal magnons ∝ n(ε)", fontsize=10)"""),
+    md(r"""**Check of the Brillouin-zone sum.** In 1D the energy δ-function can be solved: roots $k^*$ of $\varepsilon(k+q)-\varepsilon(k)=\omega$,
+$\gamma = a\sum_{k^*}|S(k^*)|^2\,[n(\varepsilon_{k^*})-n(\varepsilon_{k^*+q})]/|\partial_k(\varepsilon_{k+q}-\varepsilon_k)|$:"""),
+    code("""S_, J_, K_ = 1.0, 5.0, 0.3
+eps = lambda k: 2 * S_ * J_ * (1 - np.cos(k * a)) + 2 * K_ * S_
+s = om[nu] / (4 * S_ * J_ * np.sin(q[0] * a / 2)); ref = 0.0
+for base in (math.asin(s), math.pi - math.asin(s)):
+    k = (base - q[0] * a / 2) / a
+    Sm = vx.scattering(np.array([k, 0, 0]), q, fs[nu])[0, 0]
+    ref += a * abs(Sm) ** 2 * (bose(eps(k), 300) - bose(eps(k + q[0]), 300)) / (4 * S_ * J_ * a * np.sin(q[0] * a / 2) * abs(math.cos(k * a + q[0] * a / 2)))
+print(f"semi-analytic γ = {ref:.5f} meV   BZ sum = {gs[Ts.index(300)]:.5f} meV")"""),
+    md("## 2. Magnon linewidths: phonon emission, absorption, fusion — along Γ–X"),
+    code("""X = np.array([np.pi / a, 0, 0])
+for T in (0.0, 300.0):
+    m = vx.magnon_linewidth(X, T=T, grid=(400, 1, 1), sigma=0.2)
+    print(f"T = {T:5.0f} K: magnon at X ε = {m['epsilon'][0]:.2f} meV  γ = {m['gamma'][0]:.3f} "
+          f"(emission {m['gamma_emit'][0]:.3f}, absorption {m['gamma_abs'][0]:.3f}, fusion {m['gamma_fusion'][0]:.3f}) meV")
+lw = linewidths_along_path(r["model"], r["q"], r["x"], T=300.0, grid=(300, 1, 1), sigma=0.2, every=3)
+plot_linewidths(lw, r, title="FM chain, isotropic striction, T = 300 K");"""),
+    md(r"""Magnons above the top of the phonon band can **emit** phonons (spontaneously, even at $T=0$): their width grows sharply.
+
+## 3. AFM chain: a phonon decays into two magnons — even at $T = 0$
+
+Bogoliubov pairing in the antiferromagnet produces $\alpha^\dagger\alpha^\dagger b$ terms: an optical phonon above twice the magnon gap
+decays spontaneously."""),
+    code("""ra = afm_chain(); va = MagnonPhononVertex(ra["model"])
+print("magnon gap:", np.round(va.magnon(np.zeros(3))[0], 3), "meV")
+for qx in (0.3, 0.6, 0.9):
+    qq = np.array([qx, 0, 0]); p = va.phonon_linewidth(qq, T=0.0, grid=(2000, 1, 1), sigma=0.05)
+    print(f"q = {qx}:  ω = {np.round(p['omega'], 2)}\\n          γ_pair(T=0) = {np.round(p['gamma_pair'], 4)}")"""),
+    md(r"""## 4. Gilbert damping and lattice friction (linearised LLG, exact)
+
+Ferromagnet: $\omega\to\omega/(1+\alpha^2)$, FWHM $\gamma=2\alpha\omega/(1+\alpha^2)$. Antiferromagnet: the width is **exchange-enhanced** and nearly
+$k$-independent, $\gamma\approx2\alpha(2J+2K)S$ — far above $2\alpha\omega$ at small $\omega$:"""),
+    code("""o, g, wm = MagnonPhononVertex(r["model"]).damped_modes(np.array([0.7, 0, 0]), alpha=0.05, coupling=False)
+im = int(np.argmax(wm)); e0 = 2 * 5.0 * (1 - np.cos(0.7 * a)) + 0.6
+print(f"FM: ω = {o[im]:.4f} (ε/(1+α²) = {e0/(1+0.05**2):.4f}),  γ = {g[im]:.4f} (2αε/(1+α²) = {2*0.05*e0/(1+0.05**2):.4f}) meV")
+for kx in (0.0, 0.4, 0.9):
+    o, g, wm = va.damped_modes(np.array([kx, 0, 0]), alpha=1e-3, coupling=False)
+    mg = [(x, y) for x, y, w in zip(o, g, wm) if w > 0.5]
+    print(f"AFM k = {kx}: ω = {mg[0][0]:.3f} meV, γ = {mg[0][1]:.5f} meV  (2αω = {2e-3*mg[0][0]:.5f};  2α(2J+2K)S = {2e-3*(8+0.3)*1.5:.5f})")
+o, g, wm = va.damped_modes(np.array([0.5, 0, 0]), alpha=0.0, eta=0.3, coupling=False)
+print("pure lattice friction η = 0.3 meV -> phonon FWHM:", np.round([y for y, w in zip(g, wm) if w < 0.5], 4))"""),
+    md("""## 5. Command line
+```bash
+cd examples/vasp/MagnonPhonon_FM_chain
+symphase magnons --J -5 --K 0.3 --K-axis 0 0 1 --spin 1 --rmax 3.1 --phonons springs.dat --dJdr 3 \\
+                 --linewidth 300 --lw-grid 300 --lw-sigma 0.2 --alpha 0.01 --phonon-damping 0.05
+```
+writes `*_linewidths.png/.dat` (ω ± γ/2 for phonons and magnons) and prints the Gilbert/friction widths of the coupled modes.
+Continue with **21_quiz_two_magnon_damping.ipynb**."""),
+], "20_tutorial_two_magnon_damping.ipynb")
+
+DQ = [
+    dict(type="mc", question="Which term does the two-magnon (second-order) striction vertex come from?",
+         options={"a": "the anisotropy only", "b": "the bond-length derivative of J inserted into the BILINEAR (two-magnon) spin-wave Hamiltonian",
+                  "c": "the Zeeman energy", "d": "the phonon force constants"},
+         answer="b", explanation="H3 = (b + b†) Ψ† M Ψ: one phonon operator times two magnon operators."),
+    dict(type="mc", question="Hands-on: FM chain with isotropic striction dJ/dr = 3 meV/Å. Linear magnon–phonon hybridisation?",
+         options={"a": "large anticrossing gaps", "b": "exactly zero (collinear spins)", "c": "only at Γ", "d": "only at X"},
+         answer="b", explanation="The linear vertex ∝ x_a·v_b vanishes for collinear order; the two-magnon vertex does not."),
+    dict(type="num", question="Hands-on: FWHM (meV) of the longitudinal phonon at q = 0.9 Å⁻¹ in that FM chain at 300 K (3 decimals)?",
+         answer=0.144, tol=0.003, hint="vx.phonon_linewidth(qph, T=300, grid=(4000,1,1), sigma=0.02, modes=[nu])",
+         explanation="≈ 0.144 meV from scattering of thermal magnons (k → k+q)."),
+    dict(type="mc", question="Hands-on: how does that phonon width behave at low temperature (10 K)?",
+         options={"a": "it stays 0.144 meV", "b": "it vanishes (≈ 5×10⁻⁴ meV): no thermal magnons to scatter", "c": "it diverges", "d": "it becomes negative"},
+         answer="b", explanation="The scattering channel ∝ n(ε_k) − n(ε_k+q) dies out as the magnon population freezes."),
+    dict(type="mc", question="How was the vertex M(k, q) validated?",
+         options={"a": "not at all", "b": "entry by entry against the first-order change of a frozen-phonon supercell Hamiltonian built by the independent LSWT code",
+                  "c": "by plotting", "d": "against experiments"},
+         answer="b", explanation="All blocks (scattering, pair creation, pair annihilation) agree to ~10⁻¹¹ for an AFM with anisotropy and complex patterns."),
+    dict(type="mc", question="A bug found that way was …",
+         options={"a": "a wrong mass", "b": "double counting of the pair terms (a real-space c3 a†a† term must be represented once)", "c": "a sign of J", "d": "none"},
+         answer="b", explanation="Comparing with the supercell showed the pair amplitude was twice too large until the duplicate assignment was removed."),
+    dict(type="mc", question="Why can the BZ sum of the 1D linewidth be checked semi-analytically?",
+         options={"a": "it cannot", "b": "in 1D the energy δ-function has explicit roots k*, giving γ = a Σ|S|²Δn/|∂(ε_k+q − ε_k)/∂k|",
+                  "c": "because σ = 0", "d": "because T = 0"},
+         answer="b", explanation="Gaussian-smeared BZ sum and root formula agree to 10⁻⁵ relative."),
+    dict(type="num", question="Hands-on: magnon at X of the FM chain at T = 0 — FWHM in meV (2 decimals)?",
+         answer=0.24, tol=0.02, hint="vx.magnon_linewidth(X, T=0, grid=(400,1,1), sigma=0.2)",
+         explanation="≈ 0.24 meV: spontaneous phonon emission (factor 1 + N + n) survives at T = 0."),
+    dict(type="mc", question="Which magnons can decay by emitting a phonon?",
+         options={"a": "all magnons", "b": "those for which ε(k) − ε(k−q) = ω(q) has solutions — typically magnons above the phonon band edge region",
+                  "c": "none", "d": "only at Γ"},
+         answer="b", explanation="Energy and momentum conservation restrict the channel; in the FM chain the width grows sharply above the phonon band."),
+    dict(type="mc", question="Hands-on: which phonon channel survives at T = 0 in the AFM chain?",
+         options={"a": "magnon scattering", "b": "decay into two magnons (pair creation from Bogoliubov pairing)", "c": "none", "d": "Gilbert damping"},
+         answer="b", explanation="(1 + n1 + n2) → 1 at T = 0: spontaneous two-magnon decay of optical phonons above 2× the magnon gap."),
+    dict(type="num", question="Hands-on: magnon gap (meV) of the AFM chain at Γ (3 decimals)?",
+         answer=3.317, tol=0.005, hint="va.magnon(np.zeros(3))[0]",
+         explanation="ω = 2S√(K(2J+K)) type gap ≈ 3.317 meV for J = 4, K = 0.15, S = 1.5."),
+    dict(type="mc", question="Gilbert damping of a ferromagnetic magnon in the exact linearised LLG gives …",
+         options={"a": "γ = αω", "b": "γ = 2αω/(1+α²) and ω → ω/(1+α²)", "c": "γ = 2α", "d": "no damping"},
+         answer="b", explanation="Checked to 10⁻⁹ in the tests."),
+    dict(type="num", question="Hands-on: AFM chain, α = 10⁻³: Gilbert FWHM of the Γ magnon in meV (4 decimals)?",
+         answer=0.0249, tol=0.0002, hint="va.damped_modes(np.zeros(3), alpha=1e-3, coupling=False)",
+         explanation="0.0249 meV = 2α(2J + 2K)S — exchange-enhanced."),
+    dict(type="mc", question="Compared with 2αω at the AFM magnon gap (≈ 0.0066 meV), the AFM Gilbert width is …",
+         options={"a": "the same", "b": "≈ 3.8 times larger and almost k-independent (exchange enhancement)", "c": "smaller", "d": "zero"},
+         answer="b", explanation="Elliptical precession in an AFM dissipates through the exchange field."),
+    dict(type="mc", question="How was the AFM Gilbert result checked independently?",
+         options={"a": "it was not", "b": "against the energy-dissipation formula γ = 2αω² Σ(|X|²+|Y|²)/ξ†𝓗ξ of the undamped modes",
+                  "c": "against the FM formula", "d": "against phonopy"},
+         answer="b", explanation="Exact LLG eigenvalues and first-order dissipation agree to 10⁻³ relative at α = 10⁻³."),
+    dict(type="num", question="Lattice friction η = 0.3 meV in the equation Ṗ = −∂H/∂u − ηP: FWHM of a pure phonon in meV?",
+         answer=0.3, tol=0.001, explanation="The amplitude decays at η/2, so the FWHM equals η."),
+    dict(type="mc", question="Which quantity in the golden rule of phonon decay into two magnons accounts for stimulated emission?",
+         options={"a": "n1 − n2", "b": "1 + n1 + n2", "c": "N − n", "d": "none"},
+         answer="b", explanation="(1+n1)(1+n2) − n1 n2 = 1 + n1 + n2 (forward minus reverse process)."),
+    dict(type="mc", question="Phonon absorption by a magnon k → k+q enters the magnon linewidth with the factor …",
+         options={"a": "1 + N + n", "b": "N − n(ε_{k+q})", "c": "n − N", "d": "1"},
+         answer="b", explanation="N(1 + n') − (1 + N) n' = N − n' for absorption; emission has 1 + N + n'."),
+    dict(type="mc", question="Which CLI options switch on the damping analysis in symphase magnons?",
+         options={"a": "--relax", "b": "--linewidth T, --lw-grid, --lw-sigma, --alpha, --phonon-damping (with --phonons)", "c": "--spiral auto", "d": "--supercell auto"},
+         answer="b", explanation="They write *_linewidths.png/.dat with ω ± γ/2 for phonons and magnons."),
+    dict(type="mc", question="Why is the two-magnon process important for experiments on collinear magnets?",
+         options={"a": "it is not", "b": "it gives temperature-dependent phonon and magnon linewidths (Raman, inelastic neutron/X-ray) even when linear magnon-polaron gaps vanish",
+                  "c": "it changes the crystal structure", "d": "it removes all magnons"},
+         answer="b", explanation="Spin–phonon damping appears as T-dependent broadening tied to the magnon population."),
+]
+build_bank(os.path.join(DATA, "quiz_damping.json"), "Quiz 8 — two-magnon striction and damping", DQ)
+quiz_nb("21_quiz_two_magnon_damping.ipynb", "Quiz 8 — two-magnon striction and damping of magnons and phonons (20 questions)",
+        DQ, "damping", "Work through **20_tutorial_two_magnon_damping.ipynb** first. Questions 2–4, 8, 10, 11 and 13 are hands-on.",
+        DM_HELPER + "\nr = fm_chain(); vx = MagnonPhononVertex(r['model'])\nqph = np.array([0.9, 0, 0]); om, fs = vx.phonons(qph)\n"
+        "nu = int(np.argmax([abs(x[0, 0]) if x is not None else 0 for x in fs]))\nX = np.array([np.pi / a, 0, 0])\n"
+        "ra = afm_chain(); va = MagnonPhononVertex(ra['model'])")
