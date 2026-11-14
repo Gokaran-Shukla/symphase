@@ -166,6 +166,14 @@ pytest tests/
 ```
 
 ## How to cite / acknowledge
+If you use SymPhase, please cite it (GitHub: **"Cite this repository"**, metadata in [`CITATION.cff`](CITATION.cff)):
+
+> G. Shukla, *SymPhase: magnetic and spin-group symmetry, symmetry-allowed conductivity tensors and convex-hull
+> phase stability for VASP*, version 1.0.0 (2026), https://github.com/Gokaran-Shukla/symphase.
+> ORCID [0000-0001-9332-3332](https://orcid.org/0000-0001-9332-3332)
+
+A Zenodo DOI is minted for every GitHub release (archive metadata in [`.zenodo.json`](.zenodo.json)).
+
 Please cite the underlying tools: spglib (Togo *et al.*, Sci. Technol. Adv. Mater. Meth. 4, 2384822 (2024)),
 pymatgen (Ong *et al.*, Comput. Mater. Sci. 68, 314 (2013)), and the data source you use — OQMD
 (Saal *et al.*, JOM 65, 1501 (2013); Kirklin *et al.*, npj Comput. Mater. 1, 15010 (2015)) or the Materials Project

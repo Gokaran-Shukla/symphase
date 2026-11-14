@@ -1,0 +1,19 @@
+{
+  "title": "SymPhase: magnetic and spin-group symmetry, symmetry-allowed conductivity tensors and convex-hull phase stability for VASP",
+  "upload_type": "software",
+  "description": "<p>SymPhase reads VASP calculations (POSCAR, INCAR, OUTCAR, OSZICAR) and determines the crystal and magnetic space groups and the non-relativistic spin group, classifying ferromagnets, antiferromagnets and altermagnets with their spin-splitting form (s-, d-, g-, i-wave). It derives the symmetry-allowed charge, spin and orbital conductivity tensors, separated into time-reversal-even and -odd parts, including unconventional spin-orbit-torque channels and the components that exist only with spin-orbit coupling.</p><p>From a list of elements alone it collects the known phases from OQMD or the Materials Project, builds the convex hull for any number of elements (energies above hull, decompositions, publication-quality figures), writes VASP inputs with a SLURM job array and runs in parallel on many cores or with MPI. Tutorials, self-checking quizzes and a presentation are included.</p>",
+  "creators": [
+    {
+      "name": "Shukla, Gokaran",
+      "affiliation": "King Abdullah University of Science and Technology (KAUST)",
+      "orcid": "0000-0001-9332-3332"
+    }
+  ],
+  "license": "MIT",
+  "access_right": "open",
+  "keywords": ["VASP", "density functional theory", "magnetic space groups", "spin groups", "altermagnetism",
+               "spin Hall effect", "orbital Hall effect", "spin-orbit torque", "convex hull", "phase stability"],
+  "related_identifiers": [
+    {"identifier": "https://github.com/Gokaran-Shukla/symphase", "relation": "isSupplementTo", "scheme": "url"}
+  ]
+}
