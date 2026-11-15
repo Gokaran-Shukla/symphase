@@ -268,7 +268,7 @@ symphase mxene --M Cr --X C --T F --hull --vasp   # Cr2CF2
 symphase mxene --M Ni --X N --T F --hull          # Ni2NF2
 symphase mxene --M Mo --X C --T none --hull       # bare Mo2C
 ```
-**Energies.** The default is the universal potential CHGNet (`pip install chgnet`). It runs offline and reproduces the Materials Project PBE/PBE+U energy scale.
+**Energies.** The default is the universal potential CHGNet (`pip install "symphase[mxene]"` or `pip install chgnet`). It runs offline and reproduces the Materials Project PBE/PBE+U energy scale.
 Bulk formation energies vs experiment: CrF₂ −2.75 (−2.69), CrF₃ −2.93 (−3.00), NiF₂ −2.21 (−2.25), Cr₃C₂ −0.16 (−0.18), β-Mo₂C −0.18 (−0.16) eV/atom.
 MoC is underbound and Ni₃N slightly overbound. It is screening quality: replace the energies with your VASP results (`--energies`).
 A full worked report on the three examples (method, validation, point-by-point interpretation, how to apply it to other materials) is in `docs/MXene_report.pdf`.

@@ -21,7 +21,8 @@ mpi = ["mpi4py"]
 notebooks = ["jupyter", "ipywidgets"]
 ssg = ["findspingroup>=0.16"]        # OSSG numbers of Chen et al. (2024), Python >= 3.11
 phonons = ["phonopy>=2.20"]         # phonopy force constants (magnon–phonon) and QHA cross-checks
-full = ["mp-api", "findspingroup>=0.16", "phonopy>=2.20", "jupyter", "ipywidgets"]
+mxene = ["chgnet>=0.3", "ase>=3.23"]  # MXene / 2D module: universal-potential relaxations and hulls
+full = ["mp-api", "findspingroup>=0.16", "phonopy>=2.20", "jupyter", "ipywidgets", "chgnet>=0.3", "ase>=3.23"]
 dev = ["pytest"]
 
 [project.scripts]
