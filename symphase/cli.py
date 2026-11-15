@@ -11,6 +11,7 @@ commands
   tensors   magnetic + spin-group symmetry, conductivity tensors (POSCAR/INCAR/OUTCAR/OSZICAR)
   magnons   magnons: chirality, spirals, supercells, magnon–phonon coupling
   kubo      magnitudes from Wannier Kubo codes: plan / import (postw90) / compute (hr.dat), symmetry-fitted
+  mxene     MXenes / 2D: build M(n+1)X(n)T2 (asks for elements + passivation), relax, hull, phase diagram
   quiz      list the built-in quizzes (use them in the notebooks)
 
   symphase <command> -h   for the options of each command
@@ -37,6 +38,8 @@ def main(argv=None):
         from .magnons import main as m
     elif cmd == "kubo":
         from .kubo import main as m
+    elif cmd in ("mxene", "2d"):
+        from .twod import main as m
     elif cmd == "quiz":
         from .quiz import list_quizzes
         list_quizzes()

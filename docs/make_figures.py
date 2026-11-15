@@ -364,3 +364,44 @@ a2.set_title("Born limit recovered for S → ∞", fontsize=9)
 fig.tight_layout()
 fig.savefig(os.path.join(F, "scdecay.pdf")); fig.savefig(os.path.join(F, "scdecay.png"), dpi=160); plt.close(fig)
 print("figure scdecay")
+
+# ---------------------------------------------------------------- MXenes / 2D: structures, hulls, terminations
+from symphase import twod as _tw
+_MX = os.path.join(H, "..", "examples", "mxene")
+_res = {d: _tw.load_hull(os.path.join(_MX, d)) for d in ("Cr2CF2", "Ni2NF2", "Mo2C")}
+_col = {"Cr": "#2e86c1", "Ni": "#27ae60", "Mo": "#8e44ad", "C": "#444444", "N": "#2c3e50", "F": "#e67e22"}
+fig, axs = plt.subplots(1, 3, figsize=(9.6, 3.0))
+for ax_, (d, r_) in zip(axs, _res.items()):
+    st = r_["structure"].copy()
+    st.make_supercell([3, 1, 1])
+    zc = st.cart_coords[:, 2]
+    zc = zc - zc.mean()
+    xc = st.cart_coords[:, 0] - st.cart_coords[:, 0].min()
+    for i_, site_ in enumerate(st):
+        el_ = site_.specie.symbol
+        ax_.scatter(xc[i_], zc[i_], s=330 if el_ in ("Cr", "Ni", "Mo") else 170, color=_col[el_], edgecolor="k", zorder=3)
+    for el_ in dict.fromkeys(s_.specie.symbol for s_ in st):
+        ax_.scatter([], [], s=80, color=_col[el_], edgecolor="k", label=el_)
+    ax_.set_title(f"{r_['mxene']['formula']}: a = {r_['mxene']['a']:.3f} Å, {r_['mxene']['site']} site", fontsize=9.5)
+    ax_.set_aspect("equal"); ax_.set_xticks([]); ax_.set_ylabel("z (Å)"); ax_.set_ylim(-4, 4)
+    ax_.legend(fontsize=7, loc="upper right", ncol=3, handletextpad=0.1, columnspacing=0.5)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "mxene_structures.pdf")); fig.savefig(os.path.join(F, "mxene_structures.png"), dpi=160); plt.close(fig)
+
+for d in ("Cr2CF2", "Ni2NF2", "Mo2C"):
+    fig = _tw.plot_phase_diagram(_res[d], title=f"{d} (2D) in the {'–'.join(str(e) for e in _res[d]['hull'].elements)} hull")
+    fig.savefig(os.path.join(F, f"mxene_pd_{d}.pdf"), bbox_inches="tight"); fig.savefig(os.path.join(F, f"mxene_pd_{d}.png"), dpi=140, bbox_inches="tight")
+    plt.close(fig)
+fig, ax_ = plt.subplots(figsize=(5.0, 3.6))
+_tm = json.load(open(os.path.join(_MX, "termination_F.json")))
+_mus = np.linspace(-5, 0.3, 200)
+ax_.axhline(0, color="0.4", lw=1.5, label="bare")
+for (m_, d_), c_ in zip(_tm.items(), ("#2e86c1", "#27ae60", "#8e44ad")):
+    ax_.plot(_mus, (d_["dE"] - 2 * _mus) / d_["area"], color=c_, lw=2, label=f"{m_}F$_2$  (Δμ* = {d_['delta_mu_star']:.2f})")
+    ax_.axvline(d_["delta_mu_star"], ls=":", color=c_, lw=1)
+ax_.set_xlabel("Δμ$_F$ (eV)"); ax_.set_ylabel("ΔG (eV/Å²)"); ax_.legend(fontsize=7.5, loc="lower left")
+ax_.set_title("F termination vs bare", fontsize=10)
+fig.tight_layout()
+fig.savefig(os.path.join(F, "mxene_termination.pdf"), bbox_inches="tight"); fig.savefig(os.path.join(F, "mxene_termination.png"), dpi=160, bbox_inches="tight")
+plt.close(fig)
+print("figure mxene")

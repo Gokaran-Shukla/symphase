@@ -1,0 +1,15 @@
+{
+ "formula": "Mo2C",
+ "M": "Mo",
+ "X": "C",
+ "n": 1,
+ "T": null,
+ "site": "fcc",
+ "sites_eV_per_atom": {
+  "fcc": -9.97866694132487
+ },
+ "energy_eV": -29.93600082397461,
+ "natoms": 3,
+ "a": 2.971373038826103,
+ "model": "CHGNet"
+}

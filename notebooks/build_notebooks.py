@@ -2325,3 +2325,146 @@ SQ = [
 build_bank(os.path.join(DATA, "quiz_scdecay.json"), "Quiz 11 — self-consistent magnon decay", SQ)
 quiz_nb("27_quiz_self_consistent_decay.ipynb", "Quiz 11 — self-consistent magnon decay (20 questions)",
         SQ, "scdecay", "Work through **26_tutorial_self_consistent_decay.ipynb** first. Questions 6–12 are hands-on.", SC_HELPER)
+
+
+# =============================================================================
+# 28  MXenes / 2D;  29 quiz
+# =============================================================================
+MX_HELPER = 'import os, json, shutil, tempfile, numpy as np\nimport matplotlib.pyplot as plt\nfrom symphase import twod\nfrom symphase.twod import (build_mxene, mxene_formula, prompt_mxene, relax_mxene, mxene_hull, load_hull,\n                           plot_phase_diagram, find_layers, vacuum_thickness, monolayer_from_bulk, prototype)\nfrom symphase.hull import HullAnalysis, make_entry\nMX = "../examples/mxene"\n\ndef results(name):\n    """shipped results of `symphase mxene --hull` (Cr2CF2, Ni2NF2, Mo2C)"""\n    return load_hull(os.path.join(MX, name))\n\ndef bulk_formation_energies(name):\n    """formation energies (eV/atom) of the relaxed competing phases of one example"""\n    lib = json.load(open(os.path.join(MX, name, "library_chgnet.json")))\n    ents = {k: make_entry(v["formula"], v["energy"], name=k) for k, v in lib.items()}\n    h = HullAnalysis(list(ents.values()))\n    return {k: (e.composition.reduced_formula, float(h.form_energy(e)), float(h.e_above_hull(e))) for k, e in ents.items()}\n\ndef termination():\n    return json.load(open(os.path.join(MX, "termination_F.json")))\n'
+
+save([
+    md(r"""# SymPhase tutorial 28 — MXenes and 2D materials: structures, convex hulls, phase diagrams
+
+`symphase.twod` builds $M_{n+1}X_nT_2$ MXenes (M = transition metal, X = C/N, T = passivation F, O, OH, Cl, … or none), relaxes them,
+and places them in the convex hull of the bulk competing phases. On the command line it **asks** for the elements:
+
+```
+$ symphase mxene --hull
+  transition metal M (e.g. Cr, Mo, Ti; ordered double-M as outer,inner e.g. Mo,Ti): Cr
+  X element (C or N) [C]: C
+  n in M(n+1)X(n) (1, 2, 3) [1]: 1
+  passivation / termination (F, O, OH, Cl, Br, S, none) [F]: F
+  termination site (fcc, hcp, top, auto = lowest energy) [auto]: auto
+```
+Energies: the universal machine-learned potential **CHGNet** (trained on Materials Project PBE/PBE+U relaxations, MP2020-compatible
+energy scale), so elements, carbides, nitrides and fluorides enter one hull. It is a screening tool — confirm with VASP
+(`--vasp` writes inputs, `--energies` replaces the model energies by yours)."""),
+    SETUP,
+    code(MX_HELPER),
+    md("## 1. Building MXenes — the questions the code asks, answered from a list here"),
+    code("""answers = iter(["Cr", "C", "1", "F", "auto"])
+spec = prompt_mxene(inp=lambda q: (lambda a: (print(q + a), a)[1])(next(answers)))   # symphase mxene asks the same questions
+print(spec)
+for args in (("Cr", "C", 1, "F"), ("Ni", "N", 1, "F"), ("Mo", "C", 1, None), ("Mo,Ti", "C", 2, "O"), ("Ti", "C", 1, "OH")):
+    st = build_mxene(*args)
+    print(f"{mxene_formula(*args):11s} {st.composition.formula:22s} a0 = {st.lattice.a:.3f} Å, layers {len(find_layers(st))}, vacuum {vacuum_thickness(st):.1f} Å")"""),
+    md(r"""Termination sites: **fcc** (above the metal of the opposite side, 'model I'), **hcp** (above X, 'model II'), **top** (above the outer metal).
+
+## 2. Relax Cr$_2$CF$_2$ on all sites (CHGNet, in-plane cell + positions)"""),
+    code("""r = relax_mxene("Cr", "C", 1, "F", site="auto")
+print("lowest:", r["site"], " a =", round(r["structure"].lattice.a, 3), "Å;  hcp − fcc =",
+      round(1000 * (r["sites"]["hcp"] - r["sites"]["fcc"]), 1), "meV/atom")"""),
+    md("## 3. Convex hull against the bulk Cr–C–F phases (library prototypes, relaxed and cached)"),
+    code("""tmp = tempfile.mkdtemp(); cache = os.path.join(tmp, "lib.json")
+shutil.copy(os.path.join(MX, "Cr2CF2", "library_chgnet.json"), cache)          # reuse the shipped relaxations
+res = mxene_hull({"Cr2CF2": (r["structure"], r["energy"])}, cache=cache, verbose=False)
+for row in res["rows"]:
+    print(f"{row['label']}: E_form = {row['e_form']:.3f} eV/atom, E_hull = {1000 * row['e_hull']:.0f} meV/atom →",
+          " + ".join(f"{v:.2f} {k}" for k, v in row["decomposition"].items()))
+plot_phase_diagram(res, title="Cr2CF2 (2D) in the Cr–C–F hull");"""),
+    md("## 4. Ni$_2$NF$_2$ and bare Mo$_2$C (shipped results of `symphase mxene --hull`)"),
+    code("""for name in ("Ni2NF2", "Mo2C"):
+    rr = results(name); row = rr["rows"][0]
+    print(f"{name}: a = {rr['mxene']['a']:.3f} Å, E_hull = {1000 * row['e_hull']:.0f} meV/atom → {list(row['decomposition'])}")
+    plot_phase_diagram(rr, title=f"{name} (2D)")"""),
+    md("## 5. How good are the bulk energies? Formation energies vs experiment"),
+    code("""exp = {"CrF2": -2.688, "CrF3": -3.003, "NiF2": -2.250, "Cr3C2": -0.177, "Cr7C3": -0.167, "Cr23C6": -0.147,
+       "Mo2C": -0.159, "MoC": -0.145, "Ni3N": 0.002}
+for name in ("Cr2CF2", "Ni2NF2", "Mo2C"):
+    for k, (f, ef, eh) in bulk_formation_energies(name).items():
+        if f in exp:
+            print(f"{k:16s} {f:7s} CHGNet {ef:+.3f}   experiment {exp[f]:+.3f} eV/atom   E_hull {1000 * eh:4.0f} meV/atom")"""),
+    md(r"""## 6. Termination phase diagram
+
+$\Delta G_F(\Delta\mu_F)=[E(M_2XF_2)-E(M_2X)-2\mu_F^0-2\Delta\mu_F]/A$: F termination wins for $\Delta\mu_F>\Delta\mu_F^*$."""),
+    code("""tm = termination()
+mus = np.linspace(-5, 0.3, 200)
+fig, ax = plt.subplots(figsize=(5.2, 3.5)); ax.axhline(0, color="0.4", label="bare")
+for m, d in tm.items():
+    ax.plot(mus, (d["dE"] - 2 * mus) / d["area"], lw=2, label=f"{m}F2 (Δμ* = {d['delta_mu_star']:.2f} eV, {d['site']})")
+ax.set_xlabel("Δμ_F (eV)"); ax.set_ylabel("ΔG (eV/Å²)"); ax.legend(fontsize=8)"""),
+    md("## 7. Generic 2D tools: monolayer from a layered bulk"),
+    code("""st = build_mxene("Mo", "C", 1, None, vacuum=3.5); bulk = st.copy(); bulk.make_supercell([1, 1, 2])
+print("bulk layers:", len(find_layers(bulk, gap=2.5)))
+mono = monolayer_from_bulk(bulk, gap=2.5, vacuum=20)
+print("monolayer:", mono.composition.formula, " vacuum", round(vacuum_thickness(mono), 1), "Å")"""),
+    md("""## Command line
+```bash
+symphase mxene                                   # asks for M, X, n, passivation, site
+symphase mxene --M Cr --X C --T F --hull --vasp  # Cr2CF2: POSCAR, mxene.json, hull.json, phase_diagram.png, vasp/
+symphase mxene --M Ni --X N --T F --hull
+symphase mxene --M Mo --X C --T none --hull      # bare Mo2C
+symphase mxene --M Mo,Ti --X C --n 2 --T O       # ordered double-M Mo2TiC2O2
+symphase mxene ... --hull --energies my_vasp.csv # replace model energies by your DFT (formula/name, eV/atom)
+```
+Continue with **29_quiz_mxenes_2d.ipynb**."""),
+], "28_tutorial_mxenes_2d.ipynb")
+
+XQ = [
+    dict(type="mc", question="What is the composition of the MXene built from M = Cr, X = C, n = 1, passivation F?",
+         options={"a": "CrCF", "b": "Cr2CF2", "c": "Cr3C2F2", "d": "Cr2C2F"}, answer="b", explanation="M(n+1) X(n) T2."),
+    dict(type="mc", question="Hands-on: mxene_formula('Mo,Ti', 'C', 2, 'O') = ?",
+         options={"a": "MoTi2C2O2", "b": "Mo2TiC2O2", "c": "Mo2Ti2C2O", "d": "MoTiCO"}, answer="b",
+         explanation="Ordered double-M: outer Mo layers, inner Ti."),
+    dict(type="mc", question="What is the 'fcc' termination site?",
+         options={"a": "on top of the outer metal", "b": "the hollow above the metal of the opposite side (not above X)", "c": "above X", "d": "in the vacuum"},
+         answer="b", explanation="'Model I'; hcp = above the X atom ('model II')."),
+    dict(type="num", question="Hands-on: Cr2CF2 — hcp minus fcc termination energy (meV/atom, integer)?",
+         answer=105, tol=4, explanation="≈ +105 meV/atom: F prefers the fcc hollow."),
+    dict(type="num", question="Hands-on: relaxed lattice constant a of Cr2CF2 (Å, 2 decimals)?",
+         answer=2.955, tol=0.02, explanation="2.955 Å (CHGNet)."),
+    dict(type="num", question="Hands-on: E_hull of Cr2CF2 (meV/atom, integer)?", answer=265, tol=6,
+         explanation="265 meV/atom above the Cr–C–F hull."),
+    dict(type="mc", question="Hands-on: into which bulk phases does Cr2CF2 decompose?",
+         options={"a": "Cr + C + F2", "b": "Cr7C3 + C + CrF2", "c": "Cr3C2 + CrF3", "d": "CrF3 + C"}, answer="b",
+         explanation="0.29 Cr7C3 + 0.11 C + 0.60 CrF2 (per atom)."),
+    dict(type="num", question="Hands-on: E_hull of Ni2NF2 (meV/atom, integer)?", answer=377, tol=6,
+         explanation="377 meV/atom → Ni3N + N2 + NiF2."),
+    dict(type="num", question="Hands-on: E_hull of bare 2D Mo2C (meV/atom, integer)?", answer=391, tol=6,
+         explanation="391 meV/atom above bulk β-Mo2C — the cost of two bare surfaces."),
+    dict(type="mc", question="Why are all three monolayers above the hull?",
+         options={"a": "a bug", "b": "2D sheets have surface (unsaturated / terminated) bonds relative to the bulk competing phases — MXenes are metastable, made by etching",
+                  "c": "temperature", "d": "magnetism"},
+         answer="b", explanation="Typical MXene E_hull values are a few hundred meV/atom."),
+    dict(type="num", question="Hands-on: Δμ*_F for Cr2C → Cr2CF2 (eV, 2 decimals)?", answer=-3.90, tol=0.03,
+         explanation="F termination is favoured for Δμ_F > −3.90 eV."),
+    dict(type="mc", question="What does Δμ_F > Δμ*_F mean?",
+         options={"a": "the bare sheet is stable", "b": "fluorination of the bare sheet lowers the free energy (F-terminated surface wins)", "c": "F2 condenses", "d": "nothing"},
+         answer="b", explanation="ΔG_F(Δμ) = [E(T) − E(bare) − 2μ⁰ − 2Δμ]/A < 0."),
+    dict(type="num", question="Hands-on: CHGNet formation energy of CrF2 (eV/atom, 2 decimals)?", answer=-2.75, tol=0.02,
+         explanation="−2.75 eV/atom vs experiment −2.69 eV/atom."),
+    dict(type="mc", question="Which energy model does the module use by default, and why?",
+         options={"a": "DFT on the fly", "b": "CHGNet universal potential — Materials Project scale, works offline; screening quality", "c": "Lennard-Jones", "d": "none"},
+         answer="b", explanation="Materials Project / OQMD may be unreachable; replace by VASP for publication."),
+    dict(type="mc", question="How do you replace the model energies by your own VASP results?",
+         options={"a": "impossible", "b": "--energies CSV (formula or name, eV/atom), or write_vasp + symphase hull", "c": "--relax", "d": "--spiral"},
+         answer="b", explanation="Both MXene and competing phases can be replaced."),
+    dict(type="mc", question="How are the competing bulk phases obtained?",
+         options={"a": "downloaded at run time", "b": "built-in crystallographic prototypes (AFLOW/ICSD parameters) relaxed with the same model, plus --extra files", "c": "guessed", "d": "only elements"},
+         answer="b", explanation="e.g. Cr3C2 (D5_10), Cr7C3 (D10_1), Cr23C6 (D8_4), CrF3 (D0_12), NiF2 rutile, Ni3N, β-Mo2C."),
+    dict(type="mc", question="Hands-on: which bulk phase has the largest CHGNet error vs experiment in the shipped examples?",
+         options={"a": "CrF2", "b": "MoC (underbound by ≈ 0.15 eV/atom)", "c": "Cr23C6", "d": "NiF2"}, answer="b",
+         explanation="It does not enter the Mo2C decomposition, but shows why DFT confirmation matters."),
+    dict(type="mc", question="Which cell degrees of freedom relax for a 2D sheet?",
+         options={"a": "all", "b": "in-plane only (vacuum kept) — FrechetCellFilter mask", "c": "none", "d": "c only"},
+         answer="b", explanation="relax(..., two_d=True)."),
+    dict(type="mc", question="What does monolayer_from_bulk do?",
+         options={"a": "builds a MXene", "b": "finds the van der Waals gaps of a layered crystal, isolates one layer and adds vacuum", "c": "computes phonons", "d": "nothing"},
+         answer="b", explanation="Use with exfoliation_energy for generic 2D materials."),
+    dict(type="mc", question="Which command asks interactively for the elements and the passivation?",
+         options={"a": "symphase hull", "b": "symphase mxene (without --M/--X/--T)", "c": "symphase run", "d": "symphase quiz"},
+         answer="b", explanation="Arguments given on the command line skip the questions; --no-input never asks."),
+]
+build_bank(os.path.join(DATA, "quiz_mxene.json"), "Quiz 12 — MXenes and 2D materials", XQ)
+quiz_nb("29_quiz_mxenes_2d.ipynb", "Quiz 12 — MXenes and 2D materials (20 questions)",
+        XQ, "mxene", "Work through **28_tutorial_mxenes_2d.ipynb** first. Questions 2, 4–9, 11, 13 and 17 are hands-on.", MX_HELPER)

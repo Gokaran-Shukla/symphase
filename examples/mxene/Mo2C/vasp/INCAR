@@ -1,0 +1,16 @@
+SYSTEM = Mo2C
+PREC = Accurate
+ENCUT = 520
+EDIFF = 1E-6
+EDIFFG = -0.01
+ISMEAR = 0 ; SIGMA = 0.05
+IBRION = 2 ; NSW = 200
+ISIF = 2          # in-plane lattice: scan a, or use a VASP build with constrained ISIF
+ISPIN = 2
+MAGMOM = 3 3 0
+LORBIT = 11
+KSPACING = 0.25
+LASPH = .TRUE.
+LREAL = .FALSE.
+IDIPOL = 3 ; LDIPOL = .TRUE.   # dipole correction (asymmetric terminations)
+IVDW = 12                       # D3(BJ) if interlayer/adsorbate vdW matters

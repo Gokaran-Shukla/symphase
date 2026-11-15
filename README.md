@@ -16,8 +16,8 @@ phase stability for VASP calculations — elements in, everything out, on all yo
 | `symphase magnons` | POSCAR + INCAR/OUTCAR moments (collinear or non-collinear), exchange J per symmetry class or bond file (J, DMI, tensors) | magnons of **collinear and non-collinear FM/AFM** (LSWT in local frames), **incommensurate single-Q spirals without supercells** (rotating frame, optimal q), a **supercell workflow** for multi-Q (skyrmion crystals), conical and anisotropy-distorted states (Luttinger–Tisza, auto size, multi-seed relaxation, topological charge, magnetic field) **magnon–phonon coupling** (magnon polarons; springs or phonopy force constants, exchange striction / magnetoelastic tensors) **two-magnon striction + damping** (thermal magnon/phonon linewidths, Gilbert and lattice damping) **magnon–magnon interactions + self-energies** (four-magnon Hartree–Fock, 1/S or self-consistent; complex Σ(ω), spectral functions beyond the golden rule) **non-linear spin waves** (cubic terms of non-collinear magnets — complete 1/S spectrum, spontaneous magnon decay — and second-order four-magnon damping) and **self-consistent magnon decay** (iΓ approximation, no threshold singularities): chirality / magnon-spin vectors, Δω(q) maps, d/g/i-wave check, classical relaxation, non-reciprocity |
 | `symphase run` | **just the elements**, e.g. `Ti Ni Sn` | all phases from OQMD (no key) or Materials Project, hull, figures, POSCARs, VASP inputs + **Ibex job array**, HTML report |
 
-📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (50 slides, Beamer source included)
-📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 16 tutorials, 11 quizzes × 20 self-checking questions
+📊 **Presentation:** [`docs/SymPhase_presentation.pdf`](docs/SymPhase_presentation.pdf) (52 slides, Beamer source included)
+📓 **Tutorials & quizzes:** [`notebooks/`](notebooks) — 17 tutorials, 12 quizzes × 20 self-checking questions
 🧭 **Supercell guide:** [`docs/SUPERCELL_WORKFLOW.md`](docs/SUPERCELL_WORKFLOW.md) — every step from exchange constants to DFT checks for multi-Q / conical / distorted states
 
 ---
@@ -250,6 +250,35 @@ Checks:
 
 `mode="dyson"` (off-shell root) is only a diagnostic, because it breaks the Goldstone cancellation.
 
+### MXenes and 2D materials (`symphase.twod`, `symphase mxene`)
+Builds M<sub>n+1</sub>X<sub>n</sub>T<sub>2</sub> MXenes and places them in the convex hull of the bulk competing phases.
+- **Structures:** M = transition metal, or ordered double-M given as `outer,inner`; X = C or N; T = F, O, OH, Cl, Br, S or none.
+- **Interactive:** without arguments the command **asks for the metal, X, n, the passivation and the termination site**.
+- **Workflow:**
+  - termination sites fcc / hcp / top (`auto` keeps the lowest);
+  - in-plane relaxation;
+  - competing phases from a built-in prototype library (AFLOW / ICSD parameters: Cr₃C₂, Cr₇C₃, Cr₂₃C₆, CrF₂, CrF₃, NiF₂, NiF₃, Ni₃N, Ni₄N, β-Mo₂C, MoC, elements, molecular crystals);
+  - convex hull, E<sub>hull</sub>, decomposition, phase diagram;
+  - termination phase diagram vs Δμ;
+  - VASP inputs.
+- **Generic 2D tools:** layer detection, monolayer from bulk, vacuum, exfoliation energy.
+```bash
+symphase mxene                                    # asks: M? X? n? passivation? site?
+symphase mxene --M Cr --X C --T F --hull --vasp   # Cr2CF2
+symphase mxene --M Ni --X N --T F --hull          # Ni2NF2
+symphase mxene --M Mo --X C --T none --hull       # bare Mo2C
+```
+**Energies.** The default is the universal potential CHGNet (`pip install chgnet`). It runs offline and reproduces the Materials Project PBE/PBE+U energy scale.
+Bulk formation energies vs experiment: CrF₂ −2.75 (−2.69), CrF₃ −2.93 (−3.00), NiF₂ −2.21 (−2.25), Cr₃C₂ −0.16 (−0.18), β-Mo₂C −0.18 (−0.16) eV/atom.
+MoC is underbound and Ni₃N slightly overbound. It is screening quality: replace the energies with your VASP results (`--energies`).
+A full worked report on the three examples (method, validation, point-by-point interpretation, how to apply it to other materials) is in `docs/MXene_report.pdf`.
+
+| 2D (examples/mxene) | a (Å) | site | E<sub>form</sub> (eV/atom) | E<sub>hull</sub> (meV/atom) | decomposition | Δμ<sub>F</sub>* (eV) |
+|---|---|---|---|---|---|---|
+| Cr₂CF₂ | 2.955 | fcc | −1.445 | 265 | Cr₇C₃ + C + CrF₂ | −3.90 |
+| Ni₂NF₂ | 3.029 | fcc | −0.959 | 377 | Ni₃N + N₂ + NiF₂ | −2.92 |
+| Mo₂C (bare) | 2.971 | — | +0.212 | 391 | bulk β-Mo₂C | −2.95 (Mo₂CF₂) |
+
 ### Finite-temperature hulls
 G<sub>i</sub>(T) = E<sub>i</sub> + F<sup>vib</sup><sub>i</sub>(T) − T S<sup>conf</sup><sub>i</sub>
 ```bash
@@ -377,6 +406,8 @@ Results are identical to serial (tested). Job scripts: [`jobs/ibex_symphase.slur
 | `25_quiz_nonlinear_spin_waves.ipynb` | **20 questions**: cubic magnon terms and four-magnon damping |
 | `26_tutorial_self_consistent_decay.ipynb` | iΓ self-consistent decay: Born vs self-consistent, large-S limit, threshold regularisation, Goldstone modes, spectral function |
 | `27_quiz_self_consistent_decay.ipynb` | **20 questions**: self-consistent magnon decay |
+| `28_tutorial_mxenes_2d.ipynb` | MXene builder (interactive questions), CHGNet relaxation, termination sites, hulls and phase diagrams of Cr₂CF₂ / Ni₂NF₂ / Mo₂C, bulk validation, termination phase diagram, 2D tools |
+| `29_quiz_mxenes_2d.ipynb` | **20 questions**: MXenes and 2D materials |
 | `04_quiz_symmetry_tensors.ipynb` | **20 questions** (conceptual + hands-on, incl. MoO₂) |
 | `05_quiz_convex_hull.ipynb` | **20 questions** (conceptual + hands-on) |
 

@@ -102,7 +102,7 @@ def test_run_pipeline_with_mock_oqmd(tmp_path):
 
 
 # ---------------------------------------------------------------- quizzes
-@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions", "nonlinear", "scdecay"])
+@pytest.mark.parametrize("name", ["symmetry", "hull", "magnons", "spirals", "supercells", "magphon_qha", "kubo_scph", "damping", "interactions", "nonlinear", "scdecay", "mxene"])
 def test_quiz_banks(name):
     from symphase.quiz import Quiz, _dec
     q = Quiz(name)
@@ -1014,3 +1014,73 @@ def test_self_consistent_decay_onshell_limit_and_regularisation():
         sc.solve("sc", mix=0.3, maxiter=200, tol=1e-6 * S)
         dev[S] = abs(sc.G[~sc.gold].mean() / g0 - 1)
     assert dev[100.0] < 0.05 and dev[100.0] < 0.5 * dev[3.0]
+
+
+# ---------------------------------------------------------------- MXenes / 2D
+def test_mxene_builder_formulas_layers_and_prompt():
+    from symphase.twod import (build_mxene, mxene_formula, find_layers, vacuum_thickness, prompt_mxene,
+                               monolayer_from_bulk, prototype, PROTOTYPES, add_vacuum)
+    assert mxene_formula("Cr", "C", 1, "F") == "Cr2CF2"
+    assert mxene_formula("Ni", "N", 1, "F") == "Ni2NF2"
+    assert mxene_formula("Mo", "C", 1, None) == "Mo2C"
+    assert mxene_formula("Mo,Ti", "C", 2, "O") == "Mo2TiC2O2"
+    assert mxene_formula("Ti", "C", 1, "OH") == "Ti2C(OH)2"
+    for args, comp in ((("Cr", "C", 1, "F"), {"Cr": 2, "C": 1, "F": 2}), (("Mo", "C", 1, None), {"Mo": 2, "C": 1}),
+                       (("Mo,Ti", "C", 2, "O"), {"Mo": 2, "Ti": 1, "C": 2, "O": 2}), (("Ti", "C", 1, "OH"), {"Ti": 2, "C": 1, "O": 2, "H": 2})):
+        s = build_mxene(*args)
+        assert {e.symbol: int(v) for e, v in s.composition.items()} == comp
+        assert len(find_layers(s)) == 1 and vacuum_thickness(s) > 19.0
+        assert min(s.distance_matrix[s.distance_matrix > 0]) > 0.9
+    # termination sites: fcc above the far-side metal, hcp above X
+    s = build_mxene("Cr", "C", 1, "F", site="fcc")
+    zF = sorted([site for site in s if site.specie.symbol == "F"], key=lambda x: x.coords[2])
+    cr = sorted([site for site in s if site.specie.symbol == "Cr"], key=lambda x: x.coords[2])
+    assert np.allclose(zF[-1].frac_coords[:2], cr[0].frac_coords[:2])            # top F above the bottom Cr
+    s = build_mxene("Cr", "C", 1, "F", site="hcp")
+    c = [site for site in s if site.specie.symbol == "C"][0]
+    assert all(np.allclose(f.frac_coords[:2], c.frac_coords[:2]) for f in s if f.specie.symbol == "F")
+    # interactive prompt
+    answers = iter(["Ni", "N", "1", "F", "fcc"])
+    p = prompt_mxene(inp=lambda _: next(answers), out=lambda *_: None)
+    assert p == dict(M="Ni", X="N", n=1, T="F", site="fcc")
+    # monolayer from a layered bulk (two slabs separated by a vdW gap)
+    s2 = build_mxene("Mo", "C", 1, None, vacuum=4.0)
+    bulk = s2.copy()
+    bulk.make_supercell([1, 1, 2])
+    mono = monolayer_from_bulk(bulk, gap=2.5, vacuum=15.0)
+    assert len(mono) == 3 and vacuum_thickness(mono) > 14.0
+    assert len(find_layers(add_vacuum(mono, 10.0))) == 1
+    for name in PROTOTYPES:                                                   # library sanity
+        st = prototype(name)
+        assert min(st.distance_matrix[st.distance_matrix > 0]) > 0.7
+
+
+def test_mxene_hull_examples_and_chgnet():
+    import json
+    from symphase.hull import HullAnalysis, make_entry
+    rows = {}
+    for d in ("Cr2CF2", "Ni2NF2", "Mo2C"):
+        rows[d] = json.load(open(f"{EX}/mxene/{d}/hull.json"))[0]
+        lib = json.load(open(f"{EX}/mxene/{d}/library_chgnet.json"))
+        mx = json.load(open(f"{EX}/mxene/{d}/mxene.json"))
+        ents = [make_entry(v["formula"], v["energy"], name=k) for k, v in lib.items()]
+        t = make_entry(mx["formula"].replace("(", "").replace(")", ""), mx["energy_eV"], name=d)
+        h = HullAnalysis(ents + [t])
+        assert abs(h.e_above_hull(t) - rows[d]["e_hull"]) < 1e-6              # shipped results reproducible
+    assert 0.2 < rows["Cr2CF2"]["e_hull"] < 0.33 and 0.3 < rows["Ni2NF2"]["e_hull"] < 0.45
+    assert set(rows["Mo2C"]["decomposition"]) == {"Mo2C"}
+    assert set(rows["Cr2CF2"]["decomposition"]) == {"Cr7C3", "C", "CrF2"}
+    # bulk formation energies vs experiment (eV/atom): fluorides and carbides within 0.08
+    exp = {"CrF2": -2.688, "CrF3": -3.003, "NiF2": -2.250, "Cr3C2": -0.177, "Cr7C3": -0.167, "Cr23C6": -0.147}
+    for d in ("Cr2CF2", "Ni2NF2"):
+        lib = json.load(open(f"{EX}/mxene/{d}/library_chgnet.json"))
+        ents = {k: make_entry(v["formula"], v["energy"], name=k) for k, v in lib.items()}
+        h = HullAnalysis(list(ents.values()))
+        for k, e in ents.items():
+            f = e.composition.reduced_formula
+            if f in exp:
+                assert abs(h.form_energy(e) - exp[f]) < 0.08, (f, h.form_energy(e))
+    pytest.importorskip("chgnet")
+    from symphase.twod import relax, prototype
+    s, e = relax(prototype("Cr_bcc"), two_d=False)
+    assert abs(s.lattice.a - 2.86) < 0.03

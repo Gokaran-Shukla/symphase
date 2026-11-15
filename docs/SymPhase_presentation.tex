@@ -135,7 +135,7 @@
 \end{enumerate}
 \column{0.48\textwidth}
 \begin{enumerate}\setcounter{enumi}{4}\setlength\itemsep{0.7em}
-  \item \textbf{Convex hull} — any number of elements, finite $T$
+  \item \textbf{Convex hull} — any number of elements, finite $T$, MXenes / 2D
   \item \textbf{Elements in, everything out} — OQMD / MP $\to$ VASP $\to$ Ibex
   \item \textbf{Parallel engine} — all cores, MPI
   \item \textbf{Tutorials \& quizzes}, validation, outlook
@@ -872,6 +872,66 @@ thousands of hypothetical compounds against a fixed hull, in parallel.
 
 \sectionslide{6 \; Elements in, everything out}{\texttt{symphase run Ti Ni Sn}}
 
+\begin{frame}[fragile]{MXenes and 2D materials: \texttt{symphase mxene}}
+\begin{columns}[T]
+\column{0.44\textwidth}
+\begin{lstlisting}[basicstyle=\ttfamily\tiny]
+$ symphase mxene --hull
+  transition metal M: Cr
+  X element (C or N) [C]: C
+  n in M(n+1)X(n) [1]: 1
+  passivation (F,O,OH,Cl,none) [F]: F
+  termination site [auto]: auto
+  Cr2CF2 site fcc: E = -7.9139 eV/atom
+  Cr2CF2 site hcp: E = -7.8091 eV/atom
+  Cr2CF2: E_hull = 265 meV/atom
+     -> Cr7C3 + C + CrF2
+\end{lstlisting}
+\column{0.54\textwidth}
+{\tiny\renewcommand{\arraystretch}{1.1}\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+2D & $a$ (Å) & site & $\Eform$ (eV/at) & $\Ehull$ (meV/at) & $\Delta\mu_F^*$ (eV)\\
+\midrule
+Cr$_2$CF$_2$ & 2.955 & fcc & $-1.445$ & 265 & $-3.90$\\
+Ni$_2$NF$_2$ & 3.029 & fcc & $-0.959$ & 377 & $-2.92$\\
+Mo$_2$C      & 2.971 & —   & $+0.212$ & 391 & $-2.95$\\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\texttt{symphase.twod}: $M_{n+1}X_nT_2$ builder (asks for $M$, $X$, $n$, passivation; double-$M$; OH), fcc/hcp/top sites,
+layer detection, monolayer from bulk, exfoliation energy, in-plane relaxation, VASP inputs, hull, phase diagrams.
+Energies: CHGNet (MP PBE/PBE+U scale); hcp termination +105/+101 meV/atom.\par}
+\end{columns}
+
+\vspace{0.1em}
+\centering\includegraphics[width=0.8\textwidth]{figures/mxene_structures.pdf}
+\end{frame}
+
+\begin{frame}{MXene convex hulls and termination phase diagram}
+\centering
+\includegraphics[width=0.325\textwidth]{figures/mxene_pd_Cr2CF2.pdf}\hfill
+\includegraphics[width=0.325\textwidth]{figures/mxene_pd_Ni2NF2.pdf}\hfill
+\includegraphics[width=0.325\textwidth]{figures/mxene_pd_Mo2C.pdf}
+
+\vspace{0.1em}
+\begin{columns}[T]
+\column{0.36\textwidth}
+\includegraphics[width=\linewidth]{figures/mxene_termination.pdf}
+\column{0.62\textwidth}
+{\tiny
+\begin{itemize}\setlength\itemsep{0.05em}
+\item metastable monolayers, $\Ehull$ = 265–391 meV/atom: Cr$_2$CF$_2\to$ Cr$_7$C$_3$ + C + CrF$_2$; Ni$_2$NF$_2\to$ Ni$_3$N + N$_2$ + NiF$_2$;
+Mo$_2$C(2D)$\to$ bulk $\beta$-Mo$_2$C
+\item F termination wins for $\Delta\mu_F > \Delta\mu_F^*$ = $-3.9$, $-2.9$, $-3.0$ eV: fluorinated under etching conditions
+\item bulk $\Eform$ (exp.): CrF$_2$ $-2.75$ ($-2.69$), CrF$_3$ $-2.93$ ($-3.00$), NiF$_2$ $-2.21$ ($-2.25$), Cr$_3$C$_2$ $-0.16$ ($-0.18$),
+Cr$_7$C$_3$ $-0.20$ ($-0.17$), Mo$_2$C $-0.18$ ($-0.16$) eV/atom; MoC underbound, Ni$_3$N overbound
+\item screening quality: confirm with VASP (\texttt{--vasp} inputs, \texttt{--energies} CSV)
+\end{itemize}}
+\end{columns}
+\end{frame}
+
 \begin{frame}[fragile]{The automatic pipeline}
 \begin{columns}[T]
 \column{0.42\textwidth}
@@ -975,9 +1035,9 @@ sbatch jobs/ibex_symphase_mpi.slurm
 
 \begin{frame}{Tutorial and quiz notebooks}
 \begin{columns}[T]
-\column{0.5\textwidth}
+\column{0.58\textwidth}
 \renewcommand{\arraystretch}{1.25}
-{\scriptsize\renewcommand{\arraystretch}{0.8}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.0cm}@{}}
+{\scriptsize\renewcommand{\arraystretch}{0.74}\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{6.0cm}@{}}
 \toprule
 notebook & content\\ \midrule
 01 & symmetry \& tensors: Pt, Fe, RuO$_2$, MoO$_2$, spin groups \\
@@ -996,9 +1056,10 @@ notebook & content\\ \midrule
 22 & four-magnon HF, self-energies\\
 24 & cubic terms, four-magnon damping\\
 26 & self-consistent magnon decay\\
-quizzes & \textbf{11 $\times$ 20 questions}: 04, 05, 09, 11, 13, 16, 19, 21, 23, 25, 27\\ \bottomrule
+28 & MXenes / 2D: hulls, phase diagrams\\
+quizzes & \textbf{12 $\times$ 20 q.}: 04, 05, 09, 11, 13, 16, 19, 21, 23, 25, 27, 29\\ \bottomrule
 \end{tabular}}
-\column{0.46\textwidth}
+\column{0.4\textwidth}
 \begin{tcolorbox}[sp,title=Self-checking quizzes]
 \texttt{q = Quiz("hull")}\\
 \texttt{q.answer(10, 42.5)} $\to$ \textcolor{spinc}{\checkmark} + explanation\\
@@ -1010,7 +1071,7 @@ Conceptual + hands-on questions; hands-on answers are computed by SymPhase on th
 \end{frame}
 
 \begin{frame}{Validation}
-\renewcommand{\arraystretch}{0.86}
+\renewcommand{\arraystretch}{0.8}
 \centering\tiny
 \begin{tabular}{@{}p{4.6cm}p{6.9cm}c@{}}
 \toprule
@@ -1041,11 +1102,12 @@ four-magnon HF & Dyson FM, Oguchi chain/square, 1D breakdown & \textcolor{spinc}
 self-energies & $-2\,\mathrm{Im}\,\Sigma=\gamma$ golden rule, $\int A=1$ & \textcolor{spinc}{\checkmark} \\
 cubic + sunset & = classical expansion, = exact diagonalisation, $c_\parallel$ & \textcolor{spinc}{\checkmark} \\
 self-consistent decay & Born limit (on-shell, $S\to\infty$), residual $10^{-6}$ & \textcolor{spinc}{\checkmark} \\
-quiz keys & 220 / 220 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
+MXenes / 2D & HP builder, hulls reproducible, bulk $\Eform$ vs exp.\ ($\le$0.08 eV) & \textcolor{spinc}{\checkmark} \\
+quiz keys & 240 / 240 self-consistent & \textcolor{spinc}{\checkmark} \\ \bottomrule
 \end{tabular}
 \vspace{0.2em}
 
-{\scriptsize Automated tests: \texttt{pytest tests/} (94); OQMD/MP download checked with a mock server.}
+{\scriptsize Automated tests: \texttt{pytest tests/} (97); OQMD/MP download checked with a mock server.}
 \end{frame}
 
 \begin{frame}{Limitations and outlook}

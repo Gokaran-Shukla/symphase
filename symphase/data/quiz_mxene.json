@@ -1,0 +1,230 @@
+{
+ "title": "Quiz 12 — MXenes and 2D materials",
+ "questions": [
+  {
+   "type": "mc",
+   "question": "What is the composition of the MXene built from M = Cr, X = C, n = 1, passivation F?",
+   "options": {
+    "a": "CrCF",
+    "b": "Cr2CF2",
+    "c": "Cr3C2F2",
+    "d": "Cr2C2F"
+   },
+   "explanation": "M(n+1) X(n) T2.",
+   "id": 1,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: mxene_formula('Mo,Ti', 'C', 2, 'O') = ?",
+   "options": {
+    "a": "MoTi2C2O2",
+    "b": "Mo2TiC2O2",
+    "c": "Mo2Ti2C2O",
+    "d": "MoTiCO"
+   },
+   "explanation": "Ordered double-M: outer Mo layers, inner Ti.",
+   "id": 2,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What is the 'fcc' termination site?",
+   "options": {
+    "a": "on top of the outer metal",
+    "b": "the hollow above the metal of the opposite side (not above X)",
+    "c": "above X",
+    "d": "in the vacuum"
+   },
+   "explanation": "'Model I'; hcp = above the X atom ('model II').",
+   "id": 3,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: Cr2CF2 — hcp minus fcc termination energy (meV/atom, integer)?",
+   "tol": 4,
+   "explanation": "≈ +105 meV/atom: F prefers the fcc hollow.",
+   "id": 4,
+   "key": "NTAx"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: relaxed lattice constant a of Cr2CF2 (Å, 2 decimals)?",
+   "tol": 0.02,
+   "explanation": "2.955 Å (CHGNet).",
+   "id": 5,
+   "key": "NTU5LjI="
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: E_hull of Cr2CF2 (meV/atom, integer)?",
+   "tol": 6,
+   "explanation": "265 meV/atom above the Cr–C–F hull.",
+   "id": 6,
+   "key": "NTYy"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: into which bulk phases does Cr2CF2 decompose?",
+   "options": {
+    "a": "Cr + C + F2",
+    "b": "Cr7C3 + C + CrF2",
+    "c": "Cr3C2 + CrF3",
+    "d": "CrF3 + C"
+   },
+   "explanation": "0.29 Cr7C3 + 0.11 C + 0.60 CrF2 (per atom).",
+   "id": 7,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: E_hull of Ni2NF2 (meV/atom, integer)?",
+   "tol": 6,
+   "explanation": "377 meV/atom → Ni3N + N2 + NiF2.",
+   "id": 8,
+   "key": "Nzcz"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: E_hull of bare 2D Mo2C (meV/atom, integer)?",
+   "tol": 6,
+   "explanation": "391 meV/atom above bulk β-Mo2C — the cost of two bare surfaces.",
+   "id": 9,
+   "key": "MTkz"
+  },
+  {
+   "type": "mc",
+   "question": "Why are all three monolayers above the hull?",
+   "options": {
+    "a": "a bug",
+    "b": "2D sheets have surface (unsaturated / terminated) bonds relative to the bulk competing phases — MXenes are metastable, made by etching",
+    "c": "temperature",
+    "d": "magnetism"
+   },
+   "explanation": "Typical MXene E_hull values are a few hundred meV/atom.",
+   "id": 10,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: Δμ*_F for Cr2C → Cr2CF2 (eV, 2 decimals)?",
+   "tol": 0.03,
+   "explanation": "F termination is favoured for Δμ_F > −3.90 eV.",
+   "id": 11,
+   "key": "OS4zLQ=="
+  },
+  {
+   "type": "mc",
+   "question": "What does Δμ_F > Δμ*_F mean?",
+   "options": {
+    "a": "the bare sheet is stable",
+    "b": "fluorination of the bare sheet lowers the free energy (F-terminated surface wins)",
+    "c": "F2 condenses",
+    "d": "nothing"
+   },
+   "explanation": "ΔG_F(Δμ) = [E(T) − E(bare) − 2μ⁰ − 2Δμ]/A < 0.",
+   "id": 12,
+   "key": "ImIi"
+  },
+  {
+   "type": "num",
+   "question": "Hands-on: CHGNet formation energy of CrF2 (eV/atom, 2 decimals)?",
+   "tol": 0.02,
+   "explanation": "−2.75 eV/atom vs experiment −2.69 eV/atom.",
+   "id": 13,
+   "key": "NTcuMi0="
+  },
+  {
+   "type": "mc",
+   "question": "Which energy model does the module use by default, and why?",
+   "options": {
+    "a": "DFT on the fly",
+    "b": "CHGNet universal potential — Materials Project scale, works offline; screening quality",
+    "c": "Lennard-Jones",
+    "d": "none"
+   },
+   "explanation": "Materials Project / OQMD may be unreachable; replace by VASP for publication.",
+   "id": 14,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How do you replace the model energies by your own VASP results?",
+   "options": {
+    "a": "impossible",
+    "b": "--energies CSV (formula or name, eV/atom), or write_vasp + symphase hull",
+    "c": "--relax",
+    "d": "--spiral"
+   },
+   "explanation": "Both MXene and competing phases can be replaced.",
+   "id": 15,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "How are the competing bulk phases obtained?",
+   "options": {
+    "a": "downloaded at run time",
+    "b": "built-in crystallographic prototypes (AFLOW/ICSD parameters) relaxed with the same model, plus --extra files",
+    "c": "guessed",
+    "d": "only elements"
+   },
+   "explanation": "e.g. Cr3C2 (D5_10), Cr7C3 (D10_1), Cr23C6 (D8_4), CrF3 (D0_12), NiF2 rutile, Ni3N, β-Mo2C.",
+   "id": 16,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Hands-on: which bulk phase has the largest CHGNet error vs experiment in the shipped examples?",
+   "options": {
+    "a": "CrF2",
+    "b": "MoC (underbound by ≈ 0.15 eV/atom)",
+    "c": "Cr23C6",
+    "d": "NiF2"
+   },
+   "explanation": "It does not enter the Mo2C decomposition, but shows why DFT confirmation matters.",
+   "id": 17,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which cell degrees of freedom relax for a 2D sheet?",
+   "options": {
+    "a": "all",
+    "b": "in-plane only (vacuum kept) — FrechetCellFilter mask",
+    "c": "none",
+    "d": "c only"
+   },
+   "explanation": "relax(..., two_d=True).",
+   "id": 18,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "What does monolayer_from_bulk do?",
+   "options": {
+    "a": "builds a MXene",
+    "b": "finds the van der Waals gaps of a layered crystal, isolates one layer and adds vacuum",
+    "c": "computes phonons",
+    "d": "nothing"
+   },
+   "explanation": "Use with exfoliation_energy for generic 2D materials.",
+   "id": 19,
+   "key": "ImIi"
+  },
+  {
+   "type": "mc",
+   "question": "Which command asks interactively for the elements and the passivation?",
+   "options": {
+    "a": "symphase hull",
+    "b": "symphase mxene (without --M/--X/--T)",
+    "c": "symphase run",
+    "d": "symphase quiz"
+   },
+   "explanation": "Arguments given on the command line skip the questions; --no-input never asks.",
+   "id": 20,
+   "key": "ImIi"
+  }
+ ]
+}
