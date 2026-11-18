@@ -5,6 +5,8 @@
 
 # SymPhase
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24220936.svg)](https://doi.org/10.5281/zenodo.24220936)
+
 **Magnetic symmetry, symmetry-allowed charge / spin / orbital conductivity tensors and convex-hull
 phase stability for VASP calculations — elements in, everything out, on all your cores.**
 
@@ -432,13 +434,24 @@ pytest tests/
 ```
 
 ## How to cite / acknowledge
-If you use SymPhase, please cite it (GitHub: **"Cite this repository"**, metadata in [`CITATION.cff`](CITATION.cff)):
+If SymPhase helps your work, please cite the software:
 
 > G. Shukla, *SymPhase: magnetic and spin-group symmetry, symmetry-allowed conductivity tensors and convex-hull
-> phase stability for VASP*, version 1.0.0 (2026), https://github.com/Gokaran-Shukla/symphase.
-> ORCID [0000-0001-9332-3332](https://orcid.org/0000-0001-9332-3332)
+> phase stability for VASP*, version 1.0.0 (2026). Zenodo. https://doi.org/10.5281/zenodo.24220936
 
-A Zenodo DOI is minted for every GitHub release (archive metadata in [`.zenodo.json`](.zenodo.json)).
+```bibtex
+@software{shukla_symphase_2026,
+  author    = {Shukla, Gokaran},
+  title     = {SymPhase: magnetic and spin-group symmetry, symmetry-allowed conductivity tensors and convex-hull phase stability for VASP},
+  version   = {1.0.0},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.24220936},
+  url       = {https://github.com/Gokaran-Shukla/symphase}
+}
+```
+
+GitHub's **"Cite this repository"** button (from [`CITATION.cff`](CITATION.cff)) gives the same reference.
 
 Please cite the underlying tools: spglib (Togo *et al.*, Sci. Technol. Adv. Mater. Meth. 4, 2384822 (2024)),
 pymatgen (Ong *et al.*, Comput. Mater. Sci. 68, 314 (2013)), and the data source you use — OQMD

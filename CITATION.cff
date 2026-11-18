@@ -19,6 +19,11 @@ authors:
 version: "1.0.0"
 date-released: "2026-11-14"
 license: MIT
+doi: "10.5281/zenodo.24220936"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24220936"
+    description: "Zenodo archive of version 1.0.0"
 repository-code: "https://github.com/Gokaran-Shukla/symphase"
 url: "https://github.com/Gokaran-Shukla/symphase"
 keywords:
