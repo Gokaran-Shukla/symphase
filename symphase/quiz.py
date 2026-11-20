@@ -18,6 +18,9 @@ import json
 import math
 import os
 
+_GS_NOTICE = "© 2026 Gokaran Shukla · github.com/Gokaran-Shukla/symphase · MIT License"  # gs-watermark
+
+
 _DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
@@ -68,6 +71,7 @@ class Quiz:
         return s
 
     def show(self, i=None):
+        print(_GS_NOTICE + "\n")
         for k in ([i] if i else sorted(self.questions)):
             print(self._text(k) + "\n")
 

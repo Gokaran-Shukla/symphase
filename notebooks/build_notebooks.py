@@ -18,7 +18,7 @@ code = nbf.v4.new_code_cell
 
 def save(cells, name):
     nb = nbf.v4.new_notebook()
-    nb["cells"] = cells
+    nb["cells"] = [nbf.v4.new_markdown_cell("<!-- gs-watermark -->\n> **© 2026 Gokaran Shukla** · part of [symphase](https://github.com/Gokaran-Shukla/symphase) · MIT License — any reuse must keep this copyright notice and credit the author.")] + list(cells)
     nb["metadata"]["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
     nbf.write(nb, os.path.join(HERE, name))
     print("wrote", name)
