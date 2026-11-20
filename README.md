@@ -5,6 +5,8 @@
 
 # SymPhase
 
+📘 **Complete manual (PDF):** [docs/symphase_manual.pdf](docs/symphase_manual.pdf) — documentation, tutorials and quizzes in one file.
+
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24220936.svg)](https://doi.org/10.5281/zenodo.24220936)
 
 **Magnetic symmetry, symmetry-allowed charge / spin / orbital conductivity tensors and convex-hull
